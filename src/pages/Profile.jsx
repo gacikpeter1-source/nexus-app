@@ -1,0 +1,276 @@
+// src/pages/Profile.jsx
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '../contexts/LanguageContext';
+
+export default function Profile() {
+  const { user } = useAuth();
+  const { t } = useLanguage();
+  const navigate = useNavigate();
+
+  const [form, setForm] = useState({
+    displayName: '',
+    avatar: '',
+    phone: '',
+    bio: '',
+  });
+
+  const [avatarPreview, setAvatarPreview] = useState(null);
+
+  // Load user data
+  useEffect(() => {
+    if (user) {
+      setForm({
+        displayName: user.displayName || user.username || '',
+        avatar: user.avatar || '',
+        phone: user.phone || '',
+        bio: user.bio || '',
+      });
+      setAvatarPreview(user.avatar || null);
+    }
+  }, [user]);
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatarPreview(reader.result);
+        setForm(f => ({ ...f, avatar: reader.result }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+
+    if (!form.displayName.trim()) {
+      alert('Display name is required');
+      return;
+    }
+
+    // Update user in localStorage
+    const users = JSON.parse(localStorage.getItem('users') || '[]');
+    const updatedUsers = users.map(u => {
+      if (u.id === user.id) {
+        return {
+          ...u,
+          displayName: form.displayName.trim(),
+          avatar: form.avatar,
+          phone: form.phone.trim(),
+          bio: form.bio.trim(),
+        };
+      }
+      return u;
+    });
+    localStorage.setItem('users', JSON.stringify(updatedUsers));
+
+    // Update currentUser
+    const updatedUser = {
+      ...user,
+      displayName: form.displayName.trim(),
+      avatar: form.avatar,
+      phone: form.phone.trim(),
+      bio: form.bio.trim(),
+    };
+    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+
+    alert('Profile updated successfully!');
+    window.location.reload(); // Reload to update navbar
+  };
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-light">{t('common.Please_login_to_view_your_profile')}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen p-6">
+      <div className="max-w-2xl mx-auto">
+        {/* Header */}
+        <div className="mb-8 animate-fade-in">
+          <button
+            onClick={() => navigate(-1)}
+            className="mb-4 text-light/60 hover:text-light flex items-center gap-2 transition-colors"
+          >
+            ← Back
+          </button>
+          <h1 className="font-display text-5xl md:text-6xl text-light tracking-wider">
+            👤 {t('userMenu.profile')}
+          </h1>
+          <p className="text-light/60 text-lg mt-2">
+            {t('userMenu.profileDesc')}
+          </p>
+        </div>
+
+        {/* Profile Form */}
+        <form onSubmit={handleSubmit} className="space-y-6 animate-fade-in" style={{ animationDelay: '0.1s' }}>
+          {/* Avatar Section */}
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+            <h2 className="font-title text-2xl text-light mb-4 flex items-center gap-3">
+              <span className="w-1 h-6 bg-primary rounded"></span>
+              {t('profile.avatarSection')} 
+            </h2>
+
+            <div className="flex items-center gap-6">
+              {/* Avatar Preview */}
+              <div className="relative">
+                {avatarPreview ? (
+                  <img
+                    src={avatarPreview}
+                    alt="Avatar"
+                    className="w-32 h-32 rounded-full object-cover border-4 border-primary shadow-lg"
+                  />
+                ) : (
+                  <div className="w-32 h-32 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-6xl font-bold text-white shadow-lg">
+                    {(form.displayName || user.username || user.email).charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <label
+                  htmlFor="avatar-upload"
+                  className="absolute bottom-0 right-0 w-10 h-10 bg-primary hover:bg-primary/80 rounded-full flex items-center justify-center cursor-pointer shadow-lg transition-all"
+                >
+                  <span className="text-2xl">📷</span>
+                </label>
+                <input
+                  id="avatar-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+              </div>
+
+              {/* Upload Instructions */}
+              <div className="flex-1">
+                <p className="text-light/80 text-sm mb-2">
+                  {t('profile.uploadAvatar')}
+                </p>
+                <p className="text-light/50 text-xs">
+                  {t('profile.acceptedFormats')}
+                </p>
+                {avatarPreview && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAvatarPreview(null);
+                      setForm(f => ({ ...f, avatar: '' }));
+                    }}
+                    className="mt-3 px-3 py-1 bg-red-600/20 text-red-400 rounded text-sm hover:bg-red-600/30 transition-colors"
+                  >
+                    {t('profile.removePicture')}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Display Name */}
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+            <h2 className="font-title text-2xl text-light mb-4 flex items-center gap-3">
+              <span className="w-1 h-6 bg-primary rounded"></span>
+              {t('profile.displayName')}
+            </h2>
+            
+            <div>
+              <label className="block text-sm font-medium text-light/80 mb-2">
+                {t('profile.displayNameDesc')}
+              </label>
+              <input
+                type="text"
+                value={form.displayName}
+                onChange={(e) => setForm(f => ({ ...f, displayName: e.target.value }))}
+                placeholder="Enter your display name"
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                required
+              />
+              <p className="text-xs text-light/50 mt-2">
+                {t('profile.displayNameDesc')}
+              </p>
+            </div>
+          </div>
+
+          {/* Contact Info */}
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+            <h2 className="font-title text-2xl text-light mb-4 flex items-center gap-3">
+              <span className="w-1 h-6 bg-primary rounded"></span>
+              {t('profile.contactInfo')}
+            </h2>
+
+            <div className="space-y-4">
+              {/* Email (Read-only) */}
+              <div>
+                <label className="block text-sm font-medium text-light/80 mb-2">{t('ommon.email')}</label>
+                <input
+                  type="email"
+                  value={user.email}
+                  disabled
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-light/50 cursor-not-allowed"
+                />
+                <p className="text-xs text-light/50 mt-1">{t('profile.emailCannotChange')}</p>
+              </div>
+
+              {/* Phone */}
+              <div>
+                <label className="block text-sm font-medium text-light/80 mb-2">{t('profile.phone')}</label>
+                <input
+                  type="tel"
+                  value={form.phone}
+                  onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))}
+                  placeholder="+421 XXX XXX XXX"
+                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Bio */}
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+            <h2 className="font-title text-2xl text-light mb-4 flex items-center gap-3">
+              <span className="w-1 h-6 bg-primary rounded"></span>
+              {t('profile.bio')}
+            </h2>
+
+            <div>
+              <label className="block text-sm font-medium text-light/80 mb-2">
+                {t('profile.bioPlaceholder')}
+              </label>
+              <textarea
+                value={form.bio}
+                onChange={(e) => setForm(f => ({ ...f, bio: e.target.value }))}
+                placeholder="Write a short bio..."
+                rows={4}
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none"
+              />
+              <p className="text-xs text-light/50 mt-1">
+                {t('profile.maxChars')}
+              </p>
+            </div>
+          </div>
+
+          {/* Save Button */}
+          <div className="flex gap-4">
+            <button
+              type="submit"
+              className="flex-1 btn-primary py-4 text-lg font-semibold"
+            >
+              💾 {t('profile.saveChanges')}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="px-6 py-4 bg-white/10 hover:bg-white/20 text-light rounded-lg transition-colors"
+            >
+              {t('common.cancel')}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

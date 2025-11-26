@@ -1,0 +1,23 @@
+{
+  "team1": {
+    "id": "team1",
+    "name": "Elite Football Club",
+    "sport": "Football",
+    "owner": "trainer1",
+    "members": ["trainer1", "member1"]
+  },
+  "team2": {
+    "id": "team2",
+    "name": "Aqua Swimmers",
+    "sport": "Swimming",
+    "owner": "trainer2",
+    "members": ["member1"]
+  },
+  "team3": {
+    "id": "team3",
+    "name": "Ice Warriors",
+    "sport": "Ice Hockey",
+    "owner": "trainer1",
+    "members": ["trainer1"]
+  }
+}

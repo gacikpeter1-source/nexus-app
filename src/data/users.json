@@ -1,0 +1,23 @@
+{
+  "trainer1": {
+    "id": "trainer1",
+    "email": "john.coach@email.com",
+    "name": "John Smith",
+    "role": "trainer",
+    "teams": ["team1", "team3"]
+  },
+  "member1": {
+    "id": "member1",
+    "email": "alex.player@email.com",
+    "name": "Alex Johnson",
+    "role": "member",
+    "teams": ["team1", "team2"]
+  },
+  "independent": {
+    "id": "indie1",
+    "email": "sam.indie@email.com",
+    "name": "Sam Williams",
+    "role": "independent",
+    "teams": []
+  }
+}
