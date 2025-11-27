@@ -1,8 +1,7 @@
-// src/pages/Login.jsx - FIREBASE VERSION
+// src/pages/Login.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useLanguage } from '../contexts/LanguageContext';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -13,14 +12,13 @@ const Login = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { t } = useLanguage();
   
   const emailRef = useRef(null);
   const passwordRef = useRef(null);
 
   const from = location.state?.from?.pathname || '/';
 
-  // Fix for browser autofill
+  // Fix for browser autofill not triggering React state
   useEffect(() => {
     const checkAutofill = () => {
       if (emailRef.current && emailRef.current.value !== email) {
@@ -44,6 +42,10 @@ const Login = () => {
     const emailValue = emailRef.current?.value || email;
     const passwordValue = passwordRef.current?.value || password;
 
+    console.log('🔵 LOGIN ATTEMPT');
+    console.log('Email:', emailValue);
+    console.log('Password length:', passwordValue.length);
+
     if (!emailValue || !passwordValue) {
       setError('Please enter both email and password');
       setLoading(false);
@@ -54,6 +56,7 @@ const Login = () => {
       await login(emailValue, passwordValue);
       navigate(from, { replace: true });
     } catch (err) {
+      console.log('❌ Login error:', err);
       setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
@@ -64,14 +67,14 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('auth.welcomeBack')}</h1>
-          <p className="text-gray-600">{t('auth.signInAccount')}</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h1>
+          <p className="text-gray-600">Sign in to your training account</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-              {t('auth.emailAddress')}
+              Email Address
             </label>
             <input
               ref={emailRef}
@@ -90,7 +93,7 @@ const Login = () => {
 
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              {t('auth.password')}
+              Password
             </label>
             <div className="relative">
               <input
@@ -134,11 +137,11 @@ const Login = () => {
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
               <label htmlFor="remember" className="ml-2 block text-sm text-gray-700">
-                {t('auth.rememberMe')}
+                Remember me
               </label>
             </div>
             <Link to="/forgot-password" className="text-sm text-blue-600 hover:text-blue-700">
-              {t('auth.forgotPassword')}
+              Forgot password?
             </Link>
           </div>
 
@@ -153,15 +156,15 @@ const Login = () => {
             disabled={loading}
             className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? t('auth.signingIn') : t('auth.signIn')}
+            {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
 
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-600">
-            {t('auth.dontHaveAccount')}{' '}
+            Don't have an account?{' '}
             <Link to="/register" className="text-blue-600 hover:text-blue-700 font-medium">
-              {t('auth.createOne')}
+              Create one now
             </Link>
           </p>
         </div>

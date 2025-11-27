@@ -25,6 +25,7 @@ import ChangePassword from './pages/ChangePassword';
 import Support from './pages/Support';
 import Feedback from './pages/Feedback';
 import Language from './pages/Language';
+import FirebaseTest from './components/FirebaseTest';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -519,6 +520,7 @@ function AppContent() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      <FirebaseTest />
     </div>
   );
 }

@@ -1,6 +1,32 @@
-// src/contexts/AuthContext.jsx
+// src/contexts/AuthContext.jsx - FIREBASE VERSION
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import bcrypt from 'bcryptjs';
+import { 
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
+} from 'firebase/auth';
+import { auth } from '../firebase/config';
+import {
+  createUser,
+  getUser,
+  getUserByEmail,
+  updateUser,
+  getAllUsers,
+  deleteUser as deleteUserFromFirestore,
+  createClub,
+  getClub,
+  getClubByCode,
+  updateClub,
+  getAllClubs,
+  getUserClubs,
+  deleteClub as deleteClubFromFirestore,
+  createRequest,
+  getRequest,
+  updateRequest,
+  getPendingRequests,
+  generateUniqueCode
+} from '../firebase/firestore';
 
 const AuthContext = createContext(null);
 
@@ -19,71 +45,47 @@ export const useAuth = () => {
 };
 
 /* -----------------------------
-   Password Hashing Utilities
-   -----------------------------*/
-const hashPassword = async (password) => {
-  const salt = await bcrypt.genSalt(10);
-  return await bcrypt.hash(password, salt);
-};
-
-const comparePassword = async (password, hashedPassword) => {
-  return await bcrypt.compare(password, hashedPassword);
-};
-
-/* -----------------------------
    Initialize SuperAdmin
    -----------------------------*/
 const initializeSuperAdmin = async () => {
-  const users = _getUsers();
-  const superAdminEmail = 'admin@nexus.com';
-  
-  // Check if SuperAdmin already exists
-  const existingSuperAdmin = users.find(u => u.email === superAdminEmail && u.role === ROLES.ADMIN);
-  
-  if (!existingSuperAdmin) {
-    // Create SuperAdmin with hashed password
-    const hashedPassword = await hashPassword('SuperAdmin2025!');
+  try {
+    const superAdminEmail = 'admin@nexus.com';
+    const superAdminPassword = 'SuperAdmin2025!';
     
-    const superAdmin = {
-      id: 'superadmin-0001',
-      email: superAdminEmail,
-      username: 'SuperAdmin',
-      password: hashedPassword, // Hashed password
-      role: ROLES.ADMIN,
-      emailVerified: true,
-      clubIds: [],
-      createdAt: new Date().toISOString(),
-      isSuperAdmin: true // Special flag
-    };
+    // Check if SuperAdmin already exists
+    const existing = await getUserByEmail(superAdminEmail);
     
-    users.push(superAdmin);
-    _setUsers(users);
-    console.log('✅ SuperAdmin initialized with secure password');
+    if (!existing) {
+      console.log('🔧 Creating SuperAdmin...');
+      
+      // Create Firebase Auth user
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        superAdminEmail,
+        superAdminPassword
+      );
+      
+      // Create Firestore user document
+      await createUser(userCredential.user.uid, {
+        email: superAdminEmail,
+        username: 'SuperAdmin',
+        role: ROLES.ADMIN,
+        emailVerified: true,
+        clubIds: [],
+        isSuperAdmin: true
+      });
+      
+      console.log('✅ SuperAdmin initialized');
+    }
+  } catch (error) {
+    // SuperAdmin might already exist from a previous session
+    if (error.code === 'auth/email-already-in-use') {
+      console.log('✅ SuperAdmin already exists');
+    } else {
+      console.error('Error initializing SuperAdmin:', error);
+    }
   }
 };
-
-/* -----------------------------
-   Helpers for localStorage demo
-   -----------------------------*/
-const _getUsers = () => JSON.parse(localStorage.getItem('users') || '[]');
-const _setUsers = (arr) => localStorage.setItem('users', JSON.stringify(arr));
-
-const _getClubs = () => JSON.parse(localStorage.getItem('clubs') || '[]');
-const _setClubs = (arr) => localStorage.setItem('clubs', JSON.stringify(arr));
-
-const _getRequests = () => JSON.parse(localStorage.getItem('joinRequests') || '[]');
-const _setRequests = (arr) => localStorage.setItem('joinRequests', JSON.stringify(arr));
-
-const _generateId = (prefix = '') => `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2,6)}`;
-
-function generateUniqueClubCode() {
-  const clubs = _getClubs();
-  for (let tries = 0; tries < 200; tries++) {
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    if (!clubs.some(c => c.clubCode === code)) return code;
-  }
-  return Math.random().toString(36).slice(2,8);
-}
 
 /* -----------------------------
    Auth Provider
@@ -97,366 +99,384 @@ export const AuthProvider = ({ children }) => {
     initializeSuperAdmin();
   }, []);
 
-  // refresh user from localStorage currentUser
-  const refreshUser = useCallback(async () => {
-    setLoading(true);
-    try {
-      const cu = localStorage.getItem('currentUser');
-      if (cu) {
-        const parsed = JSON.parse(cu);
-        // ensure clubIds exists and is array (migration from clubId)
-        if (!parsed.clubIds) parsed.clubIds = parsed.clubId ? [parsed.clubId] : [];
-        setUser(parsed);
-        return parsed;
+  // Listen to Firebase Auth state changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // User is signed in, get their data from Firestore
+        try {
+          const userData = await getUser(firebaseUser.uid);
+          if (userData) {
+            setUser({
+              id: firebaseUser.uid,
+              email: firebaseUser.email,
+              ...userData
+            });
+          }
+        } catch (error) {
+          console.error('Error loading user data:', error);
+        }
       } else {
+        // User is signed out
         setUser(null);
-        return null;
       }
-    } catch (err) {
-      console.error('refreshUser error', err);
-      setUser(null);
-      return null;
-    } finally {
       setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Refresh user data
+  const refreshUser = useCallback(async () => {
+    if (auth.currentUser) {
+      try {
+        const userData = await getUser(auth.currentUser.uid);
+        if (userData) {
+          setUser({
+            id: auth.currentUser.uid,
+            email: auth.currentUser.email,
+            ...userData
+          });
+        }
+      } catch (error) {
+        console.error('Error refreshing user:', error);
+      }
     }
   }, []);
 
-  useEffect(() => {
-    refreshUser();
-  }, [refreshUser]);
-
   /* -----------------------------
-     Registration with Password Hashing
+     Registration & Login
      -----------------------------*/
-  const register = async (email) => {
-    await new Promise(r => setTimeout(r, 300)); // simulate
-    const users = _getUsers();
-    if (users.some(u => u.email === email)) throw new Error('Email already registered');
+  const register = async (email, username, password) => {
+    try {
+      // Create Firebase Auth user
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      
+      // Create Firestore user document
+      await createUser(userCredential.user.uid, {
+        email: email.toLowerCase(),
+        username: username,
+        role: ROLES.USER,
+        emailVerified: true, // Skip email verification for now
+        clubIds: []
+      });
 
-    const newUser = {
-      id: _generateId('u_'),
-      email,
-      emailVerified: true, // for local dev we mark verified by default; change in prod
-      role: ROLES.USER,
-      username: null,
-      clubIds: [] // multi-club membership
-    };
-    users.push(newUser);
-    _setUsers(users);
+      // Get the created user data
+      const userData = await getUser(userCredential.user.uid);
+      
+      setUser({
+        id: userCredential.user.uid,
+        email: userCredential.user.email,
+        ...userData
+      });
 
-    // keep token flow for demo pages (completeRegistration)
-    const token = Math.random().toString(36).slice(2, 12);
-    localStorage.setItem(`verificationToken_${token}`, JSON.stringify({
-      userId: newUser.id,
-      email: newUser.email,
-      expires: Date.now() + 24 * 60 * 60 * 1000
-    }));
-    return { token };
-  };
-
-  const completeRegistration = async (token, username, password) => {
-    await new Promise(r => setTimeout(r, 300));
-    const tokenData = localStorage.getItem(`verificationToken_${token}`);
-    if (!tokenData) throw new Error('Invalid or expired token');
-    const { userId } = JSON.parse(tokenData);
-    const users = _getUsers();
-    const idx = users.findIndex(u => u.id === userId);
-    if (idx === -1) throw new Error('User not found');
-
-    if (users.some(u => u.username === username && u.id !== userId)) {
-      throw new Error('Username already taken');
+      return { user: userData };
+    } catch (error) {
+      console.error('Registration error:', error);
+      if (error.code === 'auth/email-already-in-use') {
+        throw new Error('Email already registered');
+      }
+      throw error;
     }
-
-    // Hash the password before storing
-    const hashedPassword = await hashPassword(password);
-
-    users[idx] = {
-      ...users[idx],
-      username,
-      password: hashedPassword, // Store hashed password
-      emailVerified: true,
-      clubIds: users[idx].clubIds || (users[idx].clubId ? [users[idx].clubId] : [])
-    };
-    _setUsers(users);
-    localStorage.removeItem(`verificationToken_${token}`);
-
-    const udata = {
-      id: users[idx].id,
-      email: users[idx].email,
-      username: users[idx].username,
-      role: users[idx].role,
-      clubIds: users[idx].clubIds || []
-    };
-    localStorage.setItem('currentUser', JSON.stringify(udata));
-    setUser(udata);
-    return { user: udata };
   };
 
-  /* -----------------------------
-     Login with Password Comparison
-     -----------------------------*/
   const login = async (email, password) => {
-    await new Promise(r => setTimeout(r, 300));
+    try {
+      // Sign in with Firebase Auth
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email.toLowerCase(),
+        password
+      );
 
-    const users = _getUsers();
-    const found = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-    
-    if (!found) {
-      throw new Error('Invalid email or password');
+      // Get user data from Firestore
+      const userData = await getUser(userCredential.user.uid);
+      
+      if (!userData) {
+        throw new Error('User data not found');
+      }
+
+      setUser({
+        id: userCredential.user.uid,
+        email: userCredential.user.email,
+        ...userData
+      });
+
+      return { user: userData };
+    } catch (error) {
+      console.error('Login error:', error);
+      if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+        throw new Error('Invalid email or password');
+      }
+      throw error;
     }
-
-    // Compare password with hashed password
-    const isPasswordValid = await comparePassword(password, found.password);
-    
-    if (!isPasswordValid) {
-      throw new Error('Invalid email or password');
-    }
-
-    const udata = {
-      id: found.id,
-      email: found.email,
-      username: found.username,
-      role: found.role,
-      clubIds: found.clubIds || (found.clubId ? [found.clubId] : []),
-      isSuperAdmin: found.isSuperAdmin || false
-    };
-    
-    localStorage.setItem('currentUser', JSON.stringify(udata));
-    setUser(udata);
-    return { user: udata };
   };
 
-  const logout = () => {
-    localStorage.removeItem('currentUser');
-    setUser(null);
+  const logout = async () => {
+    try {
+      await signOut(auth);
+      setUser(null);
+    } catch (error) {
+      console.error('Logout error:', error);
+      throw error;
+    }
   };
 
   /* -----------------------------
-     Create Club
+     Club Management
      -----------------------------*/
-  const createClub = async ({ name }) => {
+  const createClubFn = async ({ name }) => {
     if (!user) throw new Error('Must be logged in to create a club');
     if (!name || name.trim().length < 2) throw new Error('Club name is required');
 
-    const clubs = _getClubs();
-    const clubId = _generateId('c_');
-    const clubCode = generateUniqueClubCode();
+    try {
+      const clubCode = await generateUniqueCode();
+      
+      const clubData = {
+        name: name.trim(),
+        clubCode,
+        createdBy: user.id,
+        trainers: [user.id],
+        assistants: [],
+        members: [],
+        teams: []
+      };
 
-    const club = {
-      id: clubId,
-      name: name.trim(),
-      clubCode,
-      createdBy: user.id,
-      createdAt: Date.now(),
-      trainers: [user.id],
-      assistants: [],
-      members: [],
-      teams: []
-    };
-    clubs.push(club);
-    _setClubs(clubs);
+      const club = await createClub(clubData);
 
-    // add clubId to creator user's clubIds and set role to TRAINER
-    const users = _getUsers();
-    const uidx = users.findIndex(u => u.id === user.id);
-    if (uidx !== -1) {
-      const existingClubIds = users[uidx].clubIds || (users[uidx].clubId ? [users[uidx].clubId] : []);
-      const nextClubIds = Array.from(new Set([...(existingClubIds || []), clubId]));
-      users[uidx] = { ...users[uidx], role: ROLES.TRAINER, clubIds: nextClubIds };
-      _setUsers(users);
+      // Update user's clubIds and role
+      const updatedClubIds = Array.from(new Set([...(user.clubIds || []), club.id]));
+      await updateUser(user.id, {
+        clubIds: updatedClubIds,
+        role: ROLES.TRAINER
+      });
 
-      const updatedUser = { ...user, role: ROLES.TRAINER, clubIds: nextClubIds };
-      localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-      setUser(updatedUser);
+      // Refresh user data
+      await refreshUser();
+
+      return { club };
+    } catch (error) {
+      console.error('Error creating club:', error);
+      throw error;
     }
-
-    return { club };
   };
-
-  // [REST OF THE FUNCTIONS REMAIN THE SAME - createTeam, getClubByCode, etc.]
-  // I'll include the key ones below, but the file is getting long
 
   const createTeam = async ({ clubId, name, sport }) => {
     if (!user) throw new Error('Must be logged in');
-    const clubs = _getClubs();
-    const idx = clubs.findIndex(c => c.id === clubId);
-    if (idx === -1) throw new Error('Club not found');
+    
+    try {
+      const club = await getClub(clubId);
+      if (!club) throw new Error('Club not found');
 
-    const club = clubs[idx];
-    const isTrainerOrAssistantOrAdmin = 
-      club.trainers?.includes(user.id) || 
-      club.assistants?.includes(user.id) ||
-      user.role === ROLES.ADMIN;
+      const isAuthorized =
+        club.trainers?.includes(user.id) ||
+        club.assistants?.includes(user.id) ||
+        user.role === ROLES.ADMIN;
 
-    if (!isTrainerOrAssistantOrAdmin) throw new Error('Unauthorized');
+      if (!isAuthorized) throw new Error('Unauthorized');
 
-    const teamId = _generateId('t_');
-    const newTeam = {
-      id: teamId,
-      name: name.trim(),
-      sport: sport || '',
-      createdBy: user.id,
-      createdAt: Date.now(),
-      members: [],
-      events: []
-    };
+      const teamId = `team_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+      const newTeam = {
+        id: teamId,
+        name: name.trim(),
+        sport: sport || '',
+        createdBy: user.id,
+        members: [],
+        events: []
+      };
 
-    club.teams = club.teams || [];
-    club.teams.push(newTeam);
-    clubs[idx] = club;
-    _setClubs(clubs);
+      const updatedTeams = [...(club.teams || []), newTeam];
+      await updateClub(clubId, { teams: updatedTeams });
 
-    return { team: newTeam };
+      return { team: newTeam };
+    } catch (error) {
+      console.error('Error creating team:', error);
+      throw error;
+    }
   };
 
-  const getClubByCode = async (code) => {
-    const clubs = _getClubs();
-    const found = clubs.find(c => c.clubCode === code);
-    if (!found) throw new Error('Club not found');
-    return found;
+  const getClubByCodeFn = async (code) => {
+    try {
+      const club = await getClubByCode(code);
+      if (!club) throw new Error('Club not found');
+      return club;
+    } catch (error) {
+      console.error('Error getting club by code:', error);
+      throw error;
+    }
   };
 
-  const getClubById = async (clubId) => {
-    const clubs = _getClubs();
-    const found = clubs.find(c => c.id === clubId);
-    if (!found) throw new Error('Club not found');
-    return found;
+  const getClubByIdFn = async (clubId) => {
+    try {
+      const club = await getClub(clubId);
+      if (!club) throw new Error('Club not found');
+      return club;
+    } catch (error) {
+      console.error('Error getting club by ID:', error);
+      throw error;
+    }
   };
 
   const joinClubByCode = async ({ code }) => {
     if (!user) throw new Error('Must be logged in');
-    const club = await getClubByCode(code);
     
-    club.members = Array.isArray(club.members) ? club.members : [];
-    if (club.members.includes(user.id)) {
-      throw new Error('Already a member');
+    try {
+      const club = await getClubByCode(code);
+      if (!club) throw new Error('Club not found');
+
+      const members = Array.isArray(club.members) ? club.members : [];
+      if (members.includes(user.id)) {
+        throw new Error('Already a member');
+      }
+
+      const updatedMembers = [...members, user.id];
+      await updateClub(club.id, { members: updatedMembers });
+
+      // Update user's clubIds
+      const updatedClubIds = Array.from(new Set([...(user.clubIds || []), club.id]));
+      await updateUser(user.id, { clubIds: updatedClubIds });
+
+      await refreshUser();
+
+      return { club };
+    } catch (error) {
+      console.error('Error joining club:', error);
+      throw error;
     }
-
-    club.members.push(user.id);
-    const clubs = _getClubs();
-    const idx = clubs.findIndex(c => c.id === club.id);
-    if (idx !== -1) {
-      clubs[idx] = club;
-      _setClubs(clubs);
-    }
-
-    const users = _getUsers();
-    const uidx = users.findIndex(u => u.id === user.id);
-    if (uidx !== -1) {
-      const existingClubIds = users[uidx].clubIds || (users[uidx].clubId ? [users[uidx].clubId] : []);
-      const nextClubIds = Array.from(new Set([...(existingClubIds || []), club.id]));
-      users[uidx] = { ...users[uidx], clubIds: nextClubIds };
-      _setUsers(users);
-
-      const updatedUser = { ...user, clubIds: nextClubIds };
-      localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-      setUser(updatedUser);
-    }
-
-    return { club };
   };
 
   const nominateAssistant = async ({ clubId, targetUserId }) => {
     if (!user) throw new Error('Must be logged in');
-    const clubs = _getClubs();
-    const idx = clubs.findIndex(c => c.id === clubId);
-    if (idx === -1) throw new Error('Club not found');
+    
+    try {
+      const club = await getClub(clubId);
+      if (!club) throw new Error('Club not found');
 
-    const club = clubs[idx];
-    const isTrainerOrAdmin = club.trainers?.includes(user.id) || user.role === ROLES.ADMIN;
-    if (!isTrainerOrAdmin) throw new Error('Only trainers/admins can nominate assistants');
+      const isAuthorized = club.trainers?.includes(user.id) || user.role === ROLES.ADMIN;
+      if (!isAuthorized) throw new Error('Only trainers/admins can nominate assistants');
 
-    club.assistants = Array.isArray(club.assistants) ? club.assistants : [];
-    if (club.assistants.includes(targetUserId)) {
-      throw new Error('Already an assistant');
-    }
-    club.assistants.push(targetUserId);
-    clubs[idx] = club;
-    _setClubs(clubs);
-
-    const users = _getUsers();
-    const uidx = users.findIndex(u => u.id === targetUserId);
-    if (uidx !== -1) {
-      if (users[uidx].role === ROLES.USER) {
-        users[uidx] = { ...users[uidx], role: ROLES.ASSISTANT };
-        _setUsers(users);
+      const assistants = Array.isArray(club.assistants) ? club.assistants : [];
+      if (assistants.includes(targetUserId)) {
+        throw new Error('Already an assistant');
       }
-    }
 
-    return { success: true };
+      const updatedAssistants = [...assistants, targetUserId];
+      await updateClub(clubId, { assistants: updatedAssistants });
+
+      // Update target user's role if they're just a user
+      const targetUser = await getUser(targetUserId);
+      if (targetUser && targetUser.role === ROLES.USER) {
+        await updateUser(targetUserId, { role: ROLES.ASSISTANT });
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error nominating assistant:', error);
+      throw error;
+    }
   };
 
   const nominateTrainer = async ({ clubId, targetUserId }) => {
     if (!user) throw new Error('Must be logged in');
-    const clubs = _getClubs();
-    const idx = clubs.findIndex(c => c.id === clubId);
-    if (idx === -1) throw new Error('Club not found');
+    
+    try {
+      const club = await getClub(clubId);
+      if (!club) throw new Error('Club not found');
 
-    const club = clubs[idx];
-    const isTrainerOrAdmin = club.trainers?.includes(user.id) || user.role === ROLES.ADMIN;
-    if (!isTrainerOrAdmin) throw new Error('Only trainers/admins can nominate trainers');
+      const isAuthorized = club.trainers?.includes(user.id) || user.role === ROLES.ADMIN;
+      if (!isAuthorized) throw new Error('Only trainers/admins can nominate trainers');
 
-    club.trainers = Array.isArray(club.trainers) ? club.trainers : [];
-    if (club.trainers.includes(targetUserId)) {
-      throw new Error('Already a trainer');
+      const trainers = Array.isArray(club.trainers) ? club.trainers : [];
+      if (trainers.includes(targetUserId)) {
+        throw new Error('Already a trainer');
+      }
+
+      const updatedTrainers = [...trainers, targetUserId];
+      
+      // Remove from assistants if present
+      const assistants = (club.assistants || []).filter(id => id !== targetUserId);
+      
+      await updateClub(clubId, { 
+        trainers: updatedTrainers,
+        assistants: assistants
+      });
+
+      // Update target user's role
+      await updateUser(targetUserId, { role: ROLES.TRAINER });
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error nominating trainer:', error);
+      throw error;
     }
-    club.trainers.push(targetUserId);
-
-    club.assistants = (club.assistants || []).filter(id => id !== targetUserId);
-
-    clubs[idx] = club;
-    _setClubs(clubs);
-
-    const users = _getUsers();
-    const uidx = users.findIndex(u => u.id === targetUserId);
-    if (uidx !== -1) {
-      users[uidx] = { ...users[uidx], role: ROLES.TRAINER };
-      _setUsers(users);
-    }
-
-    return { success: true };
   };
 
-  const listClubsForUser = () => {
+  const listClubsForUser = async () => {
     if (!user) return [];
-    const clubs = _getClubs();
-    return clubs.filter(c => {
-      const userClubIds = user.clubIds || (user.clubId ? [user.clubId] : []);
-      return userClubIds.includes(c.id) ||
-             c.trainers?.includes(user.id) ||
-             c.assistants?.includes(user.id) ||
-             c.members?.includes(user.id);
-    });
+    
+    try {
+      return await getUserClubs(user.id);
+    } catch (error) {
+      console.error('Error listing clubs:', error);
+      return [];
+    }
   };
 
+  const leaveClub = async ({ clubId }) => {
+    if (!user) throw new Error('Must be logged in');
+    
+    try {
+      const club = await getClub(clubId);
+      if (!club) throw new Error('Club not found');
+
+      const updatedClub = {
+        trainers: (club.trainers || []).filter(id => id !== user.id),
+        assistants: (club.assistants || []).filter(id => id !== user.id),
+        members: (club.members || []).filter(id => id !== user.id)
+      };
+
+      await updateClub(clubId, updatedClub);
+
+      // Update user's clubIds
+      const updatedClubIds = (user.clubIds || []).filter(id => id !== clubId);
+      const newRole = user.role === ROLES.TRAINER ? ROLES.USER : user.role;
+      
+      await updateUser(user.id, {
+        clubIds: updatedClubIds,
+        role: newRole
+      });
+
+      await refreshUser();
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error leaving club:', error);
+      throw error;
+    }
+  };
+
+  /* -----------------------------
+     Join Requests
+     -----------------------------*/
   const requestJoin = async ({ userId, clubId, teamId = null }) => {
-    const clubs = _getClubs();
-    const club = clubs.find(c => c.id === clubId);
-    if (!club) throw new Error('Club not found');
+    try {
+      const club = await getClub(clubId);
+      if (!club) throw new Error('Club not found');
 
-    const requests = _getRequests();
-    const existing = requests.find(r =>
-      r.userId === userId &&
-      r.clubId === clubId &&
-      r.teamId === teamId &&
-      r.status === 'pending'
-    );
-    if (existing) throw new Error('Request already pending');
+      const requestData = {
+        userId,
+        clubId,
+        teamId: teamId || null,
+        clubName: club.name,
+        teamName: teamId ? ((club.teams || []).find(t => t.id === teamId)?.name || null) : null
+      };
 
-    const req = {
-      id: _generateId('req_'),
-      userId,
-      clubId,
-      teamId: teamId || null,
-      clubName: club.name,
-      teamName: teamId ? ((club.teams || []).find(t => t.id === teamId)?.name || null) : null,
-      createdAt: Date.now(),
-      status: 'pending'
-    };
-
-    requests.push(req);
-    _setRequests(requests);
-    return { ok: true, request: req };
+      const request = await createRequest(requestData);
+      return { ok: true, request };
+    } catch (error) {
+      console.error('Error creating request:', error);
+      throw error;
+    }
   };
 
   const requestJoinTeam = async ({ clubId, teamId }) => {
@@ -466,98 +486,76 @@ export const AuthProvider = ({ children }) => {
   };
 
   const approveJoinRequest = async ({ requestId, handledByUserId = null }) => {
-    const requests = _getRequests();
-    const idx = requests.findIndex(r => r.id === requestId);
-    if (idx === -1) throw new Error('Request not found');
-    const req = requests[idx];
-    req.status = 'approved';
-    req.handledAt = Date.now();
-    req.handledBy = handledByUserId;
-    requests[idx] = req;
-    _setRequests(requests);
+    try {
+      const request = await getRequest(requestId);
+      if (!request) throw new Error('Request not found');
 
-    const clubs = _getClubs();
-    const cidx = clubs.findIndex(c => c.id === req.clubId);
-    if (cidx !== -1) {
-      const club = clubs[cidx];
-      club.members = Array.isArray(club.members) ? club.members : [];
-      if (!club.members.includes(req.userId)) club.members.push(req.userId);
+      // Update request status
+      await updateRequest(requestId, {
+        status: 'approved',
+        handledBy: handledByUserId
+      });
 
-      if (req.teamId) {
-        club.teams = club.teams || [];
-        const tidx = club.teams.findIndex(t => t.id === req.teamId);
-        if (tidx !== -1) {
-          const team = club.teams[tidx];
-          team.members = Array.isArray(team.members) ? team.members : [];
-          if (!team.members.includes(req.userId)) team.members.push(req.userId);
-          club.teams[tidx] = team;
+      // Add user to club members
+      const club = await getClub(request.clubId);
+      if (club) {
+        const members = Array.isArray(club.members) ? club.members : [];
+        if (!members.includes(request.userId)) {
+          const updatedMembers = [...members, request.userId];
+          
+          let updates = { members: updatedMembers };
+
+          // Add to team if specified
+          if (request.teamId) {
+            const teams = club.teams || [];
+            const teamIndex = teams.findIndex(t => t.id === request.teamId);
+            if (teamIndex !== -1) {
+              const team = teams[teamIndex];
+              const teamMembers = Array.isArray(team.members) ? team.members : [];
+              if (!teamMembers.includes(request.userId)) {
+                teams[teamIndex] = {
+                  ...team,
+                  members: [...teamMembers, request.userId]
+                };
+                updates.teams = teams;
+              }
+            }
+          }
+
+          await updateClub(request.clubId, updates);
+        }
+
+        // Update user's clubIds
+        const targetUser = await getUser(request.userId);
+        if (targetUser) {
+          const clubIds = Array.from(new Set([...(targetUser.clubIds || []), request.clubId]));
+          await updateUser(request.userId, { clubIds });
         }
       }
 
-      clubs[cidx] = club;
-      _setClubs(clubs);
+      return { ok: true, request };
+    } catch (error) {
+      console.error('Error approving request:', error);
+      throw error;
     }
-
-    const users = _getUsers();
-    const uidx = users.findIndex(u => u.id === req.userId);
-    if (uidx !== -1) {
-      const existingClubIds = users[uidx].clubIds || (users[uidx].clubId ? [users[uidx].clubId] : []);
-      const nextClubIds = Array.from(new Set([...(existingClubIds || []), req.clubId]));
-      users[uidx] = { ...users[uidx], clubIds: nextClubIds };
-      _setUsers(users);
-
-      const cu = JSON.parse(localStorage.getItem('currentUser') || 'null');
-      if (cu && cu.id === req.userId) {
-        localStorage.setItem('currentUser', JSON.stringify({ ...cu, clubIds: nextClubIds }));
-      }
-    }
-
-    return { ok: true, request: req };
   };
 
   const denyJoinRequest = async ({ requestId, handledByUserId = null }) => {
-    const requests = _getRequests();
-    const idx = requests.findIndex(r => r.id === requestId);
-    if (idx === -1) throw new Error('Request not found');
-    requests[idx].status = 'denied';
-    requests[idx].handledAt = Date.now();
-    requests[idx].handledBy = handledByUserId;
-    _setRequests(requests);
-    return { ok: true, request: requests[idx] };
-  };
+    try {
+      await updateRequest(requestId, {
+        status: 'denied',
+        handledBy: handledByUserId
+      });
 
-  const leaveClub = async ({ clubId }) => {
-    if (!user) throw new Error('Must be logged in');
-    const clubs = _getClubs();
-    const idx = clubs.findIndex(c => c.id === clubId);
-    if (idx === -1) throw new Error('Club not found');
-
-    const club = clubs[idx];
-    club.trainers = (club.trainers || []).filter(id => id !== user.id);
-    club.assistants = (club.assistants || []).filter(id => id !== user.id);
-    club.members = (club.members || []).filter(id => id !== user.id);
-    clubs[idx] = club;
-    _setClubs(clubs);
-
-    const users = _getUsers();
-    const uidx = users.findIndex(u => u.id === user.id);
-    if (uidx !== -1) {
-      const currentClubIds = users[uidx].clubIds || (users[uidx].clubId ? [users[uidx].clubId] : []);
-      const nextClubIds = currentClubIds.filter(id => id !== clubId);
-      const newRole = users[uidx].role === ROLES.TRAINER ? ROLES.USER : users[uidx].role;
-      users[uidx] = { ...users[uidx], role: newRole, clubIds: nextClubIds };
-      _setUsers(users);
-
-      const updatedUser = { ...user, clubIds: nextClubIds, role: newRole };
-      localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-      setUser(updatedUser);
+      return { ok: true };
+    } catch (error) {
+      console.error('Error denying request:', error);
+      throw error;
     }
-
-    return { success: true };
   };
 
   /* -----------------------------
-     Role helpers
+     Role Helpers
      -----------------------------*/
   const hasRole = (roles) => {
     if (!user) return false;
@@ -575,78 +573,69 @@ export const AuthProvider = ({ children }) => {
   const canManageTeam = () => hasAnyRole([ROLES.ADMIN, ROLES.TRAINER, ROLES.ASSISTANT]);
   const isAdmin = () => hasRole(ROLES.ADMIN);
 
-  const listUsers = () => {
+  const listUsers = async () => {
     if (!isAdmin()) {
       console.warn('listUsers: user is not admin');
       return [];
     }
-    const allUsers = _getUsers();
-    console.log('listUsers returned:', allUsers);
-    return allUsers;
+    try {
+      return await getAllUsers();
+    } catch (error) {
+      console.error('Error listing users:', error);
+      return [];
+    }
   };
 
-  const updateUser = async ({ userId, updates }) => {
+  const updateUserFn = async ({ userId, updates }) => {
     if (!isAdmin()) throw new Error('Only admins can update users');
     
-    const users = _getUsers();
-    const idx = users.findIndex(u => u.id === userId);
-    if (idx === -1) throw new Error('User not found');
-    
-    // Don't allow changing own admin role
-    if (userId === user?.id && updates.role && updates.role !== ROLES.ADMIN) {
-      throw new Error('Cannot change your own admin role');
+    try {
+      // Don't allow changing own admin role
+      if (userId === user?.id && updates.role && updates.role !== ROLES.ADMIN) {
+        throw new Error('Cannot change your own admin role');
+      }
+
+      // Don't allow changing SuperAdmin
+      const targetUser = await getUser(userId);
+      if (targetUser?.isSuperAdmin && userId !== user?.id) {
+        throw new Error('Cannot modify SuperAdmin account');
+      }
+
+      await updateUser(userId, updates);
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating user:', error);
+      throw error;
     }
-    
-    // Don't allow changing SuperAdmin
-    if (users[idx].isSuperAdmin && userId !== user?.id) {
-      throw new Error('Cannot modify SuperAdmin account');
-    }
-    
-    users[idx] = { ...users[idx], ...updates };
-    _setUsers(users);
-    
-    return { success: true, user: users[idx] };
   };
 
-  const deleteUser = async ({ userId }) => {
+  const deleteUserFn = async ({ userId }) => {
     if (!isAdmin()) throw new Error('Only admins can delete users');
     
-    const users = _getUsers();
-    const targetUser = users.find(u => u.id === userId);
-    
-    // Don't allow deleting yourself
-    if (userId === user?.id) {
-      throw new Error('Cannot delete your own account');
+    try {
+      // Don't allow deleting yourself
+      if (userId === user?.id) {
+        throw new Error('Cannot delete your own account');
+      }
+
+      // Don't allow deleting SuperAdmin
+      const targetUser = await getUser(userId);
+      if (targetUser?.isSuperAdmin) {
+        throw new Error('Cannot delete SuperAdmin account');
+      }
+
+      await deleteUserFromFirestore(userId);
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      throw error;
     }
-    
-    // Don't allow deleting SuperAdmin
-    if (targetUser?.isSuperAdmin) {
-      throw new Error('Cannot delete SuperAdmin account');
-    }
-    
-    const filtered = users.filter(u => u.id !== userId);
-    _setUsers(filtered);
-    
-    return { success: true };
   };
 
   const changeUserPassword = async ({ userId, newPassword }) => {
-    if (!isAdmin()) throw new Error('Only admins can change passwords');
-    if (!newPassword || newPassword.length < 8) {
-      throw new Error('Password must be at least 8 characters');
-    }
-    
-    const users = _getUsers();
-    const idx = users.findIndex(u => u.id === userId);
-    if (idx === -1) throw new Error('User not found');
-    
-    // Hash the new password
-    const hashedPassword = await hashPassword(newPassword);
-    
-    users[idx] = { ...users[idx], password: hashedPassword };
-    _setUsers(users);
-    
-    return { success: true };
+    // Note: Firebase Auth doesn't allow admins to change passwords directly
+    // This would require sending a password reset email
+    throw new Error('Password reset requires email verification. Use Firebase Auth password reset.');
   };
 
   /* -----------------------------
@@ -657,30 +646,32 @@ export const AuthProvider = ({ children }) => {
     loading,
     refreshUser,
     register,
-    completeRegistration,
     login,
     logout,
-    createClub,
+    // Clubs
+    createClub: createClubFn,
     createTeam,
-    getClubByCode,
-    getClubById,
+    getClubByCode: getClubByCodeFn,
+    getClubById: getClubByIdFn,
     joinClubByCode,
     nominateAssistant,
     nominateTrainer,
     listClubsForUser,
     leaveClub,
+    // Requests
     requestJoin,
     requestJoinTeam,
     approveJoinRequest,
     denyJoinRequest,
+    // Roles
     hasRole,
     hasAnyRole,
     canManageEvents,
     canManageTeam,
     isAdmin,
     listUsers,
-    updateUser,
-    deleteUser,
+    updateUser: updateUserFn,
+    deleteUser: deleteUserFn,
     changeUserPassword
   };
 
