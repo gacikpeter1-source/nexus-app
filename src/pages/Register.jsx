@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import bcrypt from 'bcryptjs';
 
 const Register = () => {
   const [email, setEmail] = useState('');
@@ -15,9 +16,6 @@ const Register = () => {
   const { register, completeRegistration } = useAuth();
   const navigate = useNavigate();
   const { t } = useLanguage();
-
-  // Read env var at runtime (Vite exposes import.meta.env)
-  const SKIP_VERIFICATION = import.meta.env.VITE_SKIP_EMAIL_VERIFICATION === 'true';
 
   const validateEmail = (email) => {
     const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -40,82 +38,86 @@ const Register = () => {
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  setError('');
-  setInfo('');
+    e.preventDefault();
+    setError('');
+    setInfo('');
 
-  if (!validateEmail(email)) {
-    setError('Please enter a valid email address');
-    return;
-  }
-
-  const usernameError = validateUsername(username);
-  if (usernameError) {
-    setError(usernameError);
-    return;
-  }
-
-  const passwordError = validatePassword(password);
-  if (passwordError) {
-    setError(passwordError);
-    return;
-  }
-
-  if (password !== confirmPassword) {
-    setError('Passwords do not match');
-    return;
-  }
-
-  setLoading(true);
-
-  try {
-    // Check if user exists
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
-      throw new Error('Email already registered');
+    if (!validateEmail(email)) {
+      setError('Please enter a valid email address');
+      return;
     }
 
-    // Create user directly (skip email verification)
-    const newUser = {
-      id: Date.now().toString(),
-      email: email.toLowerCase(),
-      username: username,
-      password: password,
-      role: 'user',
-      emailVerified: true,
-      clubIds: [],
-      createdAt: new Date().toISOString()
-    };
+    const usernameError = validateUsername(username);
+    if (usernameError) {
+      setError(usernameError);
+      return;
+    }
 
-    users.push(newUser);
-    localStorage.setItem('users', JSON.stringify(users));
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      setError(passwordError);
+      return;
+    }
 
-    // Log them in
-    const userData = {
-      id: newUser.id,
-      email: newUser.email,
-      username: newUser.username,
-      role: newUser.role,
-      clubIds: newUser.clubIds
-    };
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
 
-    localStorage.setItem('currentUser', JSON.stringify(userData));
-    
-    // Redirect to dashboard
-    navigate('/');
-  } catch (err) {
-    setError(err.message || 'Registration failed. Please try again.');
-  } finally {
-    setLoading(false);
-  }
-};
+    setLoading(true);
+
+    try {
+      // Check if user exists
+      const users = JSON.parse(localStorage.getItem('users') || '[]');
+      if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
+        throw new Error('Email already registered');
+      }
+
+      // Hash password using bcrypt
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
+
+      // Create user with hashed password
+      const newUser = {
+        id: Date.now().toString(),
+        email: email.toLowerCase(),
+        username: username,
+        password: hashedPassword, // Store hashed password
+        role: 'user',
+        emailVerified: true,
+        clubIds: [],
+        createdAt: new Date().toISOString()
+      };
+
+      users.push(newUser);
+      localStorage.setItem('users', JSON.stringify(users));
+
+      // Log them in
+      const userData = {
+        id: newUser.id,
+        email: newUser.email,
+        username: newUser.username,
+        role: newUser.role,
+        clubIds: newUser.clubIds
+      };
+
+      localStorage.setItem('currentUser', JSON.stringify(userData));
+      
+      // Redirect to dashboard
+      navigate('/');
+    } catch (err) {
+      setError(err.message || 'Registration failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('auth.register')}</h1>
-          <p className="text-gray-600">{t('auth.joinPlatform')}</p>
+          <p className="text-gray-600">{t('auth.createAccount')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
@@ -166,12 +168,12 @@ const Register = () => {
               required
               disabled={loading}
             />
-            <p className="mt-1 text-xs text-gray-500">{t('changePassword.minLength')}</p>
+            <p className="mt-1 text-xs text-gray-500">At least 8 characters with uppercase, lowercase, and number</p>
           </div>
 
           <div>
             <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
-              {t('auth.confirmPassword')}
+              {t('changePassword.confirmPassword')}
             </label>
             <input
               id="confirmPassword"
@@ -202,7 +204,7 @@ const Register = () => {
             disabled={loading}
             className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? (SKIP_VERIFICATION ? 'Creating Account...' : 'Processing...') : 'Create Account'}
+            {loading ? t('common.loading') : t('auth.register')}
           </button>
         </form>
 
@@ -217,7 +219,7 @@ const Register = () => {
 
         <div className="mt-8 pt-6 border-t border-gray-200">
           <p className="text-xs text-gray-500 text-center">
-            {t('auth.agreeTerms')}
+            By registering, you agree to our Terms of Service and Privacy Policy
           </p>
         </div>
       </div>
