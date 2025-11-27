@@ -7,7 +7,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState('');
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const { login } = useAuth();
@@ -36,14 +36,14 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('common.welcome')}</h1>
-          <p className="text-gray-600">{t('auth.signIn')}</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('auth.welcomeBack')}</h1>
+          <p className="text-gray-600">{t('auth.signInAccount')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-              {t('auth.email')}
+              {t('auth.emailAddress')}
             </label>
             <input
               id="email"
@@ -101,11 +101,11 @@ const Login = () => {
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
               <label htmlFor="remember" className="ml-2 block text-sm text-gray-700">
-                {t('auth.remember')}
+                {t('auth.rememberMe')}
               </label>
             </div>
             <Link to="/forgot-password" className="text-sm text-blue-600 hover:text-blue-700">
-              {t('auth.forgotPassword?')}
+              {t('auth.forgotPassword')}
             </Link>
           </div>
 
@@ -120,7 +120,7 @@ const Login = () => {
             disabled={loading}
             className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? t('auth.signingIn') : t('auth.signIn')}
           </button>
         </form>
 
@@ -128,7 +128,7 @@ const Login = () => {
           <p className="text-sm text-gray-600">
             {t('auth.dontHaveAccount')}{' '}
             <Link to="/register" className="text-blue-600 hover:text-blue-700 font-medium">
-               {t('common.create')}
+              {t('auth.createOne')}
             </Link>
           </p>
         </div>
