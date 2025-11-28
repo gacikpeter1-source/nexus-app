@@ -35,7 +35,8 @@
     "previous": "Previous",
     "finish": "Finish",
     "apply": "Apply",
-    "reset": "Reset"
+    "reset": "Reset",
+    "table": "Table"
   },
   "nav": {
     "teams": "Teams",
@@ -223,7 +224,9 @@
     "month": "Month",
     "createEvent": "Create Event",
     "noEvents": "No events scheduled",
-    "allDay": "All day"
+    "allDay": "All day",
+    "timeline": "Timeline",
+    "monthView": "Month View"
   },
   "event": {
     "title": "Event",
