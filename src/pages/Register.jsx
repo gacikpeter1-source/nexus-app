@@ -1,16 +1,17 @@
-// src/pages/Register.jsx - FIREBASE VERSION
+// src/pages/Register.jsx - WITH EMAIL VERIFICATION
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 
-const Register = () => {
+export default function Register() {
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
   const { t } = useLanguage();
@@ -38,6 +39,7 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess(false);
 
     if (!validateEmail(email)) {
       setError('Please enter a valid email address');
@@ -65,7 +67,8 @@ const Register = () => {
 
     try {
       await register(email, username, password);
-      navigate('/');
+      setSuccess(true);
+      // Don't navigate - show success message with instructions
     } catch (err) {
       setError(err.message || 'Registration failed. Please try again.');
     } finally {
@@ -73,6 +76,71 @@ const Register = () => {
     }
   };
 
+  // Success screen
+  if (success) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
+          {/* Success Icon */}
+          <div className="flex justify-center mb-6">
+            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center">
+              <svg className="w-12 h-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+          </div>
+
+          <div className="text-center mb-6">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">✅ Registration Successful!</h1>
+            <p className="text-gray-600">
+              We've sent a verification email to:
+            </p>
+            <p className="text-blue-600 font-semibold mt-2">{email}</p>
+          </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <h3 className="font-semibold text-blue-900 mb-2">📬 Next Steps:</h3>
+            <ol className="text-sm text-blue-800 space-y-2 list-decimal list-inside">
+              <li>Check your email inbox for the verification link</li>
+              <li>Click the link to verify your email address</li>
+              <li>Return here and login with your credentials</li>
+            </ol>
+          </div>
+
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+            <p className="text-sm text-yellow-800">
+              ⏰ <strong>Note:</strong> The verification link expires in 24 hours. If you don't see the email, check your spam folder.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <Link
+              to="/login"
+              className="block w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition text-center"
+            >
+              Go to Login
+            </Link>
+            
+            <Link
+              to="/register"
+              onClick={() => {
+                setSuccess(false);
+                setEmail('');
+                setUsername('');
+                setPassword('');
+                setConfirmPassword('');
+              }}
+              className="block w-full bg-gray-100 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-200 transition text-center"
+            >
+              Register Another Account
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Registration form
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
@@ -96,6 +164,7 @@ const Register = () => {
               required
               disabled={loading}
             />
+            <p className="mt-1 text-xs text-gray-500">📧 You'll need to verify this email address</p>
           </div>
 
           <div>
@@ -180,6 +249,4 @@ const Register = () => {
       </div>
     </div>
   );
-};
-
-export default Register;
+}

@@ -1,9 +1,8 @@
-// src/pages/Register.jsx
+// src/pages/Register.jsx - FIREBASE VERSION
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
-import bcrypt from 'bcryptjs';
 
 const Register = () => {
   const [email, setEmail] = useState('');
@@ -12,8 +11,7 @@ const Register = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [info, setInfo] = useState('');
-  const { register, completeRegistration } = useAuth();
+  const { register } = useAuth();
   const navigate = useNavigate();
   const { t } = useLanguage();
 
@@ -40,7 +38,6 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    setInfo('');
 
     if (!validateEmail(email)) {
       setError('Please enter a valid email address');
@@ -67,43 +64,7 @@ const Register = () => {
     setLoading(true);
 
     try {
-      // Check if user exists
-      const users = JSON.parse(localStorage.getItem('users') || '[]');
-      if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
-        throw new Error('Email already registered');
-      }
-
-      // Hash password using bcrypt
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, salt);
-
-      // Create user with hashed password
-      const newUser = {
-        id: Date.now().toString(),
-        email: email.toLowerCase(),
-        username: username,
-        password: hashedPassword, // Store hashed password
-        role: 'user',
-        emailVerified: true,
-        clubIds: [],
-        createdAt: new Date().toISOString()
-      };
-
-      users.push(newUser);
-      localStorage.setItem('users', JSON.stringify(users));
-
-      // Log them in
-      const userData = {
-        id: newUser.id,
-        email: newUser.email,
-        username: newUser.username,
-        role: newUser.role,
-        clubIds: newUser.clubIds
-      };
-
-      localStorage.setItem('currentUser', JSON.stringify(userData));
-      
-      // Redirect to dashboard
+      await register(email, username, password);
       navigate('/');
     } catch (err) {
       setError(err.message || 'Registration failed. Please try again.');
@@ -193,12 +154,6 @@ const Register = () => {
             </div>
           )}
 
-          {info && (
-            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
-              {info}
-            </div>
-          )}
-
           <button
             type="submit"
             disabled={loading}
@@ -210,7 +165,7 @@ const Register = () => {
 
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-600">
-            {t('auth.alreadyHaveAccount')}{' '}
+            {t('auth.haveAccount')}{' '}
             <Link to="/login" className="text-blue-600 hover:text-blue-700 font-medium">
               {t('auth.signIn')}
             </Link>

@@ -1,10 +1,11 @@
-// src/contexts/AuthContext.jsx - FIREBASE VERSION
+// src/contexts/AuthContext.jsx - WITH EMAIL VERIFICATION
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { 
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  sendEmailVerification
 } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import {
@@ -52,25 +53,23 @@ const initializeSuperAdmin = async () => {
     const superAdminEmail = 'admin@nexus.com';
     const superAdminPassword = 'SuperAdmin2025!';
     
-    // Check if SuperAdmin already exists
     const existing = await getUserByEmail(superAdminEmail);
     
     if (!existing) {
       console.log('🔧 Creating SuperAdmin...');
       
-      // Create Firebase Auth user
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         superAdminEmail,
         superAdminPassword
       );
       
-      // Create Firestore user document
+      // SuperAdmin doesn't need email verification
       await createUser(userCredential.user.uid, {
         email: superAdminEmail,
         username: 'SuperAdmin',
         role: ROLES.ADMIN,
-        emailVerified: true,
+        emailVerified: true, // Auto-verified
         clubIds: [],
         isSuperAdmin: true
       });
@@ -78,7 +77,6 @@ const initializeSuperAdmin = async () => {
       console.log('✅ SuperAdmin initialized');
     }
   } catch (error) {
-    // SuperAdmin might already exist from a previous session
     if (error.code === 'auth/email-already-in-use') {
       console.log('✅ SuperAdmin already exists');
     } else {
@@ -94,22 +92,20 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Initialize SuperAdmin on app load
   useEffect(() => {
     initializeSuperAdmin();
   }, []);
 
-  // Listen to Firebase Auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // User is signed in, get their data from Firestore
         try {
           const userData = await getUser(firebaseUser.uid);
           if (userData) {
             setUser({
               id: firebaseUser.uid,
               email: firebaseUser.email,
+              emailVerified: firebaseUser.emailVerified, // FROM FIREBASE AUTH
               ...userData
             });
           }
@@ -117,7 +113,6 @@ export const AuthProvider = ({ children }) => {
           console.error('Error loading user data:', error);
         }
       } else {
-        // User is signed out
         setUser(null);
       }
       setLoading(false);
@@ -126,15 +121,18 @@ export const AuthProvider = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
-  // Refresh user data
   const refreshUser = useCallback(async () => {
     if (auth.currentUser) {
       try {
+        // Reload Firebase user to get latest emailVerified status
+        await auth.currentUser.reload();
+        
         const userData = await getUser(auth.currentUser.uid);
         if (userData) {
           setUser({
             id: auth.currentUser.uid,
             email: auth.currentUser.email,
+            emailVerified: auth.currentUser.emailVerified,
             ...userData
           });
         }
@@ -145,32 +143,32 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   /* -----------------------------
-     Registration & Login
+     Registration with Email Verification
      -----------------------------*/
   const register = async (email, username, password) => {
     try {
       // Create Firebase Auth user
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
+      // Send verification email
+      await sendEmailVerification(userCredential.user);
+      
       // Create Firestore user document
       await createUser(userCredential.user.uid, {
         email: email.toLowerCase(),
         username: username,
         role: ROLES.USER,
-        emailVerified: true, // Skip email verification for now
+        emailVerified: false, // Will be true after verification
         clubIds: []
       });
 
-      // Get the created user data
-      const userData = await getUser(userCredential.user.uid);
+      // Sign out immediately - user must verify first
+      await signOut(auth);
       
-      setUser({
-        id: userCredential.user.uid,
-        email: userCredential.user.email,
-        ...userData
-      });
-
-      return { user: userData };
+      return { 
+        success: true,
+        message: 'Registration successful! Please check your email to verify your account.'
+      };
     } catch (error) {
       console.error('Registration error:', error);
       if (error.code === 'auth/email-already-in-use') {
@@ -180,35 +178,68 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  /* -----------------------------
+     Login with Email Verification Check
+     -----------------------------*/
   const login = async (email, password) => {
     try {
-      // Sign in with Firebase Auth
       const userCredential = await signInWithEmailAndPassword(
         auth,
         email.toLowerCase(),
         password
       );
 
-      // Get user data from Firestore
+      // Check if email is verified (except for SuperAdmin)
       const userData = await getUser(userCredential.user.uid);
       
       if (!userData) {
         throw new Error('User data not found');
       }
 
+      // Allow SuperAdmin to login without verification
+      if (!userData.isSuperAdmin && !userCredential.user.emailVerified) {
+        // Sign out immediately
+        await signOut(auth);
+        throw new Error('Please verify your email before logging in. Check your inbox for the verification link.');
+      }
+
       setUser({
         id: userCredential.user.uid,
         email: userCredential.user.email,
+        emailVerified: userCredential.user.emailVerified,
         ...userData
       });
 
       return { user: userData };
     } catch (error) {
       console.error('Login error:', error);
-      if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+      if (error.message.includes('verify your email')) {
+        throw error; // Pass through our custom message
+      }
+      if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
         throw new Error('Invalid email or password');
       }
       throw error;
+    }
+  };
+
+  /* -----------------------------
+     Resend Verification Email
+     -----------------------------*/
+  const resendVerificationEmail = async () => {
+    if (auth.currentUser && !auth.currentUser.emailVerified) {
+      try {
+        await sendEmailVerification(auth.currentUser);
+        return { success: true, message: 'Verification email sent! Please check your inbox.' };
+      } catch (error) {
+        console.error('Error sending verification email:', error);
+        if (error.code === 'auth/too-many-requests') {
+          throw new Error('Too many requests. Please wait a few minutes before trying again.');
+        }
+        throw error;
+      }
+    } else {
+      throw new Error('No user signed in or email already verified');
     }
   };
 
@@ -223,7 +254,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   /* -----------------------------
-     Club Management
+     Club Management (same as before)
      -----------------------------*/
   const createClubFn = async ({ name }) => {
     if (!user) throw new Error('Must be logged in to create a club');
@@ -244,14 +275,12 @@ export const AuthProvider = ({ children }) => {
 
       const club = await createClub(clubData);
 
-      // Update user's clubIds and role
       const updatedClubIds = Array.from(new Set([...(user.clubIds || []), club.id]));
       await updateUser(user.id, {
         clubIds: updatedClubIds,
         role: ROLES.TRAINER
       });
 
-      // Refresh user data
       await refreshUser();
 
       return { club };
@@ -332,7 +361,6 @@ export const AuthProvider = ({ children }) => {
       const updatedMembers = [...members, user.id];
       await updateClub(club.id, { members: updatedMembers });
 
-      // Update user's clubIds
       const updatedClubIds = Array.from(new Set([...(user.clubIds || []), club.id]));
       await updateUser(user.id, { clubIds: updatedClubIds });
 
@@ -363,7 +391,6 @@ export const AuthProvider = ({ children }) => {
       const updatedAssistants = [...assistants, targetUserId];
       await updateClub(clubId, { assistants: updatedAssistants });
 
-      // Update target user's role if they're just a user
       const targetUser = await getUser(targetUserId);
       if (targetUser && targetUser.role === ROLES.USER) {
         await updateUser(targetUserId, { role: ROLES.ASSISTANT });
@@ -392,8 +419,6 @@ export const AuthProvider = ({ children }) => {
       }
 
       const updatedTrainers = [...trainers, targetUserId];
-      
-      // Remove from assistants if present
       const assistants = (club.assistants || []).filter(id => id !== targetUserId);
       
       await updateClub(clubId, { 
@@ -401,7 +426,6 @@ export const AuthProvider = ({ children }) => {
         assistants: assistants
       });
 
-      // Update target user's role
       await updateUser(targetUserId, { role: ROLES.TRAINER });
 
       return { success: true };
@@ -437,7 +461,6 @@ export const AuthProvider = ({ children }) => {
 
       await updateClub(clubId, updatedClub);
 
-      // Update user's clubIds
       const updatedClubIds = (user.clubIds || []).filter(id => id !== clubId);
       const newRole = user.role === ROLES.TRAINER ? ROLES.USER : user.role;
       
@@ -490,13 +513,11 @@ export const AuthProvider = ({ children }) => {
       const request = await getRequest(requestId);
       if (!request) throw new Error('Request not found');
 
-      // Update request status
       await updateRequest(requestId, {
         status: 'approved',
         handledBy: handledByUserId
       });
 
-      // Add user to club members
       const club = await getClub(request.clubId);
       if (club) {
         const members = Array.isArray(club.members) ? club.members : [];
@@ -505,7 +526,6 @@ export const AuthProvider = ({ children }) => {
           
           let updates = { members: updatedMembers };
 
-          // Add to team if specified
           if (request.teamId) {
             const teams = club.teams || [];
             const teamIndex = teams.findIndex(t => t.id === request.teamId);
@@ -525,7 +545,6 @@ export const AuthProvider = ({ children }) => {
           await updateClub(request.clubId, updates);
         }
 
-        // Update user's clubIds
         const targetUser = await getUser(request.userId);
         if (targetUser) {
           const clubIds = Array.from(new Set([...(targetUser.clubIds || []), request.clubId]));
@@ -590,12 +609,10 @@ export const AuthProvider = ({ children }) => {
     if (!isAdmin()) throw new Error('Only admins can update users');
     
     try {
-      // Don't allow changing own admin role
       if (userId === user?.id && updates.role && updates.role !== ROLES.ADMIN) {
         throw new Error('Cannot change your own admin role');
       }
 
-      // Don't allow changing SuperAdmin
       const targetUser = await getUser(userId);
       if (targetUser?.isSuperAdmin && userId !== user?.id) {
         throw new Error('Cannot modify SuperAdmin account');
@@ -613,12 +630,10 @@ export const AuthProvider = ({ children }) => {
     if (!isAdmin()) throw new Error('Only admins can delete users');
     
     try {
-      // Don't allow deleting yourself
       if (userId === user?.id) {
         throw new Error('Cannot delete your own account');
       }
 
-      // Don't allow deleting SuperAdmin
       const targetUser = await getUser(userId);
       if (targetUser?.isSuperAdmin) {
         throw new Error('Cannot delete SuperAdmin account');
@@ -633,8 +648,6 @@ export const AuthProvider = ({ children }) => {
   };
 
   const changeUserPassword = async ({ userId, newPassword }) => {
-    // Note: Firebase Auth doesn't allow admins to change passwords directly
-    // This would require sending a password reset email
     throw new Error('Password reset requires email verification. Use Firebase Auth password reset.');
   };
 
@@ -648,6 +661,7 @@ export const AuthProvider = ({ children }) => {
     register,
     login,
     logout,
+    resendVerificationEmail, // NEW!
     // Clubs
     createClub: createClubFn,
     createTeam,

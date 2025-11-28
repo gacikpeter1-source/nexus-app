@@ -26,6 +26,7 @@ import Support from './pages/Support';
 import Feedback from './pages/Feedback';
 import Language from './pages/Language';
 import FirebaseTest from './components/FirebaseTest';
+import VerifyEmail from './pages/VerifyEmail';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -516,6 +517,7 @@ function AppContent() {
           <Route path="/feedback" element={<ProtectedRoute><Feedback /></ProtectedRoute>} />
           
           <Route path="/admin/users" element={<ProtectedRoute allowedRoles={[ROLES.ADMIN]}><AdminUsers /></ProtectedRoute>} />
+          
           
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
