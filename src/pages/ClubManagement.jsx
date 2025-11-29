@@ -427,41 +427,66 @@ export default function ClubManagement() {
   const handleChangeRole = async (userId, newRole) => {
     if (!selectedClubId) return;
     
+    console.log('🔄 Changing role:', { userId, newRole, selectedClubId });
+    
     try {
       // Update user's role in Firebase users collection
+      console.log('📝 Step 1: Updating user role in Firestore...');
       await updateUser(userId, { role: newRole });
+      console.log('✅ User role updated successfully');
       
       // Get fresh club data
+      console.log('📝 Step 2: Getting fresh club data...');
       const club = await getClub(selectedClubId);
-      if (!club) return;
+      if (!club) {
+        console.error('❌ Club not found');
+        return showToast('Club not found', 'error');
+      }
+      console.log('✅ Club data loaded:', club.name);
 
       // Remove user from all role arrays first
       let updatedTrainers = (club.trainers || []).filter(id => id !== userId);
       let updatedAssistants = (club.assistants || []).filter(id => id !== userId);
       let updatedMembers = (club.members || []).filter(id => id !== userId);
 
+      console.log('📝 Current arrays:', {
+        trainers: club.trainers?.length || 0,
+        assistants: club.assistants?.length || 0,
+        members: club.members?.length || 0
+      });
+
       // Add user to correct array based on new role
       if (newRole === 'trainer') {
         updatedTrainers.push(userId);
+        console.log('➕ Added to trainers');
       } else if (newRole === 'assistant') {
         updatedAssistants.push(userId);
+        console.log('➕ Added to assistants');
       } else {
         // user, parent, or any other role goes to members
         updatedMembers.push(userId);
+        console.log('➕ Added to members');
       }
 
       // Update club in Firebase
+      console.log('📝 Step 3: Updating club arrays in Firestore...');
       await updateClub(selectedClubId, {
         trainers: updatedTrainers,
         assistants: updatedAssistants,
         members: updatedMembers
       });
+      console.log('✅ Club arrays updated successfully');
       
       showToast(`Role updated to ${newRole}`, 'success');
       await loadClubData(selectedClubId);
     } catch (error) {
-      console.error('Error changing role:', error);
-      showToast('Failed to change role', 'error');
+      console.error('❌ Error changing role:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack
+      });
+      showToast(`Failed to change role: ${error.message}`, 'error');
     }
   };
 
