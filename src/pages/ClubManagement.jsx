@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useAuth, ROLES } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { getAllClubs, getClub, getAllUsers, updateClub } from '../firebase/firestore';
+import { getAllClubs, getClub, getAllUsers, updateClub, updateUser } from '../firebase/firestore';
 import {
   canPromoteToTrainer,
   canPromoteToAssistant,
@@ -429,7 +429,6 @@ export default function ClubManagement() {
     
     try {
       // Update user's role in Firebase
-      const { updateUser } = await import('../firebase/firestore');
       await updateUser(userId, { role: newRole });
       
       showToast(`Role updated to ${newRole}`, 'success');
