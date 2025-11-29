@@ -527,6 +527,53 @@ export default function ClubManagement() {
                 </div>
               </div>
             )}
+
+            {/* Teams List - Enhanced */}
+            {selectedClubId && clubTeams.length > 0 && (
+              <div className="mb-6 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+                <h2 className="font-title text-2xl text-light mb-4">Teams in this Club</h2>
+                <div className="grid gap-3">
+                  {clubTeams.map(t => {
+                    const memberCount = (t.members || []).length;
+                    const trainerCount = (t.trainers || []).length;
+                    const assistantCount = (t.assistants || []).length;
+                    
+                    return (
+                      <div key={t.id} className="bg-white/5 border border-white/10 rounded-lg p-4 hover:bg-white/10 transition-all">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-light text-lg mb-2">{t.name}</h3>
+                            <div className="flex gap-4 text-sm text-light/70">
+                              <div className="flex items-center gap-1">
+                                <span>👥</span>
+                                <span>{memberCount} member{memberCount !== 1 ? 's' : ''}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span>👨‍🏫</span>
+                                <span>{trainerCount} trainer{trainerCount !== 1 ? 's' : ''}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span>👨‍💼</span>
+                                <span>{assistantCount} assistant{assistantCount !== 1 ? 's' : ''}</span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {isClubManager(clubs.find(c => c.id === selectedClubId)) && (
+                            <button 
+                              onClick={() => handleDeleteTeam(t.id)} 
+                              className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-all"
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
