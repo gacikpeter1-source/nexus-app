@@ -47,7 +47,7 @@ export default function AdminDashboard() {
     <div className="max-w-7xl mx-auto px-4 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-4xl font-bold text-light mb-2">ðŸ‘‘ Admin Dashboard</h1>
+        <h1 className="text-4xl font-bold text-light mb-2">👑 Admin Dashboard</h1>
         <p className="text-light/60">Manage users, clubs, teams, and requests</p>
       </div>
 
@@ -57,25 +57,25 @@ export default function AdminDashboard() {
           <TabButton
             active={activeTab === 'users'}
             onClick={() => setActiveTab('users')}
-            icon="ðŸ‘¥"
+            icon="👥"
             label="Users"
           />
           <TabButton
             active={activeTab === 'clubs'}
             onClick={() => setActiveTab('clubs')}
-            icon="ðŸ¢"
+            icon="🏢"
             label="Clubs"
           />
           <TabButton
             active={activeTab === 'teams'}
             onClick={() => setActiveTab('teams')}
-            icon="âš½"
+            icon="⚽"
             label="Teams"
           />
           <TabButton
             active={activeTab === 'requests'}
             onClick={() => setActiveTab('requests')}
-            icon="ðŸ“‹"
+            icon="📋"
             label="Requests"
           />
         </div>
@@ -169,7 +169,7 @@ function UsersTab() {
       const clubIds = Array.isArray(targetUser.clubIds) ? targetUser.clubIds : [];
       await updateUser(targetUser.id, { clubIds: [...clubIds, selectedId] });
       
-      showToast('âœ… User assigned to club successfully!', 'success');
+      showToast('✅ User assigned to club successfully!', 'success');
       setAssignModal({ open: false, user: null, selectedId: '' });
       await loadData();
     } catch (err) {
@@ -185,7 +185,7 @@ function UsersTab() {
     }
     try {
       await updateUser(targetUser.id, { role: newRole });
-      showToast('âœ… Role updated successfully!', 'success');
+      showToast('✅ Role updated successfully!', 'success');
       setRoleModal({ open: false, user: null, newRole: '' });
       await loadData();
     } catch (err) {
@@ -197,7 +197,7 @@ function UsersTab() {
     const { user: targetUser } = deleteModal;
     try {
       await deleteUserFromFirestore(targetUser.id);
-      showToast('âœ… User deleted successfully!', 'success');
+      showToast('✅ User deleted successfully!', 'success');
       setDeleteModal({ open: false, user: null });
       await loadData();
     } catch (err) {
@@ -221,7 +221,7 @@ function UsersTab() {
     try {
       // Note: This requires Firebase Admin SDK or Cloud Function
       // For now, we'll show a toast that this needs backend implementation
-      showToast('âš ï¸ Password change requires backend implementation with Firebase Admin SDK', 'info');
+      showToast('⚠️ Password change requires backend implementation with Firebase Admin SDK', 'info');
       
       // TODO: Implement with Firebase Admin SDK:
       // await updateUserPassword(targetUser.id, newPassword);
@@ -229,7 +229,7 @@ function UsersTab() {
       setPasswordModal({ open: false, user: null, newPassword: '', confirmPassword: '' });
       
       // Uncomment when implemented:
-      // showToast('âœ… Password changed successfully!', 'success');
+      // showToast('Password changed successfully!', 'success');
     } catch (err) {
       showToast('Failed to change password: ' + err.message, 'error');
     }
@@ -253,7 +253,7 @@ function UsersTab() {
       <div className="bg-mid-dark rounded-lg p-6 mb-6 border border-white/10">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm text-light/80 mb-2">ðŸ” Search Users</label>
+            <label className="block text-sm text-light/80 mb-2">🔍 Search Users</label>
             <input
               type="text"
               value={searchTerm}
@@ -263,7 +263,7 @@ function UsersTab() {
             />
           </div>
           <div>
-            <label className="block text-sm text-light/80 mb-2">ðŸŽ­ Filter by Role</label>
+            <label className="block text-sm text-light/80 mb-2">Filter by Role</label>
             <select
               value={filterRole}
               onChange={(e) => setFilterRole(e.target.value)}
@@ -282,10 +282,10 @@ function UsersTab() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Total Users" value={users.length} icon="ðŸ‘¥" />
-        <StatCard label="Admins" value={users.filter(u => u.role === 'admin').length} icon="ðŸ‘‘" />
-        <StatCard label="Trainers" value={users.filter(u => u.role === 'trainer').length} icon="ðŸƒ" />
-        <StatCard label="Users" value={users.filter(u => u.role === 'user').length} icon="ðŸ‘¤" />
+        <StatCard label="Total Users" value={users.length} icon="👥" />
+        <StatCard label="Admins" value={users.filter(u => u.role === 'admin').length} icon="👑" />
+        <StatCard label="Trainers" value={users.filter(u => u.role === 'trainer').length} icon="⚽" />
+        <StatCard label="Parents" value={users.filter(u => u.role === 'parent').length} icon="👤" />
       </div>
 
       {/* Users List */}
@@ -305,9 +305,9 @@ function UsersTab() {
                     </span>
                   )}
                 </div>
-                <p className="text-light/60 mb-1">ðŸ“§ {u.email}</p>
+                <p className="text-light/60 mb-1"> {u.email}</p>
                 <p className="text-light/60 text-sm">
-                  ðŸ¢ Clubs: {u.clubIds?.length || 0}
+                  🏢 Clubs: {u.clubIds?.length || 0}
                 </p>
               </div>
               <div className="flex gap-2 flex-wrap">
@@ -316,27 +316,27 @@ function UsersTab() {
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition text-sm"
                   disabled={u.isSuperAdmin}
                 >
-                  ðŸŽ­ Role
+                  ­ Role
                 </button>
                 <button
                   onClick={() => setAssignModal({ open: true, user: u, selectedId: '' })}
                   className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition text-sm"
                 >
-                  âž• Assign
+                   Assign
                 </button>
                 <button
                   onClick={() => setPasswordModal({ open: true, user: u, newPassword: '', confirmPassword: '' })}
                   className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition text-sm"
                   disabled={u.isSuperAdmin && u.id !== currentUser?.id}
                 >
-                  ðŸ” Password
+                   Password
                 </button>
                 <button
                   onClick={() => setDeleteModal({ open: true, user: u })}
                   className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition text-sm"
                   disabled={u.isSuperAdmin || u.id === currentUser?.id}
                 >
-                  ðŸ—‘ï¸ Delete
+                  Delete
                 </button>
               </div>
             </div>
@@ -429,7 +429,7 @@ function UsersTab() {
 
       {deleteModal.open && (
         <Modal
-          title="âš ï¸ Delete User"
+          title="Delete User"
           onClose={() => setDeleteModal({ open: false, user: null })}
           danger
         >
@@ -438,7 +438,7 @@ function UsersTab() {
           </p>
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-6">
             <p className="text-red-400 text-sm">
-              âš ï¸ This action cannot be undone!
+              This action cannot be undone!
             </p>
           </div>
           <div className="flex gap-2">
@@ -460,7 +460,7 @@ function UsersTab() {
 
       {passwordModal.open && (
         <Modal
-          title="ðŸ” Change User Password"
+          title=" Change User Password"
           onClose={() => setPasswordModal({ open: false, user: null, newPassword: '', confirmPassword: '' })}
         >
           <p className="text-light mb-4">
@@ -491,7 +491,7 @@ function UsersTab() {
           </div>
           <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 mb-6">
             <p className="text-yellow-400 text-sm">
-              âš ï¸ This will immediately change the user&apos;s password. They will need to use the new password to log in.
+              This will immediately change the user&apos;s password. They will need to use the new password to log in.
             </p>
           </div>
           <div className="flex gap-2">
@@ -558,7 +558,7 @@ function ClubsTab() {
         members: [],
         teams: []
       });
-      showToast('âœ… Club created successfully!', 'success');
+      showToast('Club created successfully!', 'success');
       setCreateModal({ open: false, name: '' });
       await loadClubs();
     } catch (err) {
@@ -573,7 +573,7 @@ function ClubsTab() {
     }
     try {
       await updateClub(editModal.club.id, { name: editModal.name.trim() });
-      showToast('âœ… Club updated successfully!', 'success');
+      showToast('Club updated successfully!', 'success');
       setEditModal({ open: false, club: null, name: '' });
       await loadClubs();
     } catch (err) {
@@ -584,7 +584,7 @@ function ClubsTab() {
   const handleDeleteClub = async () => {
     try {
       await deleteClubFromFirestore(deleteModal.club.id);
-      showToast('âœ… Club deleted successfully!', 'success');
+      showToast('Club deleted successfully!', 'success');
       setDeleteModal({ open: false, club: null });
       await loadClubs();
     } catch (err) {
@@ -605,14 +605,14 @@ function ClubsTab() {
       {/* Header with Create Button */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-light">ðŸ¢ All Clubs</h2>
+          <h2 className="text-2xl font-bold text-light">🏢 All Clubs</h2>
           <p className="text-light/60">Total: {clubs.length} clubs</p>
         </div>
         <button
           onClick={() => setCreateModal({ open: true, name: '' })}
           className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium"
         >
-          âž• Create Club
+        Create Club
         </button>
       </div>
 
@@ -650,7 +650,7 @@ function ClubsTab() {
                 onClick={() => setDeleteModal({ open: true, club })}
                 className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition text-sm"
               >
-                ðŸ—‘ï¸ Delete
+                Delete
               </button>
             </div>
           </div>
@@ -666,7 +666,7 @@ function ClubsTab() {
       {/* MODALS */}
       {createModal.open && (
         <Modal
-          title="âž• Create New Club"
+          title=" Create New Club"
           onClose={() => setCreateModal({ open: false, name: '' })}
         >
           <input
@@ -724,7 +724,7 @@ function ClubsTab() {
 
       {deleteModal.open && (
         <Modal
-          title="âš ï¸ Delete Club"
+          title="Delete Club"
           onClose={() => setDeleteModal({ open: false, club: null })}
           danger
         >
@@ -733,7 +733,7 @@ function ClubsTab() {
           </p>
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-6">
             <p className="text-red-400 text-sm">
-              âš ï¸ This will delete all teams and remove all members!
+              This will delete all teams and remove all members!
             </p>
           </div>
           <div className="flex gap-2">
@@ -812,7 +812,7 @@ function TeamsTab() {
         <StatCard 
           label="Total Members" 
           value={allTeams.reduce((sum, team) => sum + (team.members?.length || 0), 0)} 
-          icon="ðŸ'¥" 
+          icon="👥" 
         />
       </div>
 
@@ -881,7 +881,7 @@ function TeamsTab() {
                 
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-light/60 text-sm">
-                    <span>ðŸ'¥</span>
+                    <span>👥</span>
                     <span>Members: <strong>{team.members?.length || 0}</strong></span>
                   </div>
                   <div className="flex items-center gap-2 text-light/60 text-sm">
@@ -932,7 +932,7 @@ function RequestsTab() {
   const handleApprove = async (requestId) => {
     try {
       await updateRequest(requestId, { status: 'approved', handledBy: user.id });
-      showToast('âœ… Request approved!', 'success');
+      showToast('Request approved!', 'success');
       await loadRequests();
     } catch (err) {
       showToast('Failed to approve request: ' + err.message, 'error');
@@ -942,7 +942,7 @@ function RequestsTab() {
   const handleDeny = async (requestId) => {
     try {
       await updateRequest(requestId, { status: 'denied', handledBy: user.id });
-      showToast('âŒ Request denied', 'info');
+      showToast('Request denied', 'info');
       await loadRequests();
     } catch (err) {
       showToast('Failed to deny request: ' + err.message, 'error');
@@ -956,7 +956,7 @@ function RequestsTab() {
   return (
     <div>
       <div className="bg-mid-dark rounded-lg p-6 mb-6 border border-white/10">
-        <h2 className="text-2xl font-bold text-light mb-2">ðŸ“‹ Join Requests</h2>
+        <h2 className="text-2xl font-bold text-light mb-2">Join Requests</h2>
         <p className="text-light/60">Pending: <strong>{requests.length}</strong> requests</p>
       </div>
 
@@ -979,13 +979,13 @@ function RequestsTab() {
                     onClick={() => handleApprove(req.id)}
                     className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition"
                   >
-                    âœ… Approve
+                    Approve
                   </button>
                   <button
                     onClick={() => handleDeny(req.id)}
                     className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition"
                   >
-                    âŒ Deny
+                    Deny
                   </button>
                 </div>
               </div>
