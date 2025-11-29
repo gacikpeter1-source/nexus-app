@@ -2,14 +2,17 @@
 import { useEffect, useState } from 'react';
 import { useAuth, ROLES } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
+import { getAllClubs, getPendingRequests, updateRequest, updateClub, getClub, getAllUsers } from '../firebase/firestore';
+import { isClubOwner } from '../utils/permissions';
 
 export default function PendingRequests() {
-  const { user, approveJoinRequest, denyJoinRequest } = useAuth();
+  const { user } = useAuth();
   const { showToast } = useToast();
   
   const [pendingRequests, setPendingRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [clubs, setClubs] = useState([]);
+  const [users, setUsers] = useState([]);
 
   const isManager = user && [ROLES.ADMIN, ROLES.TRAINER, ROLES.ASSISTANT].includes(user.role);
 
@@ -19,54 +22,100 @@ export default function PendingRequests() {
     }
   }, [user]);
 
-  const loadData = () => {
+  const loadData = async () => {
     setLoading(true);
     
-    // Load clubs user manages
-    const clubsAll = JSON.parse(localStorage.getItem('clubs') || '[]');
-    const myClubs = clubsAll.filter(club => {
-      if (!club) return false;
-      if (user.role === ROLES.ADMIN) return true;
-      const trainers = club.trainers || [];
-      const assistants = club.assistants || [];
-      return trainers.includes(user.id) || assistants.includes(user.id);
-    });
-    setClubs(myClubs);
-
-    // Load pending requests for those clubs
-    const requests = JSON.parse(localStorage.getItem('joinRequests') || '[]');
-    const myClubIds = myClubs.map(c => c.id);
-    const pending = requests.filter(r => 
-      r.status === 'pending' && myClubIds.includes(r.clubId)
-    );
-    
-    setPendingRequests(pending);
-    setLoading(false);
-  };
-
-  const handleApprove = (requestId) => {
     try {
-      approveJoinRequest({ requestId, handledByUserId: user.id });
-      showToast('Request approved!', 'success');
-      // Reload data after a short delay to ensure localStorage is updated
-      setTimeout(() => {
-        loadData();
-      }, 100);
+      // Load all clubs from Firebase
+      const allClubs = await getAllClubs();
+      
+      // Filter clubs user can manage
+      const myClubs = allClubs.filter(club => {
+        if (user.isSuperAdmin) return true;
+        if (isClubOwner(user, club)) return true;
+        return (club.trainers || []).includes(user.id) || 
+               (club.assistants || []).includes(user.id);
+      });
+      setClubs(myClubs);
+
+      // Load all users for display
+      const allUsers = await getAllUsers();
+      setUsers(allUsers);
+
+      // Load pending requests from Firebase
+      const allRequests = await getPendingRequests();
+      const myClubIds = myClubs.map(c => c.id);
+      const pending = allRequests.filter(r => myClubIds.includes(r.clubId));
+      
+      setPendingRequests(pending);
     } catch (error) {
-      showToast(error.message || 'Failed to approve request', 'error');
+      console.error('Error loading data:', error);
+      showToast('Failed to load requests', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDeny = (requestId) => {
+  const handleApprove = async (request) => {
     try {
-      denyJoinRequest({ requestId, handledByUserId: user.id });
-      showToast('Request denied', 'info');
-      // Reload data after a short delay to ensure localStorage is updated
-      setTimeout(() => {
-        loadData();
-      }, 100);
+      // Update request status in Firebase
+      await updateRequest(request.id, { 
+        status: 'approved',
+        handledBy: user.id,
+        handledAt: new Date().toISOString()
+      });
+      
+      // Get fresh club data
+      const club = await getClub(request.clubId);
+      
+      // Add user to club members
+      const updatedMembers = [...(club.members || [])];
+      if (!updatedMembers.includes(request.userId)) {
+        updatedMembers.push(request.userId);
+      }
+      
+      // If specific team requested, add to team
+      let updatedTeams = club.teams || [];
+      if (request.teamId) {
+        updatedTeams = updatedTeams.map(t => {
+          if (t.id === request.teamId) {
+            const teamMembers = [...(t.members || [])];
+            if (!teamMembers.includes(request.userId)) {
+              teamMembers.push(request.userId);
+            }
+            return { ...t, members: teamMembers };
+          }
+          return t;
+        });
+      }
+      
+      // Update club in Firebase
+      await updateClub(request.clubId, { 
+        members: updatedMembers,
+        teams: updatedTeams
+      });
+      
+      showToast('Request approved!', 'success');
+      loadData();
     } catch (error) {
-      showToast(error.message || 'Failed to deny request', 'error');
+      console.error('Error approving request:', error);
+      showToast('Failed to approve request', 'error');
+    }
+  };
+
+  const handleDeny = async (requestId) => {
+    try {
+      await updateRequest(requestId, { 
+        status: 'denied',
+        handledBy: user.id,
+        handledAt: new Date().toISOString()
+      });
+      
+      showToast('Request denied', 'info');
+      loadData();
+    } catch (error) {
+      console.error('Error denying request:', error);
+      showToast('Failed to deny request', 'error');
     }
   };
 
@@ -121,7 +170,6 @@ export default function PendingRequests() {
         ) : (
           <div className="space-y-4 max-w-4xl mx-auto">
             {pendingRequests.map(request => {
-              const users = JSON.parse(localStorage.getItem('users') || '[]');
               const requester = users.find(u => u.id === request.userId) || { email: request.userId };
               const club = clubs.find(c => c.id === request.clubId) || { name: 'Unknown Club' };
               
@@ -167,7 +215,7 @@ export default function PendingRequests() {
                           </div>
                         )}
                         <div className="text-xs text-light/40">
-                          Requested: {new Date(request.createdAt).toLocaleString()}
+                          Requested: {request.createdAt ? new Date(request.createdAt).toLocaleString() : 'Unknown'}
                         </div>
                       </div>
                     </div>
@@ -175,7 +223,7 @@ export default function PendingRequests() {
                     {/* Action Buttons */}
                     <div className="flex gap-2">
                       <button
-                        onClick={() => handleApprove(request.id)}
+                        onClick={() => handleApprove(request)}
                         className="px-5 py-2.5 bg-success hover:bg-success/80 text-white rounded-lg transition-all font-semibold text-sm flex items-center gap-2"
                       >
                         <span>✓</span>

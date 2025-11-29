@@ -2,12 +2,14 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getClub } from '../firebase/firestore';
+import { getClub, updateClub } from '../firebase/firestore';
+import { useToast } from '../contexts/ToastContext';
 
 export default function Team() {
   const { clubId, teamId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { showToast } = useToast();
   
   const [activeTab, setActiveTab] = useState('overview');
   const [club, setClub] = useState(null);
@@ -31,6 +33,36 @@ export default function Team() {
       setLoading(false);
     }
   }
+
+  const handleLeaveTeam = async () => {
+    if (!team) return;
+    
+    if (!window.confirm(`Are you sure you want to leave ${team.name}?`)) return;
+    
+    try {
+      const updatedMembers = (team.members || []).filter(id => id !== user.id);
+      const updatedTrainers = (team.trainers || []).filter(id => id !== user.id);
+      const updatedAssistants = (team.assistants || []).filter(id => id !== user.id);
+      
+      const updatedTeams = (club.teams || []).map(t => 
+        t.id === teamId 
+          ? { 
+              ...t, 
+              members: updatedMembers,
+              trainers: updatedTrainers,
+              assistants: updatedAssistants
+            }
+          : t
+      );
+      
+      await updateClub(clubId, { teams: updatedTeams });
+      showToast('Left team successfully', 'success');
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Error leaving team:', error);
+      showToast('Failed to leave team', 'error');
+    }
+  };
 
   const team = useMemo(() => {
     if (!club || !club.teams) return null;
@@ -122,10 +154,14 @@ export default function Team() {
             <p className="text-light/60 text-lg">{team.clubName}</p>
           </div>
           
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4">
-            <div className="text-sm text-light/60 mb-1">Team Members</div>
-            <div className="text-3xl font-bold text-primary">{members.length}</div>
-          </div>
+          {/* Leave Team Button */}
+          <button
+            onClick={handleLeaveTeam}
+            className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-all flex items-center gap-2"
+          >
+            <span>🚪</span>
+            <span>Leave Team</span>
+          </button>
         </div>
       </div>
 
