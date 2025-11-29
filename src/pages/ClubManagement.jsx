@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useAuth, ROLES } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
+import { getAllClubs, getClub, getAllUsers, updateClub } from '../firebase/firestore';
 
 export default function ClubManagement() {
   const { user, loading: authLoading, listClubsForUser } = useAuth();
@@ -18,7 +19,7 @@ export default function ClubManagement() {
   const [selectedUserToAdd, setSelectedUserToAdd] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // selection state (can be set by clicking row OR by using the searchable picker below)
+  // selection state
   const [selectedMemberId, setSelectedMemberId] = useState('');
 
   // searchable picker state for removal
@@ -35,31 +36,44 @@ export default function ClubManagement() {
 
   const isClubManager = (club) => {
     if (!user || !club) return false;
-    if (user.role === ROLES.ADMIN) return true;
+    if (user.role === ROLES.ADMIN || user.isSuperAdmin) return true;
     const trainers = club.trainers || [];
     const assistants = club.assistants || [];
     return trainers.includes(user.id) || assistants.includes(user.id);
   };
 
-  const persistClubs = (arr) => {
-    localStorage.setItem('clubs', JSON.stringify(arr));
-    setClubs(arr);
-  };
-
-  const persistUsers = (arr) => {
-    localStorage.setItem('users', JSON.stringify(arr));
-    setAllUsers(arr);
-  };
-
+  // Load clubs and users from Firebase
   useEffect(() => {
-    const usersAll = JSON.parse(localStorage.getItem('users') || '[]');
-    setAllUsers(usersAll);
-    const clubsAll = listClubsForUser ? listClubsForUser() : JSON.parse(localStorage.getItem('clubs') || '[]');
-    setClubs(Array.isArray(clubsAll) ? clubsAll : []);
-    if (Array.isArray(clubsAll) && clubsAll.length > 0) setSelectedClubId(prev => prev || clubsAll[0].id);
-  }, [user, listClubsForUser]);
+    loadInitialData();
+  }, [user]);
 
-  const loadClubData = (clubId) => {
+  async function loadInitialData() {
+    try {
+      // Load users
+      const usersAll = await getAllUsers();
+      setAllUsers(usersAll);
+
+      // Load clubs - SuperAdmin sees all, others see their clubs
+      let clubsAll = [];
+      if (user?.isSuperAdmin === true) {
+        clubsAll = await getAllClubs();
+      } else {
+        clubsAll = listClubsForUser ? await listClubsForUser() : [];
+      }
+      
+      setClubs(Array.isArray(clubsAll) ? clubsAll : []);
+      if (Array.isArray(clubsAll) && clubsAll.length > 0) {
+        setSelectedClubId(prev => prev || clubsAll[0].id);
+      }
+    } catch (error) {
+      console.error('Error loading initial data:', error);
+      setClubs([]);
+      setAllUsers([]);
+    }
+  }
+
+  // Load club data when selected club changes
+  const loadClubData = async (clubId) => {
     if (!clubId) {
       setClubMembers([]);
       setFilteredMembers([]);
@@ -67,47 +81,55 @@ export default function ClubManagement() {
       setLoading(false);
       return;
     }
+    
     setLoading(true);
-    const clubsAll = JSON.parse(localStorage.getItem('clubs') || '[]');
-    const usersAll = JSON.parse(localStorage.getItem('users') || '[]');
-    const club = clubsAll.find(c => c.id === clubId);
-    if (!club) {
+    try {
+      // Get club from Firebase
+      const club = await getClub(clubId);
+      if (!club) {
+        setClubMembers([]);
+        setFilteredMembers([]);
+        setClubTeams([]);
+        setLoading(false);
+        return;
+      }
+
+      const membersRaw = [
+        ...(club.trainers || []).map(id => ({ id, role: ROLES.TRAINER })),
+        ...(club.assistants || []).map(id => ({ id, role: ROLES.ASSISTANT })),
+        ...(club.members || []).map(id => ({ id, role: ROLES.USER })),
+      ];
+
+      const uniqueMembers = Array.from(new Map(membersRaw.map(m => [m.id, m])).values());
+
+      const members = uniqueMembers.map(m => {
+        const u = allUsers.find(u => u.id === m.id) || {};
+        const teams = club.teams || [];
+        const userTeamIds = teams.filter(t => (t.members || []).includes(m.id)).map(t => t.id);
+        const userTeamNames = teams.filter(t => (t.members || []).includes(m.id)).map(t => t.name);
+        return { ...m, username: u.username || '', email: u.email || '', teamIds: userTeamIds, teamNames: userTeamNames };
+      });
+
+      setClubMembers(members);
+      setFilteredMembers(members);
+      setClubTeams(club.teams || []);
+      setSelectedMemberId('');
+      setRemoveSearch('');
+      setRemoveMatches([]);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error loading club data:', error);
       setClubMembers([]);
       setFilteredMembers([]);
       setClubTeams([]);
       setLoading(false);
-      return;
     }
-
-    const membersRaw = [
-      ...(club.trainers || []).map(id => ({ id, role: ROLES.TRAINER })),
-      ...(club.assistants || []).map(id => ({ id, role: ROLES.ASSISTANT })),
-      ...(club.members || []).map(id => ({ id, role: ROLES.USER })),
-    ];
-
-    const uniqueMembers = Array.from(new Map(membersRaw.map(m => [m.id, m])).values());
-
-    const members = uniqueMembers.map(m => {
-      const u = usersAll.find(u => u.id === m.id) || {};
-      const teams = club.teams || [];
-      const userTeamIds = teams.filter(t => (t.members || []).includes(m.id)).map(t => t.id);
-      const userTeamNames = teams.filter(t => (t.members || []).includes(m.id)).map(t => t.name);
-      return { ...m, username: u.username || '', email: u.email || '', teamIds: userTeamIds, teamNames: userTeamNames };
-    });
-
-    setClubMembers(members);
-    setFilteredMembers(members);
-    setClubTeams(club.teams || []);
-    setSelectedMemberId(''); // clear selection when switching clubs
-    setRemoveSearch('');
-    setRemoveMatches([]);
-    setLoading(false);
   };
 
   useEffect(() => {
     loadClubData(selectedClubId);
     setSelectedTeamFilter('');
-  }, [selectedClubId]);
+  }, [selectedClubId, allUsers]);
 
   useEffect(() => {
     const q = (searchQuery || '').trim().toLowerCase();
@@ -136,705 +158,410 @@ export default function ClubManagement() {
 
   /* -------------------- CRUD & actions -------------------- */
 
-  const handleDeleteClub = (clubId) => {
+  const handleDeleteClub = async (clubId) => {
     if (!window.confirm('Delete this club? This cannot be undone.')) return;
-    const clubsAll = JSON.parse(localStorage.getItem('clubs') || '[]');
-    const updated = clubsAll.filter(c => c.id !== clubId);
-    persistClubs(updated);
-
-    const usersAll = JSON.parse(localStorage.getItem('users') || '[]');
-    const usersUpdated = usersAll.map(u => {
-      const nextClubIds = (u.clubIds || []).filter(id => id !== clubId);
-      let nextRole = u.role;
-      const remainingClubs = updated;
-      const stillTrainer = remainingClubs.some(rc => (rc.trainers || []).includes(u.id));
-      const stillAssistant = remainingClubs.some(rc => (rc.assistants || []).includes(u.id));
-      if (!stillTrainer && !stillAssistant && nextRole !== ROLES.ADMIN) nextRole = ROLES.USER;
-      return { ...u, clubIds: nextClubIds, role: nextRole };
-    });
-    persistUsers(usersUpdated);
-
-    if (selectedClubId === clubId) setSelectedClubId(updated.length > 0 ? updated[0].id : '');
-    setClubs(updated);
-    showToast('Club deleted', 'success');
-  };
-
-  const handleCreateTeam = () => {
-    if (!selectedClubId || !newTeamName.trim()) return showToast('Select club & enter team name', 'error');
-    const clubsAll = JSON.parse(localStorage.getItem('clubs') || '[]');
-    const cidx = clubsAll.findIndex(c => c.id === selectedClubId);
-    if (cidx === -1) return;
-    const team = { id: Date.now().toString(), name: newTeamName.trim(), members: [], trainers: [], assistants: [] };
-    clubsAll[cidx].teams = [...(clubsAll[cidx].teams || []), team];
-    persistClubs(clubsAll);
-    setNewTeamName('');
-    loadClubData(selectedClubId);
-    showToast('Team created', 'success');
-  };
-
-  const handleDeleteTeam = (teamId) => {
-    if (!selectedClubId) return;
-    if (!window.confirm('Delete this team? Users in this team remain in club.')) return;
-    const clubsAll = JSON.parse(localStorage.getItem('clubs') || '[]');
-    const cidx = clubsAll.findIndex(c => c.id === selectedClubId);
-    if (cidx === -1) return;
-    clubsAll[cidx].teams = (clubsAll[cidx].teams || []).filter(t => t.id !== teamId);
-    persistClubs(clubsAll);
-    loadClubData(selectedClubId);
-    showToast('Team deleted', 'success');
-  };
-
-  const addUserToClub = (userId) => {
-    if (!selectedClubId || !userId) return;
-    const clubsAll = JSON.parse(localStorage.getItem('clubs') || '[]');
-    const usersAll = JSON.parse(localStorage.getItem('users') || '[]');
-    const cidx = clubsAll.findIndex(c => c.id === selectedClubId);
-    const uidx = usersAll.findIndex(u => u.id === userId);
-    if (cidx === -1 || uidx === -1) return;
-    const club = clubsAll[cidx];
-    if ([...(club.members || []), ...(club.trainers || []), ...(club.assistants || [])].includes(userId)) {
-      return showToast('User already in club', 'error');
-    }
-    club.members = [...(club.members || []), userId];
-    usersAll[uidx].clubIds = Array.from(new Set([...(usersAll[uidx].clubIds || []), selectedClubId]));
-    persistClubs(clubsAll);
-    persistUsers(usersAll);
-    loadClubData(selectedClubId);
-    setSelectedUserToAdd('');
-    showToast('User added to club', 'success');
-  };
-
-  // Remove user from CLUB (bottom action)
-  const removeUserFromClub = (userId) => {
-    if (!selectedClubId) return;
-    if (!window.confirm('Remove user from club? This will remove them from all teams and roles in this club.')) return;
-    const clubsAll = JSON.parse(localStorage.getItem('clubs') || '[]');
-    const usersAll = JSON.parse(localStorage.getItem('users') || '[]');
-    const cidx = clubsAll.findIndex(c => c.id === selectedClubId);
-    const uidx = usersAll.findIndex(u => u.id === userId);
-    if (cidx === -1 || uidx === -1) return;
-    const club = clubsAll[cidx];
-    club.members = (club.members || []).filter(id => id !== userId);
-    club.trainers = (club.trainers || []).filter(id => id !== userId);
-    club.assistants = (club.assistants || []).filter(id => id !== userId);
-    club.teams = (club.teams || []).map(t => ({ ...t, members: (t.members || []).filter(id => id !== userId) }));
-    usersAll[uidx].clubIds = (usersAll[uidx].clubIds || []).filter(id => id !== selectedClubId);
-
-    // update session if needed
     try {
-      const cuRaw = localStorage.getItem('currentUser');
-      if (cuRaw) {
-        const cu = JSON.parse(cuRaw);
-        if (cu.id === userId) {
-          const updatedCU = { ...cu, clubIds: usersAll[uidx].clubIds || [] };
-          localStorage.setItem('currentUser', JSON.stringify(updatedCU));
+      const { deleteClub } = await import('../firebase/firestore');
+      await deleteClub(clubId);
+      showToast('Club deleted successfully', 'success');
+      await loadInitialData(); // Reload clubs
+      setSelectedClubId('');
+    } catch (error) {
+      console.error('Error deleting club:', error);
+      showToast('Failed to delete club', 'error');
+    }
+  };
+
+  const handleRemoveMember = async (memberId) => {
+    if (!selectedClubId || !memberId) return;
+    if (!window.confirm('Remove this member from the club?')) return;
+    
+    try {
+      const club = await getClub(selectedClubId);
+      if (!club) return;
+
+      const updatedClub = {
+        trainers: (club.trainers || []).filter(id => id !== memberId),
+        assistants: (club.assistants || []).filter(id => id !== memberId),
+        members: (club.members || []).filter(id => id !== memberId),
+        teams: (club.teams || []).map(team => ({
+          ...team,
+          members: (team.members || []).filter(id => id !== memberId),
+          trainers: (team.trainers || []).filter(id => id !== memberId),
+          assistants: (team.assistants || []).filter(id => id !== memberId)
+        }))
+      };
+
+      await updateClub(selectedClubId, updatedClub);
+      showToast('Member removed from club', 'success');
+      await loadClubData(selectedClubId); // Reload club data
+    } catch (error) {
+      console.error('Error removing member:', error);
+      showToast('Failed to remove member', 'error');
+    }
+  };
+
+  const handlePromoteToTrainer = async (memberId) => {
+    if (!selectedClubId || !memberId) return;
+    
+    try {
+      const club = await getClub(selectedClubId);
+      if (!club) return;
+
+      const updatedClub = {
+        trainers: [...new Set([...(club.trainers || []), memberId])],
+        assistants: (club.assistants || []).filter(id => id !== memberId),
+        members: (club.members || []).filter(id => id !== memberId)
+      };
+
+      await updateClub(selectedClubId, updatedClub);
+      showToast('Member promoted to trainer', 'success');
+      await loadClubData(selectedClubId);
+    } catch (error) {
+      console.error('Error promoting member:', error);
+      showToast('Failed to promote member', 'error');
+    }
+  };
+
+  const handleDemoteToMember = async (memberId) => {
+    if (!selectedClubId || !memberId) return;
+    
+    try {
+      const club = await getClub(selectedClubId);
+      if (!club) return;
+
+      const updatedClub = {
+        trainers: (club.trainers || []).filter(id => id !== memberId),
+        assistants: (club.assistants || []).filter(id => id !== memberId),
+        members: [...new Set([...(club.members || []), memberId])]
+      };
+
+      await updateClub(selectedClubId, updatedClub);
+      showToast('Member demoted to regular member', 'success');
+      await loadClubData(selectedClubId);
+    } catch (error) {
+      console.error('Error demoting member:', error);
+      showToast('Failed to demote member', 'error');
+    }
+  };
+
+  const handleCreateTeam = async () => {
+    if (!selectedClubId || !newTeamName.trim()) {
+      showToast('Please enter a team name', 'error');
+      return;
+    }
+    
+    try {
+      const club = await getClub(selectedClubId);
+      if (!club) return;
+
+      const newTeam = {
+        id: `team_${Date.now()}`,
+        name: newTeamName.trim(),
+        members: [],
+        trainers: [],
+        assistants: []
+      };
+
+      const updatedClub = {
+        teams: [...(club.teams || []), newTeam]
+      };
+
+      await updateClub(selectedClubId, updatedClub);
+      showToast('Team created successfully', 'success');
+      setNewTeamName('');
+      await loadClubData(selectedClubId);
+    } catch (error) {
+      console.error('Error creating team:', error);
+      showToast('Failed to create team', 'error');
+    }
+  };
+
+  const handleAssignToTeams = async () => {
+    if (!userToAssign || selectedTeamsForAssignment.length === 0) return;
+    
+    try {
+      const club = await getClub(selectedClubId);
+      if (!club) return;
+
+      const updatedTeams = (club.teams || []).map(team => {
+        if (selectedTeamsForAssignment.includes(team.id)) {
+          return {
+            ...team,
+            members: [...new Set([...(team.members || []), userToAssign.id])]
+          };
         }
-      }
-    } catch (e) { /* Ignore error */ }
+        return team;
+      });
 
-    const remainingClubs = clubsAll;
-    const stillTrainer = remainingClubs.some(rc => (rc.trainers || []).includes(userId));
-    const stillAssistant = remainingClubs.some(rc => (rc.assistants || []).includes(userId));
-    if (!stillTrainer && !stillAssistant && usersAll[uidx].role !== ROLES.ADMIN) {
-      usersAll[uidx].role = ROLES.USER;
+      await updateClub(selectedClubId, { teams: updatedTeams });
+      showToast('Member assigned to teams', 'success');
+      setShowTeamAssignModal(false);
+      setUserToAssign(null);
+      setSelectedTeamsForAssignment([]);
+      await loadClubData(selectedClubId);
+    } catch (error) {
+      console.error('Error assigning to teams:', error);
+      showToast('Failed to assign to teams', 'error');
     }
-
-    persistClubs(clubsAll);
-    persistUsers(usersAll);
-    loadClubData(selectedClubId);
-    showToast('User removed from club', 'success');
-    if (selectedMemberId === userId) setSelectedMemberId('');
-    // clear picker
-    setRemoveSearch('');
-    setRemoveMatches([]);
   };
 
-  /* -------------------- ROLE MANAGEMENT (promote/demote) -------------------- */
-
-  const promoteToTrainer = (targetUserId) => {
+  const handleRemoveFromTeam = async (memberId, teamId) => {
     if (!selectedClubId) return;
-    if (!window.confirm('Promote user to Trainer for this club?')) return;
-    const clubsAll = JSON.parse(localStorage.getItem('clubs') || '[]');
-    const usersAll = JSON.parse(localStorage.getItem('users') || '[]');
-    const cidx = clubsAll.findIndex(c => c.id === selectedClubId);
-    if (cidx === -1) return;
-    const club = clubsAll[cidx];
-    club.trainers = Array.from(new Set([...(club.trainers || []), targetUserId]));
-    club.assistants = (club.assistants || []).filter(id => id !== targetUserId);
-    club.members = (club.members || []).filter(id => id !== targetUserId);
-    const uidx = usersAll.findIndex(u => u.id === targetUserId);
-    if (uidx !== -1) {
-      usersAll[uidx].clubIds = Array.from(new Set([...(usersAll[uidx].clubIds || []), selectedClubId]));
-      if (usersAll[uidx].role !== ROLES.ADMIN) usersAll[uidx].role = ROLES.TRAINER;
-    }
-    persistClubs(clubsAll);
-    persistUsers(usersAll);
-    loadClubData(selectedClubId);
-    showToast('User promoted to Trainer', 'success');
-  };
-
-  const promoteToAssistant = (targetUserId) => {
-    if (!selectedClubId) return;
-    if (!window.confirm('Promote user to Assistant for this club?')) return;
-    const clubsAll = JSON.parse(localStorage.getItem('clubs') || '[]');
-    const usersAll = JSON.parse(localStorage.getItem('users') || '[]');
-    const cidx = clubsAll.findIndex(c => c.id === selectedClubId);
-    if (cidx === -1) return;
-    const club = clubsAll[cidx];
-    club.assistants = Array.from(new Set([...(club.assistants || []), targetUserId]));
-    club.trainers = (club.trainers || []).filter(id => id !== targetUserId);
-    club.members = (club.members || []).filter(id => id !== targetUserId);
-    const uidx = usersAll.findIndex(u => u.id === targetUserId);
-    if (uidx !== -1) {
-      usersAll[uidx].clubIds = Array.from(new Set([...(usersAll[uidx].clubIds || []), selectedClubId]));
-      if (usersAll[uidx].role !== ROLES.ADMIN) usersAll[uidx].role = ROLES.ASSISTANT;
-    }
-    persistClubs(clubsAll);
-    persistUsers(usersAll);
-    loadClubData(selectedClubId);
-    showToast('User promoted to Assistant', 'success');
-  };
-
-  const demoteToUser = (targetUserId) => {
-    if (!selectedClubId) return;
-    if (!window.confirm('Demote user to regular User for this club?')) return;
-    const clubsAll = JSON.parse(localStorage.getItem('clubs') || '[]');
-    const usersAll = JSON.parse(localStorage.getItem('users') || '[]');
-    const cidx = clubsAll.findIndex(c => c.id === selectedClubId);
-    if (cidx === -1) return;
-    const club = clubsAll[cidx];
-    club.trainers = (club.trainers || []).filter(id => id !== targetUserId);
-    club.assistants = (club.assistants || []).filter(id => id !== targetUserId);
-    club.members = Array.from(new Set([...(club.members || []), targetUserId]));
-    const uidx = usersAll.findIndex(u => u.id === targetUserId);
-    if (uidx !== -1) {
-      const remainingClubs = clubsAll;
-      const stillTrainer = remainingClubs.some(rc => (rc.trainers || []).includes(targetUserId));
-      const stillAssistant = remainingClubs.some(rc => (rc.assistants || []).includes(targetUserId));
-      if (!stillTrainer && !stillAssistant && usersAll[uidx].role !== ROLES.ADMIN) {
-        usersAll[uidx].role = ROLES.USER;
-      }
-    }
-    persistClubs(clubsAll);
-    persistUsers(usersAll);
-    loadClubData(selectedClubId);
-    showToast('User demoted to User (club-level)', 'success');
-  };
-
-  const demoteTrainerToAssistant = (targetUserId) => {
-    if (!selectedClubId) return;
-    if (!window.confirm('Demote Trainer to Assistant for this club?')) return;
-    const clubsAll = JSON.parse(localStorage.getItem('clubs') || '[]');
-    const usersAll = JSON.parse(localStorage.getItem('users') || '[]');
-    const cidx = clubsAll.findIndex(c => c.id === selectedClubId);
-    if (cidx === -1) return;
-    const club = clubsAll[cidx];
-    club.trainers = (club.trainers || []).filter(id => id !== targetUserId);
-    club.assistants = Array.from(new Set([...(club.assistants || []), targetUserId]));
-    club.members = (club.members || []).filter(id => id !== targetUserId);
-    const uidx = usersAll.findIndex(u => u.id === targetUserId);
-    if (uidx !== -1) {
-      const stillTrainer = clubsAll.some(rc => (rc.trainers || []).includes(targetUserId));
-      if (!stillTrainer && usersAll[uidx].role !== ROLES.ADMIN) {
-        usersAll[uidx].role = ROLES.ASSISTANT;
-      }
-    }
-    persistClubs(clubsAll);
-    persistUsers(usersAll);
-    loadClubData(selectedClubId);
-    showToast('Trainer demoted to Assistant', 'success');
-  };
-
-  const demoteAssistantToUser = (targetUserId) => {
-    if (!selectedClubId) return;
-    if (!window.confirm('Demote Assistant to regular User for this club?')) return;
-    const clubsAll = JSON.parse(localStorage.getItem('clubs') || '[]');
-    const usersAll = JSON.parse(localStorage.getItem('users') || '[]');
-    const cidx = clubsAll.findIndex(c => c.id === selectedClubId);
-    if (cidx === -1) return;
-    const club = clubsAll[cidx];
-    club.assistants = (club.assistants || []).filter(id => id !== targetUserId);
-    club.trainers = (club.trainers || []).filter(id => id !== targetUserId);
-    club.members = Array.from(new Set([...(club.members || []), targetUserId]));
-    const uidx = usersAll.findIndex(u => u.id === targetUserId);
-    if (uidx !== -1) {
-      const stillTrainer = clubsAll.some(rc => (rc.trainers || []).includes(targetUserId));
-      const stillAssistant = clubsAll.some(rc => (rc.assistants || []).includes(targetUserId));
-      if (!stillTrainer && !stillAssistant && usersAll[uidx].role !== ROLES.ADMIN) {
-        usersAll[uidx].role = ROLES.USER;
-      }
-    }
-    persistClubs(clubsAll);
-    persistUsers(usersAll);
-    loadClubData(selectedClubId);
-    showToast('Assistant demoted to User', 'success');
-  };
-
-  /* -------------------- TEAM membership actions -------------------- */
-
-  // Remove user from specific team:
-  // - if user in 0 teams -> alert
-  // - if in 1 team -> remove from that team
-  // - if in multiple -> prompt index selection
-  const removeUserFromTeam = (userId) => {
-    if (!selectedClubId) return;
-    const clubsAll = JSON.parse(localStorage.getItem('clubs') || '[]');
-    const cidx = clubsAll.findIndex(c => c.id === selectedClubId);
-    if (cidx === -1) return;
-    const club = clubsAll[cidx];
-    const teams = club.teams || [];
-    const userTeams = teams.filter(t => (t.members || []).includes(userId));
-    if (!userTeams || userTeams.length === 0) {
-      return showToast('User is not in any team', 'error');
-    }
-    if (userTeams.length === 1) {
-      if (!window.confirm(`Remove ${userTeams[0].name} membership from this user?`)) return;
-      const tid = userTeams[0].id;
-      club.teams = teams.map(t => (t.id === tid ? { ...t, members: (t.members || []).filter(id => id !== userId) } : t));
-      persistClubs(clubsAll);
-      loadClubData(selectedClubId);
-      return showToast('User removed from team', 'success');
-    }
-    // multiple teams -> prompt to pick
-    const list = userTeams.map((t, i) => `${i + 1}) ${t.name}`).join('\n');
-    const pick = window.prompt(`User is in multiple teams:\n${list}\nEnter number to remove:`);
-    if (!pick) return;
-    const idx = parseInt(pick, 10) - 1;
-    if (Number.isNaN(idx) || idx < 0 || idx >= userTeams.length) {
-      return showToast('Invalid selection', 'error');
-    }
-    const tid = userTeams[idx].id;
-    if (!window.confirm(`Remove "${userTeams[idx].name}" membership from this user?`)) return;
-    club.teams = teams.map(t => (t.id === tid ? { ...t, members: (t.members || []).filter(id => id !== userId) } : t));
-    persistClubs(clubsAll);
-    loadClubData(selectedClubId);
-    showToast('User removed from team', 'success');
-  };
-
-  // Open team assignment modal
-  const openTeamAssignModal = (userId) => {
-    if (!selectedClubId) return;
-    const clubsAll = JSON.parse(localStorage.getItem('clubs') || '[]');
-    const club = clubsAll.find(c => c.id === selectedClubId);
-    if (!club) return;
     
-    const userObj = allUsers.find(u => u.id === userId);
-    if (!userObj) return;
-    
-    // Get teams user is already in
-    const teams = club.teams || [];
-    const userTeamIds = teams
-      .filter(t => (t.members || []).includes(userId))
-      .map(t => t.id);
-    
-    setUserToAssign(userObj);
-    setSelectedTeamsForAssignment(userTeamIds);
-    setShowTeamAssignModal(true);
+    try {
+      const club = await getClub(selectedClubId);
+      if (!club) return;
+
+      const updatedTeams = (club.teams || []).map(team => {
+        if (team.id === teamId) {
+          return {
+            ...team,
+            members: (team.members || []).filter(id => id !== memberId),
+            trainers: (team.trainers || []).filter(id => id !== memberId),
+            assistants: (team.assistants || []).filter(id => id !== memberId)
+          };
+        }
+        return team;
+      });
+
+      await updateClub(selectedClubId, { teams: updatedTeams });
+      showToast('Member removed from team', 'success');
+      await loadClubData(selectedClubId);
+    } catch (error) {
+      console.error('Error removing from team:', error);
+      showToast('Failed to remove from team', 'error');
+    }
   };
 
-  // Toggle team selection in modal
-  const toggleTeamSelection = (teamId) => {
-    setSelectedTeamsForAssignment(prev => {
-      if (prev.includes(teamId)) {
-        return prev.filter(id => id !== teamId);
-      } else {
-        return [...prev, teamId];
-      }
-    });
-  };
+  if (authLoading) {
+    return <div className="p-6 text-light">Loading...</div>;
+  }
 
-  // Save team assignments
-  const saveTeamAssignments = () => {
-    if (!selectedClubId || !userToAssign) return;
-    
-    const clubsAll = JSON.parse(localStorage.getItem('clubs') || '[]');
-    const cidx = clubsAll.findIndex(c => c.id === selectedClubId);
-    if (cidx === -1) return;
-    
-    const club = clubsAll[cidx];
-    const teams = club.teams || [];
-    
-    // Update each team's members array
-    club.teams = teams.map(team => {
-      const shouldBeInTeam = selectedTeamsForAssignment.includes(team.id);
-      const isInTeam = (team.members || []).includes(userToAssign.id);
-      
-      if (shouldBeInTeam && !isInTeam) {
-        // Add user to team
-        return { ...team, members: [...(team.members || []), userToAssign.id] };
-      } else if (!shouldBeInTeam && isInTeam) {
-        // Remove user from team
-        return { ...team, members: (team.members || []).filter(id => id !== userToAssign.id) };
-      }
-      
-      return team;
-    });
-    
-    persistClubs(clubsAll);
-    loadClubData(selectedClubId);
-    setShowTeamAssignModal(false);
-    setUserToAssign(null);
-    setSelectedTeamsForAssignment([]);
-    showToast('Team assignments updated successfully', 'success');
-  };
-
-  if (authLoading) return <div className="p-6">Loading…</div>;
-  if (!user) return <div className="p-6 text-red-600">Please login</div>;
+  if (!user) {
+    return <div className="p-6 text-light">Please sign in</div>;
+  }
 
   return (
     <div className="flex flex-col min-h-screen p-6">
       <div className="flex-1 overflow-auto">
-        <h1 className="font-display text-6xl text-light mb-4"><span className="text-primary">CLUB</span> MANAGEMENT</h1>
+        <div className="mb-8 animate-fade-in">
+          <h1 className="font-display text-6xl md:text-7xl text-light mb-2 tracking-wider">
+            <span className="text-primary">CLUB</span> MANAGEMENT
+          </h1>
+          <p className="text-light/60 text-lg">Manage your club members and teams</p>
+        </div>
 
         {/* Club selector */}
-        <div className="mb-4 flex flex-col md:flex-row md:gap-4 md:items-center">
-          <div>
-            <label className="block mb-1 font-medium text-light/80">Select Club</label>
-            <select
-              value={selectedClubId}
-              onChange={e => setSelectedClubId(e.target.value)}
-              className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-            >
-              <option value="" className="bg-mid-dark">-- Select club --</option>
-              {clubs.map(c => <option key={c.id} value={c.id} className="bg-mid-dark">{c.name} {c.clubNumber ? `(${c.clubNumber})` : ''}</option>)}
-            </select>
-          </div>
-        </div>
-
-        {/* Create team */}
-        {selectedClubId && isClubManager(clubs.find(c => c.id === selectedClubId)) && (
-          <div className="mb-6 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 max-w-md">
-            <h2 className="font-semibold mb-2">Create Team</h2>
-            <div className="flex gap-2">
-              <input value={newTeamName} onChange={e => setNewTeamName(e.target.value)} placeholder="Team name" className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all flex-1" />
-              <button onClick={handleCreateTeam} className="px-4 py-2 bg-primary text-white rounded">Create</button>
-            </div>
-          </div>
-        )}
-
-        {/* Teams list */}
-        {selectedClubId && clubTeams.length > 0 && (
-          <div className="mb-6 max-w-md">
-            <h2 className="font-semibold mb-2">Teams</h2>
-            <ul>
-              {clubTeams.map(t => (
-                <li key={t.id} className="flex justify-between items-center mb-1">
-                  <span>{t.name}</span>
-                  {isClubManager(clubs.find(c => c.id === selectedClubId)) && (
-                    <button onClick={() => handleDeleteTeam(t.id)} className="px-2 py-1 bg-red-100 text-red-700 rounded text-sm">Delete</button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Add user */}
-        {selectedClubId && isClubManager(clubs.find(c => c.id === selectedClubId)) && (
-          <div className="mb-6 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 max-w-2xl">
-            <h2 className="font-semibold mb-2">Add User</h2>
-            <div className="flex gap-2">
-              <select value={selectedUserToAdd} onChange={e => setSelectedUserToAdd(e.target.value)} className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all flex-1">
-                <option value="" className="bg-mid-dark">-- Select user --</option>
-                {allUsers.filter(u => !(clubMembers || []).some(m => m.id === u.id)).map(u => <option key={u.id} value={u.id} className="bg-mid-dark">{u.username || u.email}</option>)}
-              </select>
-              <button onClick={() => addUserToClub(selectedUserToAdd)} className="px-4 py-2 bg-green-500 text-white rounded">Add</button>
-            </div>
-          </div>
-        )}
-
-        {/* Search */}
-        <div className="mb-4 max-w-2xl">
-          <input type="text" placeholder="Search members by username or email" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all w-full" />
-        </div>
-
-        {/* Team filter */}
-        <div className="mb-4 max-w-md">
-          <label className="block mb-1 font-medium text-light/80">Filter by Team</label>
-          <select value={selectedTeamFilter} onChange={e => setSelectedTeamFilter(e.target.value)} className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all w-full">
-            <option value="" className="bg-mid-dark">All</option>
-            <option value="none">No team</option>
-            {clubTeams.map(t => <option key={t.id} value={t.id} className="bg-mid-dark">{t.name}</option>)}
+        <div className="mb-6 animate-fade-in" style={{ animationDelay: '0.1s' }}>
+          <label className="block mb-2 text-light/80 font-medium">Select Club</label>
+          <select
+            value={selectedClubId}
+            onChange={e => setSelectedClubId(e.target.value)}
+            className="w-full md:w-auto bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+          >
+            <option value="" className="bg-mid-dark">-- Select club --</option>
+            {clubs.map(c => (
+              <option key={c.id} value={c.id} className="bg-mid-dark">
+                {c.name} {c.clubNumber ? `(${c.clubNumber})` : ''}
+              </option>
+            ))}
           </select>
         </div>
 
-        {/* Members table (click row to select) */}
-        <div className="max-w-6xl mb-6">
-          {loading ? (
-            <p>Loading members…</p>
-          ) : (
-            <table className="w-full">
-              <thead>
-                <tr>
-                  <th className="px-4 py-3 text-left text-light font-semibold border-b border-white/10">Username</th>
-                  <th className="px-4 py-3 text-left text-light font-semibold border-b border-white/10">Email</th>
-                  <th className="px-4 py-3 text-left text-light font-semibold border-b border-white/10">Role</th>
-                  <th className="px-4 py-3 text-left text-light font-semibold border-b border-white/10">Teams</th>
-                  <th className="px-4 py-3 text-left text-light font-semibold border-b border-white/10">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-transparent">
-                {filteredMembers.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-8 text-center text-light/40" className="text-light/60">No members found.</td>
-                  </tr>
-                ) : filteredMembers.map(m => {
-                  const isSelected = selectedMemberId === m.id;
-                  return (
-                    <tr
-                      key={m.id}
-                      onClick={() => {
-                        setSelectedMemberId(m.id);
-                        setRemoveSearch('');
-                        setRemoveMatches([]);
-                      }}
-                      className={`${isSelected ? 'bg-primary/10' : ''} cursor-pointer`}
-                    >
-                      <td className="p-2 border text-light">{m.username || '—'}</td>
-                      <td className="p-2 border text-light">{m.email || '—'}</td>
-                      <td className="p-2 border text-light">{m.role}</td>
-                      <td className="p-2 border text-light">
-                        {(m.teamNames || []).length === 0 ? '—' : (
-                          <div className="flex flex-wrap gap-2">
-                            {(m.teamNames || []).map((tName, idx) => (
-                              <span key={`${m.id}-t-${idx}`} className="inline-flex items-center gap-2 bg-white/5 px-2 py-1 rounded text-sm">
-                                {tName}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-2 border space-x-1 text-light">
-                        {isClubManager(clubs.find(c => c.id === selectedClubId)) ? (
-                          <>
-                            {m.id !== user.id && (
-                              <>
-                                {/* Promote buttons */}
-                                {m.role !== ROLES.TRAINER && m.role !== ROLES.ASSISTANT && (
-                                  <button
-                                    onClick={(ev) => { ev.stopPropagation(); promoteToTrainer(m.id); }}
-                                    className="px-2 py-1 bg-primary text-white rounded text-sm hover:bg-primary/80"
-                                  >
-                                    ⬆️ Trainer
-                                  </button>
-                                )}
-                                {m.role !== ROLES.TRAINER && m.role !== ROLES.ASSISTANT && (
-                                  <button
-                                    onClick={(ev) => { ev.stopPropagation(); promoteToAssistant(m.id); }}
-                                    className="px-2 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
-                                  >
-                                    ⬆️ Assistant
-                                  </button>
-                                )}
-                                {m.role === ROLES.ASSISTANT && (
-                                  <button
-                                    onClick={(ev) => { ev.stopPropagation(); promoteToTrainer(m.id); }}
-                                    className="px-2 py-1 bg-primary text-white rounded text-sm hover:bg-primary/80"
-                                  >
-                                    ⬆️ Trainer
-                                  </button>
-                                )}
-                                
-                                {/* Demote buttons - granular options */}
-                                {m.role === ROLES.TRAINER && (
-                                  <>
-                                    <button
-                                      onClick={(ev) => { ev.stopPropagation(); demoteTrainerToAssistant(m.id); }}
-                                      className="px-2 py-1 bg-yellow-500 text-white rounded text-sm hover:bg-yellow-600"
-                                    >
-                                      ⬇️ to Assistant
-                                    </button>
-                                    <button
-                                      onClick={(ev) => { ev.stopPropagation(); demoteToUser(m.id); }}
-                                      className="px-2 py-1 bg-orange-500 text-white rounded text-sm hover:bg-orange-600"
-                                    >
-                                      ⬇️ to User
-                                    </button>
-                                  </>
-                                )}
-                                {m.role === ROLES.ASSISTANT && (
-                                  <button
-                                    onClick={(ev) => { ev.stopPropagation(); demoteAssistantToUser(m.id); }}
-                                    className="px-2 py-1 bg-orange-500 text-white rounded text-sm hover:bg-orange-600"
-                                  >
-                                    ⬇️ to User
-                                  </button>
-                                )}
-                                {/* Remove from Team button (per-row) */}
-                                <button
-                                  onClick={(ev) => { ev.stopPropagation(); removeUserFromTeam(m.id); }}
-                                  className="px-2 py-1 bg-white/10 text-light rounded text-sm hover:bg-white/15"
-                                >
-                                  ❌ Remove from Team
-                                </button>
-                                {/* Assign to Team button */}
-                                <button
-                                  onClick={(ev) => { ev.stopPropagation(); openTeamAssignModal(m.id); }}
-                                  className="px-2 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700"
-                                >
-                                  📋 Assign to Team
-                                </button>
-                              </>
-                            )}
-                            {m.id === user.id && <span className="text-light/50">You</span>}
-                          </>
-                        ) : (
-                          <span className="text-xs text-light/50">No actions</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-
-      {/* Bottom actions area: searchable picker + Remove selected user + Delete club */}
-      <div className="mt-4">
-        {selectedClubId && isClubManager(clubs.find(c => c.id === selectedClubId)) && (
-          <div className="mb-3 max-w-2xl">
-            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4">
-              <div className="mb-2">
-                <label className="block text-sm font-medium mb-1 text-light/80">Find member to remove</label>
-                <input
-                  value={removeSearch}
-                  onChange={e => {
-                    setRemoveSearch(e.target.value);
-                    setShowRemoveDropdown(true);
-                  }}
-                  onFocus={() => setShowRemoveDropdown(true)}
-                  onBlur={() => setTimeout(() => setShowRemoveDropdown(false), 150)} // small delay to allow click
-                  placeholder="Type username or email..."
-                  className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all w-full"
-                />
-                {showRemoveDropdown && removeMatches.length > 0 && (
-                  <ul className="border border-white/20 rounded-lg mt-1 max-h-48 overflow-auto bg-mid-dark shadow-xl z-20">
-                    {removeMatches.map(m => (
-                      <li
-                        key={m.id}
-                        onMouseDown={(ev) => { // use mouseDown so it fires before blur
-                          ev.preventDefault();
-                          setSelectedMemberId(m.id);
-                          setRemoveSearch('');
-                          setRemoveMatches([]);
-                          setShowRemoveDropdown(false);
-                        }}
-                        className="px-3 py-2 hover:bg-white/5 cursor-pointer"
-                      >
-                        <div className="text-sm font-medium">{m.username || '—'}</div>
-                        <div className="text-xs text-light/50">{m.email || '—'}</div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <div className="text-sm">Selected member: <strong>{(clubMembers.find(m => m.id === selectedMemberId)?.username) || selectedMemberId || '—'}</strong></div>
-                  <div className="text-xs text-light/50">You can select a row or pick a member with the search above.</div>
-                </div>
-<div className="flex gap-2">
-  <button
-    onClick={() => {
-      if (!selectedMemberId) return showToast('Please select a member first', 'error');
-      if (selectedMemberId === user.id) return showToast('You cannot remove yourself here', 'error');
-      removeUserFromClub(selectedMemberId);
-    }}
-    className="px-4 py-2 bg-red-500 text-white rounded"
-  >
-    Remove selected user from Club
-  </button>
-
-  <button
-    onClick={() => {
-      setSelectedMemberId('');
-      setRemoveSearch('');
-      setRemoveMatches([]);
-      setShowRemoveDropdown(false);
-      showToast('Removal cancelled', 'info');
-    }}
-    className="px-4 py-2 bg-white/15 text-light rounded"
-  >
-    Cancel
-  </button>
-</div>
-
-              </div>
+        {selectedClubId && (
+          <>
+            {/* Search */}
+            <div className="mb-4">
+              <input
+                type="text"
+                placeholder="Search members by username or email"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all w-full"
+              />
             </div>
-          </div>
-        )}
 
-        {/* Delete club button at the very bottom */}
-        {selectedClubId && isClubManager(clubs.find(c => c.id === selectedClubId)) && (
-          <div className="mt-6">
-            <button
-              onClick={() => handleDeleteClub(selectedClubId)}
-              className="w-full px-4 py-3 bg-red-500 text-white rounded shadow-lg hover:bg-red-600 transition"
-            >
-              Delete Club
-            </button>
-          </div>
+            {/* Filter by Team */}
+            <div className="mb-4 flex items-center gap-2">
+              <label className="text-light/80">Filter by Team:</label>
+              <select
+                value={selectedTeamFilter}
+                onChange={e => setSelectedTeamFilter(e.target.value)}
+                className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+              >
+                <option value="" className="bg-mid-dark">All</option>
+                <option value="none" className="bg-mid-dark">No team</option>
+                {clubTeams.map(t => (
+                  <option key={t.id} value={t.id} className="bg-mid-dark">{t.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Members Table */}
+            <div className="overflow-x-auto bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-1">
+              {loading ? (
+                <div className="py-8 text-center text-light/60">Loading members...</div>
+              ) : filteredMembers.length === 0 ? (
+                <div className="py-8 text-center text-light/40">No members found.</div>
+              ) : (
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-white/10">
+                      <th className="px-4 py-3 text-left text-light font-semibold">Username</th>
+                      <th className="px-4 py-3 text-left text-light font-semibold">Email</th>
+                      <th className="px-4 py-3 text-left text-light font-semibold">Role</th>
+                      <th className="px-4 py-3 text-left text-light font-semibold">Teams</th>
+                      <th className="px-4 py-3 text-left text-light font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredMembers.map(m => (
+                      <tr
+                        key={m.id}
+                        onClick={() => setSelectedMemberId(m.id)}
+                        className={`cursor-pointer border-b border-white/5 transition-colors ${
+                          m.id === selectedMemberId ? 'bg-primary/10' : 'hover:bg-white/5'
+                        }`}
+                      >
+                        <td className="px-4 py-3 text-light">{m.username}</td>
+                        <td className="px-4 py-3 text-light">{m.email}</td>
+                        <td className="px-4 py-3 text-light">{m.role}</td>
+                        <td className="px-4 py-3 text-light">
+                          {m.teamNames && m.teamNames.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {m.teamNames.map((tn, idx) => (
+                                <span
+                                  key={`${m.id}-t-${idx}`}
+                                  className="inline-flex items-center gap-2 bg-white/5 px-2 py-1 rounded text-sm"
+                                >
+                                  {tn}
+                                  <button
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      handleRemoveFromTeam(m.id, m.teamIds[idx]);
+                                    }}
+                                    className="text-red-400 hover:text-red-300"
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-light/50">No teams</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-light">
+                          {isClubManager(clubs.find(c => c.id === selectedClubId)) ? (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  setUserToAssign(m);
+                                  setShowTeamAssignModal(true);
+                                }}
+                                className="px-2 py-1 bg-white/10 text-light rounded text-sm hover:bg-white/15"
+                              >
+                                Assign
+                              </button>
+                              {m.role === ROLES.TRAINER ? (
+                                <button
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    handleDemoteToMember(m.id);
+                                  }}
+                                  className="bg-red-500 text-white px-3 py-1.5 rounded-lg hover:bg-red-600 text-sm font-medium transition-all"
+                                >
+                                  Demote
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    handlePromoteToTrainer(m.id);
+                                  }}
+                                  className="bg-green-500 text-white px-3 py-1.5 rounded-lg hover:bg-green-600 text-sm font-medium transition-all"
+                                >
+                                  Promote
+                                </button>
+                              )}
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  handleRemoveMember(m.id);
+                                }}
+                                className="bg-red-500 text-white px-3 py-1.5 rounded-lg hover:bg-red-600 text-sm font-medium transition-all"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-light/50">No actions</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Create Team Section */}
+            {isClubManager(clubs.find(c => c.id === selectedClubId)) && (
+              <div className="mt-6 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 mb-6">
+                <h3 className="font-title text-2xl text-light mb-3">Create Team</h3>
+                <div className="flex gap-2">
+                  <input
+                    value={newTeamName}
+                    onChange={e => setNewTeamName(e.target.value)}
+                    placeholder="Team name"
+                    className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all flex-1"
+                  />
+                  <button
+                    onClick={handleCreateTeam}
+                    className="px-6 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
+                  >
+                    Create
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
       {/* Team Assignment Modal */}
       {showTeamAssignModal && userToAssign && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
-            <h2 className="font-title text-2xl text-light mb-4">
-              📋 Assign Teams
-            </h2>
-            
-            <div className="mb-4 p-3 bg-primary/10 border border-blue-200 rounded">
-              <p className="text-sm text-blue-800">
-                <strong>User:</strong> {userToAssign.username || 'Unknown'}
-              </p>
-              <p className="text-xs text-blue-600 mt-1">
-                Select which teams this user should belong to
-              </p>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-lg w-full mx-4">
+            <h3 className="text-2xl font-bold text-light mb-4">
+              Assign {userToAssign.username} to Teams
+            </h3>
+            <div className="space-y-2 mb-4">
+              {clubTeams.map(team => (
+                <div
+                  key={team.id}
+                  onClick={() => {
+                    setSelectedTeamsForAssignment(prev =>
+                      prev.includes(team.id)
+                        ? prev.filter(id => id !== team.id)
+                        : [...prev, team.id]
+                    );
+                  }}
+                  className="flex items-center gap-3 p-3 border rounded hover:bg-white/5 cursor-pointer transition"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedTeamsForAssignment.includes(team.id)}
+                    onChange={() => {}}
+                    className="mr-2 accent-primary"
+                  />
+                  <div className="font-medium text-light">{team.name}</div>
+                </div>
+              ))}
             </div>
-
-            {/* Team List */}
-            <div className="space-y-2 mb-6">
-              {clubTeams.length === 0 ? (
-                <p className="text-light/50 text-center py-4">
-                  No teams in this club yet. Create a team first.
-                </p>
-              ) : (
-                clubTeams.map(team => (
-                  <label
-                    key={team.id}
-                    className="flex items-center gap-3 p-3 border rounded hover:bg-white/5 cursor-pointer transition"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedTeamsForAssignment.includes(team.id)}
-                      onChange={() => toggleTeamSelection(team.id)}
-                      className="w-5 h-5 text-purple-600 rounded focus:ring-2 focus:ring-purple-500"
-                    />
-                    <div className="flex-1">
-                      <div className="font-medium text-light">{team.name}</div>
-                      <div className="text-xs text-light/50">
-                        {team.sport || 'Sport'} • {(team.members || []).length} members
-                      </div>
-                    </div>
-                  </label>
-                ))
-              )}
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-3">
-              <button
-                onClick={saveTeamAssignments}
-                className="flex-1 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium transition"
-                disabled={clubTeams.length === 0}
-              >
-                Save Assignments
-              </button>
+            <div className="flex gap-2">
               <button
                 onClick={() => {
                   setShowTeamAssignModal(false);
@@ -844,6 +571,12 @@ export default function ClubManagement() {
                 className="flex-1 px-4 py-3 bg-white/10 text-light rounded-lg hover:bg-white/15 font-medium transition"
               >
                 Cancel
+              </button>
+              <button
+                onClick={handleAssignToTeams}
+                className="flex-1 px-4 py-3 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition"
+              >
+                Assign
               </button>
             </div>
           </div>
