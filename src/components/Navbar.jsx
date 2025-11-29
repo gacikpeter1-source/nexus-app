@@ -37,9 +37,14 @@ export default function Navbar() {
     }
   };
 
-  // Check if user is manager (admin, trainer, or assistant)
+  // Check if user is manager (SuperAdmin, admin, trainer, or assistant)
   const isManager = () => {
-    return user && (isAdmin() || user.role === 'trainer' || user.role === 'assistant');
+    return user && (user.isSuperAdmin || isAdmin() || user.role === 'trainer' || user.role === 'assistant');
+  };
+
+  // Check if user is SuperAdmin or Admin
+  const isSuperAdminOrAdmin = () => {
+    return user && (user.isSuperAdmin || isAdmin());
   };
 
   // Don't show navbar on public pages
@@ -136,7 +141,7 @@ export default function Navbar() {
             >
               ⚽ Teams
             </Link>
-            {isAdmin() && (
+            {isSuperAdminOrAdmin() && (
               <Link
                 to="/admin"
                 className={`text-sm font-medium transition ${
