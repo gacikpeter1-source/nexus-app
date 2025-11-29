@@ -78,6 +78,10 @@ export default function ClubManagement() {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
 
+  // Remove action modal state
+  const [showRemoveActionModal, setShowRemoveActionModal] = useState(false);
+  const [memberToRemove, setMemberToRemove] = useState(null);
+
   const isClubManager = (club) => {
     if (!user || !club) return false;
     if (user.role === ROLES.ADMIN || user.isSuperAdmin) return true;
@@ -321,24 +325,84 @@ export default function ClubManagement() {
   const handleRemoveMember = async (member) => {
     if (!selectedClubId || !member) return;
     
-    // Get teams user is in
+    // Show action choice modal
+    setMemberToRemove(member);
+    setShowRemoveActionModal(true);
+  };
+
+  // Remove from teams only
+  const handleRemoveFromTeamsChoice = () => {
     const club = clubs.find(c => c.id === selectedClubId);
-    if (!club) return;
+    if (!club || !memberToRemove) return;
     
     const userTeams = (club.teams || []).filter(team => 
-      (team.members || []).includes(member.id) ||
-      (team.trainers || []).includes(member.id) ||
-      (team.assistants || []).includes(member.id)
+      (team.members || []).includes(memberToRemove.id) ||
+      (team.trainers || []).includes(memberToRemove.id) ||
+      (team.assistants || []).includes(memberToRemove.id)
     );
     
     if (userTeams.length === 0) {
+      setShowRemoveActionModal(false);
       return showToast('User is not in any teams', 'info');
     }
     
-    // Open modal to select teams
-    setUserToRemove(member);
+    // Open team selection modal
+    setUserToRemove(memberToRemove);
     setTeamsToRemoveFrom([]);
+    setShowRemoveActionModal(false);
     setShowRemoveModal(true);
+  };
+
+  // Remove from club entirely
+  const handleRemoveFromClub = async () => {
+    if (!selectedClubId || !memberToRemove) return;
+
+    // Check permission - only trainer or superadmin
+    const club = clubs.find(c => c.id === selectedClubId);
+    if (!club) return;
+
+    const isTrainerOrAbove = user.isSuperAdmin || 
+                             (club.trainers || []).includes(user.id) ||
+                             user.role === ROLES.ADMIN;
+    
+    if (!isTrainerOrAbove) {
+      setShowRemoveActionModal(false);
+      return showToast('Only trainers can remove users from club', 'error');
+    }
+
+    if (!confirm(`Remove ${memberToRemove.username || memberToRemove.email} from club entirely?`)) {
+      return;
+    }
+
+    try {
+      // Remove from all role arrays
+      const updatedTrainers = (club.trainers || []).filter(id => id !== memberToRemove.id);
+      const updatedAssistants = (club.assistants || []).filter(id => id !== memberToRemove.id);
+      const updatedMembers = (club.members || []).filter(id => id !== memberToRemove.id);
+
+      // Remove from all teams
+      const updatedTeams = (club.teams || []).map(team => ({
+        ...team,
+        members: (team.members || []).filter(id => id !== memberToRemove.id),
+        trainers: (team.trainers || []).filter(id => id !== memberToRemove.id),
+        assistants: (team.assistants || []).filter(id => id !== memberToRemove.id)
+      }));
+
+      await updateClub(selectedClubId, {
+        trainers: updatedTrainers,
+        assistants: updatedAssistants,
+        members: updatedMembers,
+        teams: updatedTeams
+      });
+
+      showToast('User removed from club', 'success');
+      setShowRemoveActionModal(false);
+      setMemberToRemove(null);
+      await loadClubData(selectedClubId);
+    } catch (error) {
+      console.error('Error removing from club:', error);
+      showToast('Failed to remove from club', 'error');
+    }
   };
 
   const confirmRemoveFromTeams = async () => {
@@ -807,134 +871,6 @@ export default function ClubManagement() {
 
         {selectedClubId && activeTab === 'management' && (
           <>
-            {/* Search */}
-            <div className="mb-4">
-              <input
-                type="text"
-                placeholder="Search members by username or email"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all w-full"
-              />
-            </div>
-
-            {/* Filter by Team */}
-            <div className="mb-4 flex items-center gap-2">
-              <label className="text-light/80">Filter by Team:</label>
-              <select
-                value={selectedTeamFilter}
-                onChange={e => setSelectedTeamFilter(e.target.value)}
-                className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-              >
-                <option value="" className="bg-mid-dark">All</option>
-                <option value="none" className="bg-mid-dark">No team</option>
-                {clubTeams.map(t => (
-                  <option key={t.id} value={t.id} className="bg-mid-dark">{t.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Members Table */}
-            <div className="overflow-x-auto bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-1">
-              {loading ? (
-                <div className="py-8 text-center text-light/60">Loading members...</div>
-              ) : filteredMembers.length === 0 ? (
-                <div className="py-8 text-center text-light/40">No members found.</div>
-              ) : (
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-white/10">
-                      <th className="px-4 py-3 text-left text-light font-semibold">Username</th>
-                      <th className="px-4 py-3 text-left text-light font-semibold">Email</th>
-                      <th className="px-4 py-3 text-left text-light font-semibold">Role</th>
-                      <th className="px-4 py-3 text-left text-light font-semibold">Teams</th>
-                      <th className="px-4 py-3 text-left text-light font-semibold">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredMembers.map(m => (
-                      <tr
-                        key={m.id}
-                        onClick={() => setSelectedMemberId(m.id)}
-                        className={`cursor-pointer border-b border-white/5 transition-colors ${
-                          m.id === selectedMemberId ? 'bg-primary/10' : 'hover:bg-white/5'
-                        }`}
-                      >
-                        <td className="px-4 py-3 text-light">{m.username}</td>
-                        <td className="px-4 py-3 text-light">{m.email}</td>
-                        <td className="px-4 py-3 text-light">{m.role}</td>
-                        <td className="px-4 py-3 text-light">
-                          {m.teamNames && m.teamNames.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {m.teamNames.map((tn, idx) => (
-                                <span
-                                  key={`${m.id}-t-${idx}`}
-                                  className="inline-flex items-center gap-2 bg-white/5 px-2 py-1 rounded text-sm"
-                                >
-                                  {tn}
-                                  <button
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      handleRemoveFromTeam(m.id, m.teamIds[idx]);
-                                    }}
-                                    className="text-red-400 hover:text-red-300"
-                                  >
-                                    ×
-                                  </button>
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-light/50">No teams</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-light">
-                          {isClubManager(clubs.find(c => c.id === selectedClubId)) ? (
-                            <div className="flex gap-2">
-                              <button
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  setUserToAssign(m);
-                                  setShowTeamAssignModal(true);
-                                }}
-                                className="px-2 py-1 bg-white/10 text-light rounded text-sm hover:bg-white/15"
-                              >
-                                Assign
-                              </button>
-                              <select
-                                value={m.role}
-                                onChange={e => {
-                                  e.stopPropagation();
-                                  handleChangeRole(m.id, e.target.value);
-                                }}
-                                className="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-light text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-                              >
-                                <option value="user" className="bg-mid-dark">User</option>
-                                <option value="parent" className="bg-mid-dark">Parent</option>
-                                <option value="assistant" className="bg-mid-dark">Assistant</option>
-                                <option value="trainer" className="bg-mid-dark">Trainer</option>
-                              </select>
-                              <button
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  handleRemoveMember(m);
-                                }}
-                                className="bg-red-500 text-white px-3 py-1.5 rounded-lg hover:bg-red-600 text-sm font-medium transition-all"
-                              >
-                                Remove
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-light/50">No actions</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-
             {/* Teams List - Enhanced */}
             {selectedClubId && clubTeams.length > 0 && (
               <div className="mb-6 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
@@ -1111,6 +1047,134 @@ export default function ClubManagement() {
                 </div>
               </div>
             )}
+            {/* Search */}
+            <div className="mb-4">
+              <input
+                type="text"
+                placeholder="Search members by username or email"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all w-full"
+              />
+            </div>
+
+            {/* Filter by Team */}
+            <div className="mb-4 flex items-center gap-2">
+              <label className="text-light/80">Filter by Team:</label>
+              <select
+                value={selectedTeamFilter}
+                onChange={e => setSelectedTeamFilter(e.target.value)}
+                className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+              >
+                <option value="" className="bg-mid-dark">All</option>
+                <option value="none" className="bg-mid-dark">No team</option>
+                {clubTeams.map(t => (
+                  <option key={t.id} value={t.id} className="bg-mid-dark">{t.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Members Table */}
+            <div className="overflow-x-auto bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-1">
+              {loading ? (
+                <div className="py-8 text-center text-light/60">Loading members...</div>
+              ) : filteredMembers.length === 0 ? (
+                <div className="py-8 text-center text-light/40">No members found.</div>
+              ) : (
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-white/10">
+                      <th className="px-4 py-3 text-left text-light font-semibold">Username</th>
+                      <th className="px-4 py-3 text-left text-light font-semibold">Email</th>
+                      <th className="px-4 py-3 text-left text-light font-semibold">Role</th>
+                      <th className="px-4 py-3 text-left text-light font-semibold">Teams</th>
+                      <th className="px-4 py-3 text-left text-light font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredMembers.map(m => (
+                      <tr
+                        key={m.id}
+                        onClick={() => setSelectedMemberId(m.id)}
+                        className={`cursor-pointer border-b border-white/5 transition-colors ${
+                          m.id === selectedMemberId ? 'bg-primary/10' : 'hover:bg-white/5'
+                        }`}
+                      >
+                        <td className="px-4 py-3 text-light">{m.username}</td>
+                        <td className="px-4 py-3 text-light">{m.email}</td>
+                        <td className="px-4 py-3 text-light">{m.role}</td>
+                        <td className="px-4 py-3 text-light">
+                          {m.teamNames && m.teamNames.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {m.teamNames.map((tn, idx) => (
+                                <span
+                                  key={`${m.id}-t-${idx}`}
+                                  className="inline-flex items-center gap-2 bg-white/5 px-2 py-1 rounded text-sm"
+                                >
+                                  {tn}
+                                  <button
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      handleRemoveFromTeam(m.id, m.teamIds[idx]);
+                                    }}
+                                    className="text-red-400 hover:text-red-300"
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-light/50">No teams</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-light">
+                          {isClubManager(clubs.find(c => c.id === selectedClubId)) ? (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  setUserToAssign(m);
+                                  setShowTeamAssignModal(true);
+                                }}
+                                className="px-2 py-1 bg-white/10 text-light rounded text-sm hover:bg-white/15"
+                              >
+                                Assign
+                              </button>
+                              <select
+                                value={m.role}
+                                onChange={e => {
+                                  e.stopPropagation();
+                                  handleChangeRole(m.id, e.target.value);
+                                }}
+                                className="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-light text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                              >
+                                <option value="user" className="bg-mid-dark">User</option>
+                                <option value="parent" className="bg-mid-dark">Parent</option>
+                                <option value="assistant" className="bg-mid-dark">Assistant</option>
+                                <option value="trainer" className="bg-mid-dark">Trainer</option>
+                              </select>
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  handleRemoveMember(m);
+                                }}
+                                className="bg-red-500 text-white px-3 py-1.5 rounded-lg hover:bg-red-600 text-sm font-medium transition-all"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-light/50">No actions</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
 
           </>
         )}
@@ -1444,6 +1508,55 @@ export default function ClubManagement() {
                 Assign
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Action Choice Modal */}
+      {showRemoveActionModal && memberToRemove && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-2xl font-bold text-light mb-4">
+              Remove User
+            </h3>
+            
+            <p className="text-light/70 mb-6">
+              Choose how to remove <span className="text-light font-medium">{memberToRemove.username || memberToRemove.email}</span>:
+            </p>
+
+            <div className="space-y-3">
+              <button
+                onClick={handleRemoveFromTeamsChoice}
+                className="w-full px-4 py-3 bg-white/10 hover:bg-white/15 text-light rounded-lg font-medium transition-all text-left flex items-center gap-3"
+              >
+                <span className="text-xl">👥</span>
+                <div>
+                  <div className="font-semibold">Remove from Teams</div>
+                  <div className="text-xs text-light/60">Remove from selected teams only</div>
+                </div>
+              </button>
+
+              <button
+                onClick={handleRemoveFromClub}
+                className="w-full px-4 py-3 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 rounded-lg font-medium transition-all text-left flex items-center gap-3"
+              >
+                <span className="text-xl">🚫</span>
+                <div>
+                  <div className="font-semibold">Remove from Club</div>
+                  <div className="text-xs text-red-300/60">Remove from club and all teams (Trainer only)</div>
+                </div>
+              </button>
+            </div>
+
+            <button
+              onClick={() => {
+                setShowRemoveActionModal(false);
+                setMemberToRemove(null);
+              }}
+              className="w-full mt-4 px-4 py-3 bg-white/10 text-light rounded-lg hover:bg-white/15 font-medium transition"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
