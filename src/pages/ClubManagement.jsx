@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useAuth, ROLES } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { getAllClubs, getClub, getAllUsers, updateClub, updateUser } from '../firebase/firestore';
+import { getAllClubs, getClub, getAllUsers, updateClub, updateUser, getPendingRequests, updateRequest } from '../firebase/firestore';
 import {
   canPromoteToTrainer,
   canPromoteToAssistant,
@@ -73,6 +73,10 @@ export default function ClubManagement() {
   // Statistics tab state
   const [selectedTrainer, setSelectedTrainer] = useState(null);
   const [trainerSearchQuery, setTrainerSearchQuery] = useState('');
+
+  // Pending requests state
+  const [pendingRequests, setPendingRequests] = useState([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
 
   const isClubManager = (club) => {
     if (!user || !club) return false;
@@ -166,10 +170,103 @@ export default function ClubManagement() {
     }
   };
 
+  // Load pending requests for selected club
+  const loadPendingRequests = async (clubId) => {
+    if (!clubId) {
+      setPendingRequests([]);
+      return;
+    }
+
+    setLoadingRequests(true);
+    try {
+      const allRequests = await getPendingRequests();
+      const clubRequests = allRequests.filter(r => r.clubId === clubId && r.status === 'pending');
+      setPendingRequests(clubRequests);
+    } catch (error) {
+      console.error('Error loading pending requests:', error);
+      setPendingRequests([]);
+    } finally {
+      setLoadingRequests(false);
+    }
+  };
+
+  // Handle approve request
+  const handleApproveRequest = async (request) => {
+    try {
+      // Update request status
+      await updateRequest(request.id, {
+        status: 'approved',
+        handledBy: user.id,
+        handledAt: new Date().toISOString()
+      });
+
+      // Get fresh club data
+      const club = await getClub(request.clubId);
+      if (!club) return;
+
+      // Add user to club members
+      const updatedMembers = [...(club.members || [])];
+      if (!updatedMembers.includes(request.userId)) {
+        updatedMembers.push(request.userId);
+      }
+
+      // If specific team requested, add to team
+      let updatedTeams = club.teams || [];
+      if (request.teamId) {
+        updatedTeams = updatedTeams.map(t => {
+          if (t.id === request.teamId) {
+            const teamMembers = [...(t.members || [])];
+            if (!teamMembers.includes(request.userId)) {
+              teamMembers.push(request.userId);
+            }
+            return { ...t, members: teamMembers };
+          }
+          return t;
+        });
+      }
+
+      // Update club in Firebase
+      await updateClub(request.clubId, {
+        members: updatedMembers,
+        teams: updatedTeams
+      });
+
+      showToast('✅ Request approved!', 'success');
+      await loadPendingRequests(selectedClubId);
+      await loadClubData(selectedClubId);
+    } catch (error) {
+      console.error('Error approving request:', error);
+      showToast('Failed to approve request', 'error');
+    }
+  };
+
+  // Handle deny request
+  const handleDenyRequest = async (requestId) => {
+    try {
+      await updateRequest(requestId, {
+        status: 'denied',
+        handledBy: user.id,
+        handledAt: new Date().toISOString()
+      });
+
+      showToast('Request denied', 'info');
+      await loadPendingRequests(selectedClubId);
+    } catch (error) {
+      console.error('Error denying request:', error);
+      showToast('Failed to deny request', 'error');
+    }
+  };
+
   useEffect(() => {
     loadClubData(selectedClubId);
     setSelectedTeamFilter('');
   }, [selectedClubId, allUsers]);
+
+  useEffect(() => {
+    if (activeTab === 'requests' && selectedClubId) {
+      loadPendingRequests(selectedClubId);
+    }
+  }, [activeTab, selectedClubId]);
 
   useEffect(() => {
     const q = (searchQuery || '').trim().toLowerCase();
@@ -1022,10 +1119,103 @@ export default function ClubManagement() {
         {selectedClubId && activeTab === 'requests' && (
           <div className="animate-fade-in">
             <h2 className="font-title text-3xl text-light mb-6">Pending Join Requests</h2>
-            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-              <p className="text-light/70">Pending requests feature - Coming soon</p>
-              <p className="text-light/50 text-sm mt-2">This will show users who requested to join the club/teams</p>
-            </div>
+            
+            {loadingRequests ? (
+              <div className="text-center py-12">
+                <div className="text-light/60">Loading requests...</div>
+              </div>
+            ) : pendingRequests.length === 0 ? (
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-12 text-center">
+                <div className="text-6xl mb-4">✅</div>
+                <h3 className="font-title text-2xl text-light mb-2">All Caught Up!</h3>
+                <p className="text-light/60">No pending join requests at the moment.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {pendingRequests.map(request => {
+                  const requester = allUsers.find(u => u.id === request.userId) || { email: request.userId };
+                  const club = clubs.find(c => c.id === request.clubId) || { name: 'Unknown Club' };
+                  
+                  // Get team info if teamId exists
+                  let teamName = null;
+                  if (request.teamId && club.teams) {
+                    const team = club.teams.find(t => t.id === request.teamId);
+                    if (team) teamName = team.name;
+                  }
+
+                  return (
+                    <div 
+                      key={request.id}
+                      className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 hover:bg-white/10 hover:border-primary/30 transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        {/* User Info */}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center font-bold text-white">
+                              {(requester.username || requester.email).charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="font-semibold text-light text-lg">
+                                {requester.username || requester.email}
+                              </div>
+                              <div className="text-xs text-light/50">
+                                {requester.email}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Request Details */}
+                          <div className="ml-15 space-y-1">
+                            <div className="text-sm text-light/80">
+                              <span className="text-light/50">Club:</span>{' '}
+                              <span className="text-accent font-medium">{club.name}</span>
+                            </div>
+                            {teamName && (
+                              <div className="text-sm text-light/80">
+                                <span className="text-light/50">Team:</span>{' '}
+                                <span className="text-secondary font-medium">{teamName}</span>
+                              </div>
+                            )}
+                            <div className="text-xs text-light/40">
+                              Requested: {request.createdAt ? new Date(request.createdAt).toLocaleString() : 'Unknown'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleApproveRequest(request)}
+                            className="px-5 py-2.5 bg-success hover:bg-success/80 text-white rounded-lg transition-all font-semibold text-sm flex items-center gap-2"
+                          >
+                            <span>✔</span>
+                            <span>Approve</span>
+                          </button>
+                          <button
+                            onClick={() => handleDenyRequest(request.id)}
+                            className="px-5 py-2.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 rounded-lg transition-all font-semibold text-sm flex items-center gap-2"
+                          >
+                            <span>✕</span>
+                            <span>Deny</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Stats */}
+            {pendingRequests.length > 0 && (
+              <div className="mt-8 text-center">
+                <div className="inline-block bg-white/5 border border-white/10 rounded-lg px-6 py-3">
+                  <span className="text-light/60 text-sm">Total Pending: </span>
+                  <span className="font-bold text-secondary text-lg">{pendingRequests.length}</span>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
