@@ -1,5 +1,5 @@
 // src/pages/Login.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -42,9 +42,6 @@ const Login = () => {
     const emailValue = emailRef.current?.value || email;
     const passwordValue = passwordRef.current?.value || password;
 
-    console.log('🔵 LOGIN ATTEMPT');
-    console.log('Email:', emailValue);
-    console.log('Password length:', passwordValue.length);
 
     if (!emailValue || !passwordValue) {
       setError('Please enter both email and password');
@@ -56,7 +53,6 @@ const Login = () => {
       await login(emailValue, passwordValue);
       navigate(from, { replace: true });
     } catch (err) {
-      console.log('❌ Login error:', err);
       setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
@@ -162,7 +158,7 @@ const Login = () => {
 
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-600">
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <Link to="/register" className="text-blue-600 hover:text-blue-700 font-medium">
               Create one now
             </Link>

@@ -1,5 +1,5 @@
 // src/pages/VerifyEmail.jsx
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { auth } from '../firebase/config';
@@ -101,7 +101,7 @@ export default function VerifyEmail() {
         <div className="text-center mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">📧 Verify Your Email</h1>
           <p className="text-gray-600">
-            We've sent a verification link to:
+            We&apos;ve sent a verification link to:
           </p>
           <p className="text-blue-600 font-semibold mt-2">
             {user?.email || auth.currentUser?.email}
@@ -113,7 +113,7 @@ export default function VerifyEmail() {
           <ul className="text-sm text-blue-800 space-y-2">
             <li>• Click the verification link in the email</li>
             <li>• The link expires in 24 hours</li>
-            <li>• Check your spam folder if you don't see it</li>
+            <li>• Check your spam folder if you don&apos;t see it</li>
             <li>• This page will auto-detect when you verify</li>
           </ul>
         </div>
@@ -151,7 +151,7 @@ export default function VerifyEmail() {
               </>
             ) : (
               <>
-                ✅ I've Verified - Check Status
+                ✅ I&apos;ve Verified - Check Status
               </>
             )}
           </button>

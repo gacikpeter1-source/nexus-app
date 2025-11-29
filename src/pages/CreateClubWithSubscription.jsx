@@ -12,24 +12,12 @@ export default function CreateClubWithSubscription() {
     if (!user) return [];
     const clubs = JSON.parse(localStorage.getItem('clubs') || '[]');
     const owned = clubs.filter(c => c.superTrainer === user.id);
-    console.log('🔍 Owned clubs check:', { 
-      userId: user.id, 
-      totalClubs: clubs.length, 
-      ownedCount: owned.length,
-      ownedClubs: owned.map(c => ({ name: c.name, id: c.id }))
-    });
     return owned;
   }, [user]);
 
   // Determine initial step based on owned clubs
   const hasExistingClubs = ownedClubs.length > 0;
   const initialStep = hasExistingClubs ? 0 : 1;
-  
-  console.log('📊 Initial step determination:', { 
-    hasExistingClubs, 
-    ownedCount: ownedClubs.length, 
-    initialStep 
-  });
   
   const [step, setStep] = useState(initialStep);
   const [clubName, setClubName] = useState('');
@@ -38,6 +26,13 @@ export default function CreateClubWithSubscription() {
   const [busy, setBusy] = useState(false);
   const [customerID, setCustomerID] = useState('');
   const [createdClub, setCreatedClub] = useState(null);
+  // FAILSAFE: If user has clubs but somehow step isn't 0, force back to step 0
+  React.useEffect(() => {
+    if (hasExistingClubs && step > 0 && step < 4) {
+      console.warn('⚠️ FAILSAFE: User has clubs but step is', step, '- forcing to Step 0');
+      setStep(0);
+    }
+  }, [hasExistingClubs, step]);
 
   // Generate unique 15-character Customer ID
   const generateCustomerID = () => {
@@ -173,7 +168,7 @@ You are now the SuperTrainer (Club Owner) with full access to all teams.
 
 ${isAdditionalClub ? `\n⚠️ BILLING NOTICE:\nThis is subscription #${ownedClubs.length + 1}. You now own ${ownedClubs.length + 1} club(s), each with separate billing.\n\nYour clubs:\n${ownedClubs.map((c, i) => `  ${i + 1}. ${c.name} (ID: ${c.customerID})`).join('\n')}\n  ${ownedClubs.length + 1}. ${newClub.name} (ID: ${newCustomerID})\n` : ''}
 
-Important: Keep your Customer ID safe. You'll need it for support and billing.
+Important: Keep your Customer ID safe. You&apos;ll need it for support and billing.
 
 Welcome to NEXUS!
         `,
@@ -211,16 +206,8 @@ Welcome to NEXUS!
   }
 
   // Show info about existing clubs if user already owns some
-  const hasExistingClubs = ownedClubs.length > 0;
 
   // FAILSAFE: If user has clubs but somehow step isn't 0, force back to step 0
-  React.useEffect(() => {
-    if (hasExistingClubs && step > 0 && step < 4) {
-      console.warn('⚠️ FAILSAFE: User has clubs but step is', step, '- forcing to Step 0');
-      setStep(0);
-    }
-  }, [hasExistingClubs, step]);
-
   return (
     <div className="max-w-2xl mx-auto">
       {/* DEBUG INFO (remove after testing) */}
@@ -373,7 +360,7 @@ Welcome to NEXUS!
                 What happens next?
               </h3>
               <ul className="text-sm text-light/70 space-y-1">
-                <li>• You'll review and accept our terms</li>
+                <li>• You&apos;ll review and accept our terms</li>
                 <li>• Complete subscription setup (simulated for dev)</li>
                 <li>• Receive your unique Customer ID</li>
                 <li>• Become SuperTrainer with full club access</li>
@@ -436,7 +423,7 @@ Welcome to NEXUS!
               <p>Subscription is billed annually. Payment details and pricing will be confirmed during activation.</p>
 
               <p><strong>6. Data & Privacy</strong></p>
-              <p>We protect your club's data according to our Privacy Policy. You retain ownership of all content and member information.</p>
+              <p>We protect your club&apos;s data according to our Privacy Policy. You retain ownership of all content and member information.</p>
 
               <p><strong>7. Cancellation</strong></p>
               <p>You may cancel your subscription at any time. Access will continue until the end of the current billing period.</p>
@@ -579,7 +566,7 @@ Welcome to NEXUS!
               </code>
             </div>
             <p className="text-xs text-light/60 text-center mt-3">
-              ⚠️ Save this ID! You'll need it for support and billing.
+              ⚠️ Save this ID! You&apos;ll need it for support and billing.
             </p>
           </div>
 

@@ -1,0 +1,199 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    /* ===========================
+       HELPER FUNCTIONS
+       =========================== */
+    
+    // Check if user is authenticated
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    // Check if user is accessing their own document
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // Get user data from database
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    // Check if user has a specific role
+    function hasRole(role) {
+      return isSignedIn() && getUserData().role == role;
+    }
+    
+    // Check if user is admin
+    function isAdmin() {
+      return hasRole('admin');
+    }
+    
+    // Check if user is SuperAdmin
+    function isSuperAdmin() {
+      return isSignedIn() && getUserData().isSuperAdmin == true;
+    }
+    
+    // Check if user is trainer, assistant, or admin
+    function isTrainerOrAbove() {
+      return isSignedIn() && getUserData().role in ['admin', 'trainer', 'assistant'];
+    }
+    
+    // Check if user is a member of a specific club
+    function isClubMember(clubId) {
+      return isSignedIn() && clubId in getUserData().clubIds;
+    }
+    
+    // Get club data
+    function getClubData(clubId) {
+      return get(/databases/$(database)/documents/clubs/$(clubId)).data;
+    }
+    
+    // Check if user is a trainer of a specific club
+    function isClubTrainer(clubId) {
+      return isSignedIn() && request.auth.uid in getClubData(clubId).trainers;
+    }
+    
+    // Check if user is an assistant of a specific club
+    function isClubAssistant(clubId) {
+      return isSignedIn() && request.auth.uid in getClubData(clubId).assistants;
+    }
+    
+    // Check if user has permission to manage a club
+    function canManageClub(clubId) {
+      return isAdmin() || isClubTrainer(clubId) || isClubAssistant(clubId);
+    }
+    
+    
+    /* ===========================
+       USERS COLLECTION
+       =========================== */
+    
+    match /users/{userId} {
+      // Anyone authenticated can read any user (for team/club member lists)
+      allow read: if isSignedIn();
+      
+      // Users can create their own account during registration
+      allow create: if isOwner(userId) 
+                    && request.resource.data.email is string
+                    && request.resource.data.role in ['user', 'trainer', 'parent']
+                    && (!request.resource.data.keys().hasAny(['isSuperAdmin']) || request.resource.data.isSuperAdmin == false);
+      
+      // Users can update their own profile (but not their role or isSuperAdmin flag)
+      allow update: if isOwner(userId)
+                    && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isSuperAdmin']))
+                    && request.resource.data.email == resource.data.email; // Can't change email
+      
+      // Admins can update any user (including roles)
+      allow update: if isAdmin()
+                    && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['isSuperAdmin']) || isSuperAdmin());
+      
+      // Trainers can update users in their clubs (limited fields)
+      allow update: if isSignedIn()
+                    && getUserData().role == 'trainer'
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clubIds', 'teamIds', 'updatedAt']);
+      
+      // Only SuperAdmin can delete users (prevent accidental deletion)
+      allow delete: if isSuperAdmin() || (isAdmin() && !resource.data.isSuperAdmin);
+    }
+    
+    
+    /* ===========================
+       CLUBS COLLECTION
+       =========================== */
+    
+    match /clubs/{clubId} {
+      // Anyone authenticated can read clubs they're a member of
+      allow read: if isSignedIn() && (
+        isAdmin() || 
+        request.auth.uid in resource.data.members ||
+        request.auth.uid in resource.data.trainers ||
+        request.auth.uid in resource.data.assistants
+      );
+      
+      // Trainers and above can create clubs
+      allow create: if isSignedIn() 
+                    && getUserData().role in ['trainer', 'assistant', 'admin']
+                    && request.resource.data.clubCode is string
+                    && request.resource.data.clubCode.size() == 6
+                    && request.auth.uid in request.resource.data.trainers;
+      
+      // Club trainers and admins can update clubs
+      allow update: if canManageClub(clubId);
+      
+      // Only admins can delete clubs
+      allow delete: if isAdmin();
+    }
+    
+    
+    /* ===========================
+       EVENTS COLLECTION
+       =========================== */
+    
+    match /events/{eventId} {
+      // Users can read events from clubs they belong to
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        isClubMember(resource.data.clubId) ||
+        resource.data.createdBy == request.auth.uid
+      );
+      
+      // Trainers, assistants, and admins can create events
+      allow create: if isSignedIn()
+                    && getUserData().role in ['trainer', 'assistant', 'admin']
+                    && request.resource.data.clubId is string
+                    && isClubMember(request.resource.data.clubId)
+                    && request.resource.data.createdBy == request.auth.uid;
+      
+      // Event creator, club trainers, and admins can update events
+      allow update: if isAdmin() 
+                    || resource.data.createdBy == request.auth.uid
+                    || canManageClub(resource.data.clubId);
+      
+      // Event creator, club trainers, and admins can delete events
+      allow delete: if isAdmin() 
+                    || resource.data.createdBy == request.auth.uid
+                    || canManageClub(resource.data.clubId);
+    }
+    
+    
+    /* ===========================
+       REQUESTS COLLECTION
+       =========================== */
+    
+    match /requests/{requestId} {
+      // Users can read their own requests
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        canManageClub(resource.data.clubId) ||
+        isAdmin()
+      );
+      
+      // Authenticated users can create join requests
+      allow create: if isSignedIn()
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.clubId is string;
+      
+      // Club trainers and admins can update requests (approve/deny)
+      allow update: if canManageClub(resource.data.clubId) || isAdmin();
+      
+      // Users can delete their own pending requests, trainers/admins can delete any
+      allow delete: if (isSignedIn() && resource.data.userId == request.auth.uid && resource.data.status == 'pending')
+                    || canManageClub(resource.data.clubId)
+                    || isAdmin();
+    }
+    
+    
+    /* ===========================
+       DEFAULT DENY ALL
+       =========================== */
+    
+    // Deny all other access by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,5 +1,5 @@
 // src/pages/ClubsDashboard.jsx
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth, ROLES } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useNavigate } from 'react-router-dom';
@@ -16,7 +16,7 @@ function Modal({ open, title, children, onClose }) {
             onClick={onClose} 
             className="text-light/60 hover:text-light w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors"
           >
-            ✕
+            âœ•
           </button>
         </div>
         <div>{children}</div>
@@ -49,14 +49,17 @@ export default function ClubsDashboard() {
     loadClubs();
   }, [user]);
 
-  function loadClubs() {
+  async function loadClubs() {
     setLoading(true);
     try {
-      let list = listClubsForUser ? listClubsForUser() : [];
+      let list = listClubsForUser ? await listClubsForUser() : [];
       if (!Array.isArray(list)) list = [];
 
-      // Filter clubs where user is a member
-      if (user.role !== ROLES.ADMIN) {
+      // SuperAdmin sees ALL clubs, others see clubs they're member of
+      if (user.isSuperAdmin || user.role === ROLES.ADMIN) {
+        // Don't filter - SuperAdmin sees all clubs
+      } else {
+        // Filter clubs where user is a member
         list = list.filter(c =>
           c.createdBy === user.id ||
           (c.trainers || []).includes(user.id) ||
@@ -71,7 +74,8 @@ export default function ClubsDashboard() {
       }, []);
 
       setClubs(deduped);
-    } catch {
+    } catch (error) {
+      console.error('Error loading clubs:', error);
       setClubs([]);
     } finally {
       setLoading(false);
@@ -143,7 +147,7 @@ export default function ClubsDashboard() {
           <div className="text-6xl mb-4">🏆</div>
           <h3 className="font-title text-2xl text-light mb-2">No Clubs Yet</h3>
           <p className="text-light/60 mb-6 max-w-md mx-auto">
-            You haven't joined any clubs yet. Create a club or request to join an existing one to get started.
+            You haven&apos;t joined any clubs yet. Create a club or request to join an existing one to get started.
           </p>
           <div className="flex justify-center gap-4">
             <button 
@@ -191,7 +195,7 @@ export default function ClubsDashboard() {
               <div className="relative z-10">
                 {/* Club Icon */}
                 <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-3xl mb-4">
-                  🏛️
+                  ðŸ›ï¸
                 </div>
 
                 <h3 className="font-title text-2xl text-light group-hover:text-primary transition-colors mb-2">
@@ -220,7 +224,7 @@ export default function ClubsDashboard() {
 
                 {/* Arrow indicator */}
                 <div className="absolute bottom-6 right-6 text-primary opacity-0 group-hover:opacity-100 transform translate-x-2 group-hover:translate-x-0 transition-all">
-                  →
+                  â†’
                 </div>
               </div>
             </div>
@@ -242,7 +246,7 @@ export default function ClubsDashboard() {
             onClick={() => setSelectedClubId(null)}
             className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center text-light transition-all"
           >
-            ←
+            â†
           </button>
           <div>
             <h2 className="font-title text-3xl text-light">{selectedClub.name}</h2>
@@ -255,10 +259,10 @@ export default function ClubsDashboard() {
         {/* Teams in this club */}
         {userTeamsInClub.length === 0 ? (
           <div className="rounded-2xl border-2 border-dashed border-white/20 bg-white/5 backdrop-blur-sm p-12 text-center">
-            <div className="text-6xl mb-4">👥</div>
+            <div className="text-6xl mb-4">ðŸ‘¥</div>
             <h3 className="font-title text-2xl text-light mb-2">No Teams Yet</h3>
             <p className="text-light/60 mb-6 max-w-md mx-auto">
-              You haven't joined any teams in this club yet.
+              You haven&apos;t joined any teams in this club yet.
             </p>
           </div>
         ) : (
@@ -266,7 +270,7 @@ export default function ClubsDashboard() {
             {userTeamsInClub.map((team, idx) => (
               <div
                 key={team.id}
-                onClick={() => navigate(`/teams/${team.id}`)}
+                onClick={() => navigate(`/team/${selectedClub.id}/${team.id}`)}
                 className="group relative cursor-pointer bg-white/5 backdrop-blur-sm border border-white/10 p-5 rounded-xl hover:bg-white/10 hover:border-primary/50 transition-all duration-300 card-hover overflow-hidden"
                 style={{ animationDelay: `${idx * 0.05}s` }}
               >
@@ -279,10 +283,10 @@ export default function ClubsDashboard() {
                   <div className="flex items-center gap-4">
                     {/* Team Icon */}
                     <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-2xl">
-                      {team.sport === 'Football' ? '⚽' : 
-                       team.sport === 'Basketball' ? '🏀' : 
-                       team.sport === 'Volleyball' ? '🏐' : 
-                       team.sport === 'Swimming' ? '🏊' : '🏆'}
+                      {team.sport === 'Football' ? 'âš½' : 
+                       team.sport === 'Basketball' ? 'ðŸ€' : 
+                       team.sport === 'Volleyball' ? 'ðŸ' : 
+                       team.sport === 'Swimming' ? 'ðŸŠ' : '🏆'}
                     </div>
 
                     <div>
@@ -306,7 +310,7 @@ export default function ClubsDashboard() {
 
                   {/* Arrow indicator */}
                   <div className="text-primary opacity-0 group-hover:opacity-100 transform translate-x-2 group-hover:translate-x-0 transition-all ml-4">
-                    →
+                    â†’
                   </div>
                 </div>
               </div>
@@ -408,7 +412,7 @@ export default function ClubsDashboard() {
               onClick={() => setOpenCreateModal(false)}
               className="absolute top-4 right-4 z-10 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-light transition-all"
             >
-              ✕
+              âœ•
             </button>
             <CreateClubWithSubscription />
           </div>

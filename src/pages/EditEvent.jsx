@@ -1,9 +1,9 @@
 // src/pages/EditEvent.jsx
-import React, { useState, useEffect } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { updateEvent, getEvent, getCurrentUser } from "../api/localApi";
-import { useNavigate, useParams } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
+import { useState, useEffect } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { updateEvent, getEvent, getCurrentUser } from '../api/localApi';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function EditEvent() {
   const { id } = useParams();
@@ -13,35 +13,35 @@ export default function EditEvent() {
 
   // Load the existing event
   const { data: existingEvent, isLoading } = useQuery({
-    queryKey: ["event", id],
+    queryKey: ['event', id],
     queryFn: () => getEvent(id),
   });
 
   const [form, setForm] = useState({
-    title: "",
-    type: "training",
-    date: "",
-    time: "",
-    location: "",
-    description: "",
-    teamId: "",
-    clubId: "",
-    visibilityLevel: "personal",
+    title: '',
+    type: 'training',
+    date: '',
+    time: '',
+    location: '',
+    description: '',
+    teamId: '',
+    clubId: '',
+    visibilityLevel: 'personal',
   });
 
   // Populate form when event loads
   useEffect(() => {
     if (existingEvent) {
       setForm({
-        title: existingEvent.title || "",
-        type: existingEvent.type || "training",
-        date: existingEvent.date || "",
-        time: existingEvent.time || "",
-        location: existingEvent.location || "",
-        description: existingEvent.description || "",
-        teamId: existingEvent.teamId || "",
-        clubId: existingEvent.clubId || "",
-        visibilityLevel: existingEvent.visibilityLevel || "personal",
+        title: existingEvent.title || '',
+        type: existingEvent.type || 'training',
+        date: existingEvent.date || '',
+        time: existingEvent.time || '',
+        location: existingEvent.location || '',
+        description: existingEvent.description || '',
+        teamId: existingEvent.teamId || '',
+        clubId: existingEvent.clubId || '',
+        visibilityLevel: existingEvent.visibilityLevel || 'personal',
       });
     }
   }, [existingEvent]);
@@ -49,8 +49,8 @@ export default function EditEvent() {
   const mutation = useMutation({
     mutationFn: (updates) => updateEvent(id, updates),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["events"] });
-      qc.invalidateQueries({ queryKey: ["event", id] });
+      qc.invalidateQueries({ queryKey: ['events'] });
+      qc.invalidateQueries({ queryKey: ['event', id] });
       navigate(`/events/${id}`);
     },
   });
@@ -59,7 +59,7 @@ export default function EditEvent() {
     e.preventDefault();
     
     if (!form.title || !form.date) {
-      alert("Please fill Title and Date");
+      alert('Please fill Title and Date');
       return;
     }
 
@@ -99,7 +99,7 @@ export default function EditEvent() {
             type="text"
             className="border rounded px-3 py-1 w-full"
             value={form.title}
-            onChange={update("title")}
+            onChange={update('title')}
             required
           />
         </div>
@@ -109,7 +109,7 @@ export default function EditEvent() {
           <select
             className="border rounded px-3 py-1 w-full"
             value={form.type}
-            onChange={update("type")}
+            onChange={update('type')}
           >
             <option value="training">Training</option>
             <option value="game">Game</option>
@@ -126,7 +126,7 @@ export default function EditEvent() {
             <input
               type="date"
               value={form.date}
-              onChange={update("date")}
+              onChange={update('date')}
               className="w-full border p-2 rounded"
               required
             />
@@ -137,7 +137,7 @@ export default function EditEvent() {
             <input
               type="time"
               value={form.time}
-              onChange={update("time")}
+              onChange={update('time')}
               className="w-full border p-2 rounded"
             />
           </label>
@@ -149,7 +149,7 @@ export default function EditEvent() {
             type="text"
             className="border rounded px-3 py-1 w-full"
             value={form.location}
-            onChange={update("location")}
+            onChange={update('location')}
           />
         </div>
 
@@ -159,7 +159,7 @@ export default function EditEvent() {
             rows={3}
             className="border rounded px-3 py-1 w-full"
             value={form.description}
-            onChange={update("description")}
+            onChange={update('description')}
           />
         </div>
 
@@ -169,7 +169,7 @@ export default function EditEvent() {
             className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-medium"
             disabled={mutation.isPending}
           >
-            {mutation.isPending ? "Saving..." : "Save Changes"}
+            {mutation.isPending ? 'Saving...' : 'Save Changes'}
           </button>
           <button
             type="button"

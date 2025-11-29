@@ -1,4 +1,3 @@
-import React from 'react';
 import CreateClubWithSubscription from '../components/CreateClubWithSubscription';
 import { Link } from 'react-router-dom';
 

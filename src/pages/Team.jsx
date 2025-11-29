@@ -1,7 +1,7 @@
 // src/pages/Team.jsx
-import React, { useState, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
+import { useState, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Team() {
   const { id } = useParams();
@@ -12,31 +12,22 @@ export default function Team() {
 
   // Load team data from localStorage
   const team = useMemo(() => {
-    console.log('🏃 Loading team data...');
-    console.log('  Team ID from URL:', id);
     
     try {
       const clubs = JSON.parse(localStorage.getItem('clubs') || '[]');
-      console.log('  Clubs found:', clubs.length);
       
       for (const club of clubs) {
-        console.log(`  Checking club: ${club.name} (${club.id})`);
         if (!Array.isArray(club.teams)) {
-          console.log('    ⚠️ No teams array');
           continue;
         }
-        console.log(`    Teams in club: ${club.teams.length}`);
         club.teams.forEach(t => {
-          console.log(`      - ${t.name} (id: ${t.id})`);
         });
         
         const foundTeam = club.teams.find(t => t.id === id);
         if (foundTeam) {
-          console.log(`  ✅ FOUND TEAM: ${foundTeam.name}`);
           return { ...foundTeam, clubId: club.id, clubName: club.name };
         }
       }
-      console.log('  ❌ Team not found in any club');
       return null;
     } catch (e) {
       console.error('  ❌ Error loading team:', e);
@@ -55,13 +46,10 @@ export default function Team() {
 
   // Load events
   const allEvents = useMemo(() => {
-    console.log('📅 Loading events from localStorage...');
     try {
       // Events are stored in 'sportsapp:localEvents', not 'events'
       const events = JSON.parse(localStorage.getItem('sportsapp:localEvents') || '[]');
-      console.log(`  Total events in storage: ${events.length}`);
       events.forEach(e => {
-        console.log(`    - "${e.title}" (teamId: ${e.teamId}, clubId: ${e.clubId}, date: ${e.date})`);
       });
       return events;
     } catch (e) {
@@ -74,11 +62,6 @@ export default function Team() {
   const upcomingEvents = useMemo(() => {
     if (!team) return [];
     
-    console.log('🔍 Debug Info:');
-    console.log('  Team ID:', team.id);
-    console.log('  Team Name:', team.name);
-    console.log('  Club ID:', team.clubId);
-    console.log('  All Events Count:', allEvents.length);
     
     // Filter events for this team
     // An event belongs to this team if:
@@ -91,13 +74,12 @@ export default function Team() {
       const isMatch = matchesTeamId || matchesClubId;
       
       if (isMatch) {
-        console.log(`  ✅ Event "${e.title}": teamId=${e.teamId}, clubId=${e.clubId}, visibility=${e.visibilityLevel}`);
+        /* Matching logic completed */
       }
       
       return isMatch;
     });
     
-    console.log('🎯 Team Events Found:', teamEvents.length);
     
     const now = new Date();
     const fiveDaysLater = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
@@ -106,15 +88,12 @@ export default function Team() {
     const next5Days = teamEvents.filter(e => {
       const eventDate = new Date(e.date);
       const isInRange = eventDate >= now && eventDate <= fiveDaysLater;
-      console.log(`  📅 "${e.title}": ${e.date} (${eventDate.toLocaleDateString()}) -> ${isInRange ? '✅ IN RANGE' : '❌ OUT OF RANGE'}`);
       return isInRange;
     }).sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    console.log('📆 Events in next 5 days:', next5Days.length);
 
     // If we have events in next 5 days, return them
     if (next5Days.length > 0) {
-      console.log('✅ Returning next 5 days events');
       return next5Days.slice(0, 5);
     }
 
@@ -122,13 +101,11 @@ export default function Team() {
     const futureEvents = teamEvents
       .filter(e => {
         const isFuture = new Date(e.date) >= now;
-        console.log(`  🔮 "${e.title}": ${isFuture ? 'FUTURE' : 'PAST'}`);
         return isFuture;
       })
       .sort((a, b) => new Date(a.date) - new Date(b.date))
       .slice(0, 5);
 
-    console.log('🔮 Returning future events:', futureEvents.length);
     
     return futureEvents;
   }, [team, allEvents]);
@@ -199,7 +176,7 @@ export default function Team() {
         <div className="text-center">
           <div className="text-6xl mb-4">😕</div>
           <h2 className="font-title text-2xl text-light mb-2">Team Not Found</h2>
-          <p className="text-light/60 mb-6">The team you're looking for doesn't exist.</p>
+          <p className="text-light/60 mb-6">The team you&apos;re looking for doesn&apos;t exist.</p>
           <button
             onClick={() => navigate('/clubs')}
             className="btn-primary"

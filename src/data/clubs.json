@@ -1,0 +1,85 @@
+[
+  {
+    "id": "club1",
+    "name": "Elite Football Academy",
+    "clubCode": "EFA2024",
+    "createdBy": "trainer1",
+    "trainers": ["trainer1"],
+    "assistants": [],
+    "members": ["member1"],
+    "teams": [
+      {
+        "id": "team1",
+        "name": "U-15 Boys",
+        "sport": "Football",
+        "ageGroup": "U-15",
+        "trainers": ["trainer1"],
+        "assistants": [],
+        "members": ["member1"],
+        "createdBy": "trainer1",
+        "createdAt": "2024-01-15T10:00:00Z"
+      },
+      {
+        "id": "team2",
+        "name": "U-17 Girls",
+        "sport": "Football",
+        "ageGroup": "U-17",
+        "trainers": ["trainer1"],
+        "assistants": [],
+        "members": ["member1"],
+        "createdBy": "trainer1",
+        "createdAt": "2024-02-20T10:00:00Z"
+      }
+    ],
+    "createdAt": "2024-01-01T10:00:00Z",
+    "updatedAt": "2024-11-29T10:00:00Z"
+  },
+  {
+    "id": "club2",
+    "name": "Basketball Stars",
+    "clubCode": "BST2024",
+    "createdBy": "trainer1",
+    "trainers": ["trainer1"],
+    "assistants": [],
+    "members": [],
+    "teams": [
+      {
+        "id": "team3",
+        "name": "Junior League",
+        "sport": "Basketball",
+        "ageGroup": "U-16",
+        "trainers": ["trainer1"],
+        "assistants": [],
+        "members": [],
+        "createdBy": "trainer1",
+        "createdAt": "2024-03-10T10:00:00Z"
+      }
+    ],
+    "createdAt": "2024-02-15T10:00:00Z",
+    "updatedAt": "2024-11-29T10:00:00Z"
+  },
+  {
+    "id": "club3",
+    "name": "Swimming Club Pro",
+    "clubCode": "SCP2024",
+    "createdBy": "u-swimming-coach",
+    "trainers": ["u-swimming-coach"],
+    "assistants": [],
+    "members": ["member1"],
+    "teams": [
+      {
+        "id": "team4",
+        "name": "Beginner Swimmers",
+        "sport": "Swimming",
+        "ageGroup": "All Ages",
+        "trainers": ["u-swimming-coach"],
+        "assistants": [],
+        "members": ["member1"],
+        "createdBy": "u-swimming-coach",
+        "createdAt": "2024-04-05T10:00:00Z"
+      }
+    ],
+    "createdAt": "2024-03-01T10:00:00Z",
+    "updatedAt": "2024-11-29T10:00:00Z"
+  }
+]

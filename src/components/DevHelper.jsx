@@ -1,17 +1,17 @@
 // src/components/DevHelper.jsx
 // Dev helper with quick login and club tools (delete in production)
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth, ROLES } from '../contexts/AuthContext';
 
 // Try to import helper components (if they exist)
 let CreateClub, JoinClubByCode, NominateAssistant;
 try {
-  // eslint-disable-next-line
+   
   CreateClub = require('./CreateClub').default;
-  // eslint-disable-next-line
+   
   JoinClubByCode = require('./JoinClubByCode').default;
-  // eslint-disable-next-line
+   
   NominateAssistant = require('./NominateAssistant').default;
 } catch (e) {
   CreateClub = null;

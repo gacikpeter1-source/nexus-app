@@ -1,5 +1,5 @@
 // src/pages/Register.jsx - WITH EMAIL VERIFICATION
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -93,7 +93,7 @@ export default function Register() {
           <div className="text-center mb-6">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">✅ Registration Successful!</h1>
             <p className="text-gray-600">
-              We've sent a verification email to:
+              We&apos;ve sent a verification email to:
             </p>
             <p className="text-blue-600 font-semibold mt-2">{email}</p>
           </div>
@@ -109,7 +109,7 @@ export default function Register() {
 
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
             <p className="text-sm text-yellow-800">
-              ⏰ <strong>Note:</strong> The verification link expires in 24 hours. If you don't see the email, check your spam folder.
+              ⏰ <strong>Note:</strong> The verification link expires in 24 hours. If you don&apos;t see the email, check your spam folder.
             </p>
           </div>
 
@@ -164,7 +164,7 @@ export default function Register() {
               required
               disabled={loading}
             />
-            <p className="mt-1 text-xs text-gray-500">📧 You'll need to verify this email address</p>
+            <p className="mt-1 text-xs text-gray-500">📧 You&apos;ll need to verify this email address</p>
           </div>
 
           <div>

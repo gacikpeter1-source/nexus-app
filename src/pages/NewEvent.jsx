@@ -1,9 +1,9 @@
 // src/pages/NewEvent.jsx
-import React, { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { addEvent } from "../api/localApi";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
+import React, { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { addEvent } from '../api/localApi';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function NewEvent() {
   const navigate = useNavigate();
@@ -11,24 +11,24 @@ export default function NewEvent() {
   const { user } = useAuth();
 
   const [form, setForm] = useState({
-    title: "",
-    type: "training",
-    date: "",
-    time: "",
-    location: "",
-    teamId: "",
-    clubId: "",
-    visibilityLevel: "personal",  // "personal" | "team" | "club"
-    createdBy: "",
-    description: "",
-    recurrence: "",    // none | daily | weekly | monthly
-    occurrences: "",   // integer (string in state)
-    endDate: "",       // optional ISO date string "YYYY-MM-DD"
+    title: '',
+    type: 'training',
+    date: '',
+    time: '',
+    location: '',
+    teamId: '',
+    clubId: '',
+    visibilityLevel: 'personal',  // "personal" | "team" | "club"
+    createdBy: '',
+    description: '',
+    recurrence: '',    // none | daily | weekly | monthly
+    occurrences: '',   // integer (string in state)
+    endDate: '',       // optional ISO date string "YYYY-MM-DD"
   });
 
   // Get teams from clubs instead of separate teams array
   const { data: teams = [] } = useQuery({
-    queryKey: ["teams"],
+    queryKey: ['teams'],
     queryFn: async () => {
       // Get all clubs from localStorage
       const clubs = JSON.parse(localStorage.getItem('clubs') || '[]');
@@ -67,7 +67,7 @@ export default function NewEvent() {
 
   // Get clubs that user owns (SuperTrainer only)
   const { data: ownedClubs = [] } = useQuery({
-    queryKey: ["ownedClubs"],
+    queryKey: ['ownedClubs'],
     queryFn: async () => {
       if (!user) return [];
       const clubs = JSON.parse(localStorage.getItem('clubs') || '[]');
@@ -102,8 +102,8 @@ export default function NewEvent() {
       return addEvent(eventToSave);
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["events"] });
-      navigate("/calendar");
+      qc.invalidateQueries({ queryKey: ['events'] });
+      navigate('/calendar');
     },
   });
 
@@ -112,24 +112,24 @@ export default function NewEvent() {
     
     // Basic validation
     if (!form.title || !form.date) {
-      alert("Please fill Title and Date");
+      alert('Please fill Title and Date');
       return;
     }
     
     // Visibility-specific validation
     if (form.visibilityLevel === 'team' && !form.teamId) {
-      alert("Please select a team for team events");
+      alert('Please select a team for team events');
       return;
     }
     
     if (form.visibilityLevel === 'club' && !form.clubId) {
-      alert("Please select a club for club events");
+      alert('Please select a club for club events');
       return;
     }
     
     // Permission check
     if (form.visibilityLevel === 'club' && !canCreateClubEvents) {
-      alert("Only club owners can create club-wide events");
+      alert('Only club owners can create club-wide events');
       return;
     }
 
@@ -140,7 +140,7 @@ export default function NewEvent() {
       const hasEnd = Boolean(form.endDate);
 
       if (!hasOcc && !hasEnd) {
-        alert("For recurring events, provide either Occurrences (number) or an End date (or both).");
+        alert('For recurring events, provide either Occurrences (number) or an End date (or both).');
         return;
       }
 
@@ -149,17 +149,17 @@ export default function NewEvent() {
         const start = new Date(form.date);
         const end = new Date(form.endDate);
         if (isNaN(end.getTime())) {
-          alert("End date is invalid.");
+          alert('End date is invalid.');
           return;
         }
         if (end < start) {
-          alert("End date must be the same or after the start date.");
+          alert('End date must be the same or after the start date.');
           return;
         }
       }
 
       if (hasOcc && (!Number.isInteger(occ) || occ < 1)) {
-        alert("Occurrences must be a whole number of 1 or more.");
+        alert('Occurrences must be a whole number of 1 or more.');
         return;
       }
     }
@@ -191,7 +191,7 @@ export default function NewEvent() {
             type="text"
             className="border rounded px-3 py-1 w-full"
             value={form.title}
-            onChange={update("title")}
+            onChange={update('title')}
             required
           />
         </div>
@@ -201,7 +201,7 @@ export default function NewEvent() {
           <select
             className="border rounded px-3 py-1 w-full"
             value={form.type}
-            onChange={update("type")}
+            onChange={update('type')}
           >
             <option value="training">Training</option>
             <option value="game">Game</option>
@@ -218,7 +218,7 @@ export default function NewEvent() {
             <input
               type="date"
               value={form.date}
-              onChange={update("date")}
+              onChange={update('date')}
               className="w-full border p-2 rounded"
               required
             />
@@ -229,7 +229,7 @@ export default function NewEvent() {
             <input
               type="time"
               value={form.time}
-              onChange={update("time")}
+              onChange={update('time')}
               className="w-full border p-2 rounded"
             />
           </label>
@@ -241,7 +241,7 @@ export default function NewEvent() {
             type="text"
             className="border rounded px-3 py-1 w-full"
             value={form.location}
-            onChange={update("location")}
+            onChange={update('location')}
           />
         </div>
 
@@ -336,7 +336,7 @@ export default function NewEvent() {
             <select
               className="border rounded px-3 py-2 w-full"
               value={form.clubId}
-              onChange={update("clubId")}
+              onChange={update('clubId')}
               required
             >
               <option value="">-- choose club --</option>
@@ -358,7 +358,7 @@ export default function NewEvent() {
           <select
             className="border rounded px-3 py-1 w-full"
             value={form.recurrence}
-            onChange={update("recurrence")}
+            onChange={update('recurrence')}
           >
             <option value="">None</option>
             <option value="daily">Daily</option>
@@ -375,7 +375,7 @@ export default function NewEvent() {
                 type="number"
                 min={1}
                 value={form.occurrences}
-                onChange={update("occurrences")}
+                onChange={update('occurrences')}
                 className="w-full border p-2 rounded"
                 placeholder="How many times (e.g. 6)"
               />
@@ -386,7 +386,7 @@ export default function NewEvent() {
               <input
                 type="date"
                 value={form.endDate}
-                onChange={update("endDate")}
+                onChange={update('endDate')}
                 className="w-full border p-2 rounded"
               />
             </label>
@@ -399,7 +399,7 @@ export default function NewEvent() {
             rows={3}
             className="border rounded px-3 py-1 w-full"
             value={form.description}
-            onChange={update("description")}
+            onChange={update('description')}
           />
         </div>
 
@@ -409,12 +409,12 @@ export default function NewEvent() {
             className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-medium"
             disabled={mutation.isPending}
           >
-            {mutation.isPending ? "Creating..." : "Create Event"}
+            {mutation.isPending ? 'Creating...' : 'Create Event'}
           </button>
           <button
             type="button"
             className="bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400"
-            onClick={() => navigate("/calendar")}
+            onClick={() => navigate('/calendar')}
           >
             Cancel
           </button>

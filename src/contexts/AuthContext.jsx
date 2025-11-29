@@ -1,5 +1,5 @@
 // src/contexts/AuthContext.jsx - WITH EMAIL VERIFICATION
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { 
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -50,13 +50,12 @@ export const useAuth = () => {
    -----------------------------*/
 const initializeSuperAdmin = async () => {
   try {
-    const superAdminEmail = 'admin@nexus.com';
-    const superAdminPassword = 'SuperAdmin2025!';
+    const superAdminEmail = import.meta.env.VITE_ADMIN_EMAIL;
+    const superAdminPassword = import.meta.env.VITE_ADMIN_PASSWORD;
     
     const existing = await getUserByEmail(superAdminEmail);
     
     if (!existing) {
-      console.log('🔧 Creating SuperAdmin...');
       
       const userCredential = await createUserWithEmailAndPassword(
         auth,
@@ -74,12 +73,9 @@ const initializeSuperAdmin = async () => {
         isSuperAdmin: true
       });
       
-      console.log('✅ SuperAdmin initialized');
     }
   } catch (error) {
     if (error.code === 'auth/email-already-in-use') {
-      console.log('✅ SuperAdmin already exists');
-    } else {
       console.error('Error initializing SuperAdmin:', error);
     }
   }
@@ -156,7 +152,7 @@ export const AuthProvider = ({ children }) => {
       // Create Firestore user document
       await createUser(userCredential.user.uid, {
         email: email.toLowerCase(),
-        username: username,
+        username,
         role: ROLES.USER,
         emailVerified: false, // Will be true after verification
         clubIds: []
@@ -423,7 +419,7 @@ export const AuthProvider = ({ children }) => {
       
       await updateClub(clubId, { 
         trainers: updatedTrainers,
-        assistants: assistants
+        assistants
       });
 
       await updateUser(targetUserId, { role: ROLES.TRAINER });
@@ -524,7 +520,7 @@ export const AuthProvider = ({ children }) => {
         if (!members.includes(request.userId)) {
           const updatedMembers = [...members, request.userId];
           
-          let updates = { members: updatedMembers };
+          const updates = { members: updatedMembers };
 
           if (request.teamId) {
             const teams = club.teams || [];

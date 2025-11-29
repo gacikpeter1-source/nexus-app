@@ -3,7 +3,7 @@ export function sendDevEmail({ to, subject, body }) {
   try {
     const mailbox = JSON.parse(localStorage.getItem('mailbox') || '[]');
     const mail = {
-      id: 'm_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+      id: `m_${  Date.now().toString(36)  }${Math.random().toString(36).slice(2,6)}`,
       to,
       subject,
       body,
@@ -12,7 +12,6 @@ export function sendDevEmail({ to, subject, body }) {
     mailbox.unshift(mail);
     localStorage.setItem('mailbox', JSON.stringify(mailbox));
     // helpful console log for quick debugging
-    console.info('📧 Dev email queued:', mail);
     return mail;
   } catch (err) {
     console.error('Failed to save dev email', err);

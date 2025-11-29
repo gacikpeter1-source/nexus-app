@@ -1,5 +1,5 @@
 // src/contexts/LanguageContext.jsx
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 
 // Import all translations directly
 import en from '../translations/en.json';

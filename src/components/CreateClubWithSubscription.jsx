@@ -267,7 +267,7 @@ Welcome to NEXUS!
                 What happens next?
               </h3>
               <ul className="text-sm text-light/70 space-y-1">
-                <li>• You'll review and accept our terms</li>
+                <li>• You&apos;ll review and accept our terms</li>
                 <li>• Complete subscription setup (simulated for dev)</li>
                 <li>• Receive your unique Customer ID</li>
                 <li>• Become SuperTrainer with full club access</li>
@@ -320,7 +320,7 @@ Welcome to NEXUS!
               <p>Subscription is billed annually. Payment details and pricing will be confirmed during activation.</p>
 
               <p><strong>6. Data & Privacy</strong></p>
-              <p>We protect your club's data according to our Privacy Policy. You retain ownership of all content and member information.</p>
+              <p>We protect your club&apos;s data according to our Privacy Policy. You retain ownership of all content and member information.</p>
 
               <p><strong>7. Cancellation</strong></p>
               <p>You may cancel your subscription at any time. Access will continue until the end of the current billing period.</p>
@@ -463,7 +463,7 @@ Welcome to NEXUS!
               </code>
             </div>
             <p className="text-xs text-light/60 text-center mt-3">
-              ⚠️ Save this ID! You'll need it for support and billing.
+              ⚠️ Save this ID! You&apos;ll need it for support and billing.
             </p>
           </div>
 

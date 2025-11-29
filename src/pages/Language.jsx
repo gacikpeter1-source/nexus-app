@@ -1,5 +1,4 @@
 // src/pages/Language.jsx
-import React from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useNavigate } from 'react-router-dom';
 

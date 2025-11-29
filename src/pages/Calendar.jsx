@@ -1,34 +1,29 @@
 // src/pages/Calendar.jsx
-import { useQuery } from "@tanstack/react-query";
-import { getEvents, getTeams, getCurrentUser } from "../api/localApi";
-import { Link } from "react-router-dom";
-import { useState, useMemo } from "react";
+import { useQuery } from '@tanstack/react-query';
+import { getEvents, getTeams, getCurrentUser } from '../api/localApi';
+import { Link } from 'react-router-dom';
+import { useState, useMemo } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 
-
 export default function Calendar() {
-  // ✅ CORRECT LOCATION: Add translation hook at component level (FIRST!)
   const { t } = useLanguage();
   
-  // data hooks (must be second)
+  // Data hooks
   const { data: events = [], isLoading: loadingEvents, error: eventsError } = useQuery({
-    queryKey: ["events"],
+    queryKey: ['events'],
     queryFn: getEvents,
-    });
+  });
 
   const { data: teams = [], isLoading: loadingTeams, error: teamsError } = useQuery({
-    queryKey: ["teams"],
+    queryKey: ['teams'],
     queryFn: async () => {
-      // Get current user first
       const currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
       if (!currentUser) return [];
       
       const clubs = JSON.parse(localStorage.getItem('clubs') || '[]');
       const allTeams = [];
-      // ❌ REMOVED: const { t } = useLanguage(); ← This was in WRONG location!
       
       clubs.forEach(club => {
-        // Check user's role in this club
         const isTrainer = (club.trainers || []).includes(currentUser.id);
         const isAssistant = (club.assistants || []).includes(currentUser.id);
         const isSuperTrainer = club.superTrainer === currentUser.id;
@@ -36,7 +31,6 @@ export default function Calendar() {
         
         const clubTeams = club.teams || [];
         
-        // If trainer, assistant, supertrainer, or admin -> see ALL teams in club
         if (isTrainer || isAssistant || isSuperTrainer || isAdmin) {
           clubTeams.forEach(team => {
             allTeams.push({
@@ -46,7 +40,6 @@ export default function Calendar() {
             });
           });
         } else {
-          // Regular member -> only see teams they're specifically in
           clubTeams.forEach(team => {
             const isTeamMember = (team.members || []).includes(currentUser.id);
             if (isTeamMember) {
@@ -65,25 +58,23 @@ export default function Calendar() {
   });
 
   const { data: user } = useQuery({
-    queryKey: ["currentUser"],
+    queryKey: ['currentUser'],
     queryFn: getCurrentUser,
   });
 
   // UI state
-  const [mode, setMode] = useState("table"); // "table" | "timeline" | "month"
-  const [teamFilter, setTeamFilter] = useState(""); // "" = all
-  // month state for month view: store year and month (0-based)
+  const [mode, setMode] = useState('month'); // "table" | "timeline" | "month"
+  const [teamFilter, setTeamFilter] = useState('');
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
-  const [selectedDay, setSelectedDay] = useState(null); // 'YYYY-MM-DD' selected in month view
+  const [selectedDay, setSelectedDay] = useState(null);
 
-  // ---------- NEW: multi-level filter state (kept in addition to original teamFilter)
-  // We kept `teamFilter` so none of your original lines were removed.
-  const [filterType, setFilterType] = useState("all"); // "all" | "club" | "team" | "athlete"
-  const [filterValue, setFilterValue] = useState("");
+  // Filter state
+  const [filterType, setFilterType] = useState('all');
+  const [filterValue, setFilterValue] = useState('');
 
-  // ---------- recurrence helpers ----------
+  // Recurrence helpers
   const addDays = (date, days) => {
     const d = new Date(date);
     d.setDate(d.getDate() + days);
@@ -94,111 +85,55 @@ export default function Calendar() {
     const d = new Date(date);
     const day = d.getDate();
     d.setMonth(d.getMonth() + months);
-    // handle month rollover
     if (d.getDate() < day) d.setDate(0);
     return d;
   };
 
-  function expandRecurrence(ev) {
-    if (!ev.recurrence) return [ev];
-    const out = [];
-    const start = new Date(ev.date);
-    if (isNaN(start.getTime())) return [ev];
-
-    const occurrences = Number(ev.occurrences || 0);
-    const hasOcc = occurrences > 0;
-    const hasEnd = !!ev.endDate;
-    const endDate = hasEnd ? new Date(ev.endDate) : null;
-
-    out.push(ev);
-
-    let i = 1;
-    const MAX = 1000;
-    while (i <= MAX) {
-      if (hasOcc && i + 1 > occurrences) break;
-      let next;
-      if (ev.recurrence === "daily") next = addDays(start, i);
-      else if (ev.recurrence === "weekly") next = addDays(start, i * 7);
-      else if (ev.recurrence === "monthly") next = addMonths(start, i);
-      else break;
-
-      if (hasEnd && endDate && next > endDate) break;
-
-      out.push({
-        ...ev,
-        id: `${ev.id}-r${i}`,
-        date: next.toISOString().slice(0, 10),
-        _isRecurringInstance: true,
-        _originalId: ev.id,
-        occurrenceIndex: i + 1,
-      });
-
-      if (hasOcc && i + 1 >= occurrences) break;
-      i += 1;
+  // Expand recurring events
+  const expandedEvents = useMemo(() => {
+    const expanded = [];
+    const endDate = new Date(viewYear + 2, 11, 31);
+    
+    for (const event of events) {
+      if (!event.recurrence || event.recurrence === 'none') {
+        expanded.push(event);
+      } else {
+        const start = new Date(event.date);
+        let current = new Date(start);
+        
+        while (current <= endDate) {
+          expanded.push({
+            ...event,
+            date: current.toISOString().split('T')[0],
+            id: `${event.id}-${current.toISOString().split('T')[0]}`
+          });
+          
+          if (event.recurrence === 'daily') current = addDays(current, 1);
+          else if (event.recurrence === 'weekly') current = addDays(current, 7);
+          else if (event.recurrence === 'monthly') current = addMonths(current, 1);
+          else break;
+        }
+      }
     }
-    return out;
-  }
+    
+    return expanded;
+  }, [events, viewYear]);
 
-  // ---------- visible events (three-level visibility: personal, team, club) ----------
+  // Filter visible events
   const visibleEvents = useMemo(() => {
-    const expanded = events.flatMap((e) => expandRecurrence(e));
     if (!user) return [];
-
-
-    // Get all clubs from localStorage
+    
     const clubs = JSON.parse(localStorage.getItem('clubs') || '[]');
     
-    const filtered = expanded.filter((event) => {
-      // Personal events - only creator sees
+    const filtered = expandedEvents.filter((event) => {
       if (event.visibilityLevel === 'personal') {
-        const canSee = event.createdBy === user.id;
-        console.log(`${canSee ? '✅' : '❌'} Personal event "${event.title}" - Created by: ${event.createdBy}`);
-        return canSee;
+        return event.createdBy === user.id;
       }
       
-      // Team events - team members see
-      if (event.visibilityLevel === 'team') {
-        if (!event.teamId || !event.clubId) {
-          return false;
-        }
-        
-        const club = clubs.find(c => c.id === event.clubId);
-        if (!club) {
-          return false;
-        }
-        
-        // Check if user has access to this club
-        const isTrainer = (club.trainers || []).includes(user.id);
-        const isAssistant = (club.assistants || []).includes(user.id);
-        const isMember = (club.members || []).includes(user.id);
-        const isAdmin = user.role === 'admin';
-        
-        if (!isTrainer && !isAssistant && !isMember && !isAdmin) {
-          return false;
-        }
-        
-        // Check if in the specific team
-        const team = (club.teams || []).find(t => t.id === event.teamId);
-        if (!team) {
-          return false;
-        }
-        
-        const inTeam = (team.members || []).includes(user.id);
-        const canSee = inTeam || isTrainer || isAssistant || isAdmin;
-        console.log(`${canSee ? '✅' : '❌'} Team event "${event.title}" (${team.name}) - inTeam: ${inTeam}, isTrainer: ${isTrainer}`);
-        return canSee;
-      }
-      
-      // Club events - all club members see
       if (event.visibilityLevel === 'club') {
-        if (!event.clubId) {
-          return false;
-        }
-        
-        const club = clubs.find(c => c.id === event.clubId);
-        if (!club) {
-          return false;
-        }
+        const clubId = event.clubId;
+        const club = clubs.find(c => String(c.id) === String(clubId));
+        if (!club) return false;
         
         const canSee = (club.members || []).includes(user.id) ||
                       (club.trainers || []).includes(user.id) ||
@@ -206,15 +141,12 @@ export default function Calendar() {
                       club.superTrainer === user.id ||
                       user.role === 'admin';
         
-        console.log(`${canSee ? '✅' : '❌'} Club event "${event.title}" (${club.name}) - Club-wide event`);
         return canSee;
       }
       
-      // Legacy events without visibilityLevel - treat as team events
       const tid = event.team ?? event.teamId ?? event.teamID;
       if (!tid) return false;
       
-      // Find which club this team belongs to
       let teamClub = null;
       let foundTeam = null;
       
@@ -238,35 +170,12 @@ export default function Calendar() {
     });
 
     return filtered;
-  }, [events, user]);
+  }, [expandedEvents, user]);
 
-  // ---------- helper to return events filtered by team filter ("" = all) ----------
-  const eventsFilteredByTeam = useMemo(() => {
-    if (!teamFilter) return visibleEvents;
-    return visibleEvents.filter((ev) => {
-      // Club events should ALWAYS be visible regardless of team filter
-      if (ev.visibilityLevel === 'club') {
-        return true;
-      }
-      
-      // Personal events should be visible if they're the user's own
-      if (ev.visibilityLevel === 'personal') {
-        return ev.createdBy === user?.id;
-      }
-      
-      // Team events - filter by selected team
-      const tid = ev.team ?? ev.teamId ?? ev.teamID;
-      const matches = String(tid) === String(teamFilter);
-      console.log(`${matches ? '✅' : '❌'} Team event "${ev.title}" - Team filter: ${matches ? 'matches' : 'no match'}`);
-      return matches;
-    });
-  }, [visibleEvents, teamFilter, user]);
-
-  // ---------- NEW: build options for multi-level filter (clubs, teams, athletes)
+  // Build filter options
   const filterOptions = useMemo(() => {
     if (!user) return { clubs: [], teams: [], athletes: [] };
     
-    // Build clubs list from user's accessible teams only
     const clubsMap = {};
     teams.forEach(t => {
       if (t && t.clubId) {
@@ -278,10 +187,7 @@ export default function Calendar() {
     });
 
     const clubsList = Object.values(clubsMap);
-
-    // Teams are already filtered by user access in the query
     const availableTeams = teams;
-
     const athletes = (user && user.athletes) ? user.athletes : [];
 
     return {
@@ -291,307 +197,445 @@ export default function Calendar() {
     };
   }, [teams, user]);
 
+  // Apply filters
+  const filteredEvents = useMemo(() => {
+    let filtered = visibleEvents;
 
-  // ---------- NEW: events filtered by the selected filter (filterType/filterValue)
-  const eventsFilteredByUserChoice = useMemo(() => {
-    // If no special filter, use team-filtered events (keeps backward compatibility)
-    if ((!filterType || filterType === "all") && !teamFilter) return visibleEvents;
-
-    // Start from visibleEvents (events the user is allowed to see)
-    let base = visibleEvents;
-
-    // If old `teamFilter` is set (backwards compat), apply it first
-    if (teamFilter) {
-      base = base.filter(ev => {
-        const tid = ev.team ?? ev.teamId ?? ev.teamID;
-        return String(tid) === String(teamFilter);
-      });
-    }
-
-    if (!filterType || filterType === "all" || !filterValue) return base;
-
-    if (filterType === "club") {
-      return base.filter(ev => String(ev.clubId) === String(filterValue));
-    } else if (filterType === "team") {
-      return base.filter(ev => {
+    if (filterType === 'club' && filterValue) {
+      filtered = filtered.filter(ev => String(ev.clubId) === String(filterValue));
+    } else if (filterType === 'team' && filterValue) {
+      filtered = filtered.filter(ev => {
         const tid = ev.team ?? ev.teamId ?? ev.teamID;
         return String(tid) === String(filterValue);
       });
-    } else if (filterType === "athlete") {
-      return base.filter(ev => String(ev.athleteId || ev.playerId || ev.ownerId) === String(filterValue));
+    } else if (filterType === 'athlete' && filterValue) {
+      filtered = filtered.filter(ev => {
+        return ev.athleteId === filterValue || (ev.athletes || []).includes(filterValue);
+      });
     }
-    return base;
-  }, [visibleEvents, filterType, filterValue, teamFilter]);
 
-  // ---------- grouping and sorting for list/table/timeline ----------
-  const grouped = useMemo(() => {
-    return eventsFilteredByUserChoice.reduce((acc, ev) => {
-      const dateKey = ev.date || "unknown";
-      if (!acc[dateKey]) acc[dateKey] = [];
-      acc[dateKey].push(ev);
-      return acc;
-    }, {});
-  }, [eventsFilteredByUserChoice]);
+    return filtered;
+  }, [visibleEvents, filterType, filterValue]);
 
-  const sortedDates = useMemo(() => {
-    return Object.keys(grouped).sort((a, b) => {
-      if (a === "unknown") return 1;
-      if (b === "unknown") return -1;
-      return new Date(a) - new Date(b);
-    });
-  }, [grouped]);
-
-  // ---------- month view helpers ----------
-  const startOfMonth = (y, m) => new Date(y, m, 1);
-  const endOfMonth = (y, m) => new Date(y, m + 1, 0);
-  const daysInMonth = (y, m) => endOfMonth(y, m).getDate();
-
-  // returns 'YYYY-MM-DD'
-  const toKey = (d) => {
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
+  // Month view helpers
+  const buildMonthGrid = (year, month) => {
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDay = firstDay.getDay();
+    const daysInMonth = lastDay.getDate();
+    
+    const grid = [];
+    let week = [];
+    
+    const monday = startDay === 0 ? 6 : startDay - 1;
+    for (let i = 0; i < monday; i++) {
+      week.push(null);
+    }
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+      week.push(new Date(year, month, day));
+      if (week.length === 7) {
+        grid.push(week);
+        week = [];
+      }
+    }
+    
+    if (week.length > 0) {
+      while (week.length < 7) week.push(null);
+      grid.push(week);
+    }
+    
+    return grid;
   };
 
-  // build month grid: array of weeks, each week is 7 cells (some null)
-  const monthGrid = useMemo(() => {
-    const first = startOfMonth(viewYear, viewMonth);
-    const totalDays = daysInMonth(viewYear, viewMonth);
+  const monthGrid = buildMonthGrid(viewYear, viewMonth);
 
-    // convert JS day (0=Sun) -> Monday-first index (0=Mon..6=Sun)
-    const jsFirstDay = first.getDay(); // 0..6 (Sun..Sat)
-    const firstWeekday = jsFirstDay === 0 ? 6 : jsFirstDay - 1; // 0..6 where 0=Mon
+  const toKey = (date) => {
+    if (!date) return '';
+    return date.toISOString().split('T')[0];
+  };
 
-    const cells = [];
-    // pad before (Monday-first)
-    for (let i = 0; i < firstWeekday; i++) cells.push(null);
-    for (let d = 1; d <= totalDays; d++) cells.push(new Date(viewYear, viewMonth, d));
-    // pad after to fill final week
-    while (cells.length % 7 !== 0) cells.push(null);
-
-    // group into weeks
-    const weeks = [];
-    for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
-    return weeks;
-  }, [viewYear, viewMonth]);
-
-  // events keyed by date for quick lookup (use eventsFilteredByTeam so month obeys team filter)
   const eventsByDate = useMemo(() => {
     const map = {};
-    for (const ev of eventsFilteredByUserChoice) {
-      const k = ev.date || "unknown";
-      if (!map[k]) map[k] = [];
-      map[k].push(ev);
+    for (const ev of filteredEvents) {
+      const key = ev.date;
+      if (!map[key]) map[key] = [];
+      map[key].push(ev);
     }
     return map;
-  }, [eventsFilteredByUserChoice]);
+  }, [filteredEvents]);
 
-  // ---------- early returns ----------
-  if (eventsError || teamsError) {
-    return (
-      <div className="p-6">
-        <h1 className="text-3xl font-bold mb-4">{t('calendar.title')}</h1>
-        <div className="p-4 bg-red-50 border border-red-200 rounded">
-          <p className="text-red-700 font-semibold">{t('common.error')}</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (loadingEvents || loadingTeams) {
-    return (
-      <div className="p-6">
-        <h1 className="text-3xl font-bold mb-4">{t('calendar.title')}</h1>
-        <p>{t('common.loading')}</p>
-      </div>
-    );
-  }
-
-  const teamName = (id) => {
-    if (!id) return "Unknown";
-    if (!teams || teams.length === 0) return id;
-    const team = teams.find(t => String(t.id) === String(id));
-    if (!team) return id;
-    return team.displayName || team.name || id;
+  const prevMonth = () => {
+    if (viewMonth === 0) {
+      setViewMonth(11);
+      setViewYear(viewYear - 1);
+    } else {
+      setViewMonth(viewMonth - 1);
+    }
+    setSelectedDay(null);
   };
 
-  // ---------- type color helper (literal mapping so Tailwind keeps classes) ----------
-  const TYPE_CLASSES = {
-    training: "bg-green-100 text-green-700",
-    game: "bg-yellow-100 text-yellow-700",
-    match: "bg-orange-100 text-orange-700",
-    meeting: "bg-purple-100 text-purple-700",
-    tournament: "bg-blue-100 text-blue-700",
-    default: "bg-gray-100 text-gray-700",
+  const nextMonth = () => {
+    if (viewMonth === 11) {
+      setViewMonth(0);
+      setViewYear(viewYear + 1);
+    } else {
+      setViewMonth(viewMonth + 1);
+    }
+    setSelectedDay(null);
   };
 
   const typeColor = (type) => {
-    if (!type) return TYPE_CLASSES.default;
-    const key = String(type).toLowerCase();
-    return TYPE_CLASSES[key] || TYPE_CLASSES.default;
+    const colors = {
+      training: 'bg-blue-500/20 text-blue-400',
+      match: 'bg-red-500/20 text-red-400',
+      meeting: 'bg-purple-500/20 text-purple-400',
+      event: 'bg-green-500/20 text-green-400'
+    };
+    return colors[type] || 'bg-gray-500/20 text-gray-400';
   };
 
-  // ---------- UI handlers for month navigation ----------
-  const prevMonth = () => {
-    const d = new Date(viewYear, viewMonth - 1, 1);
-    setViewYear(d.getFullYear());
-    setViewMonth(d.getMonth());
-    setSelectedDay(null);
-  };
-  const nextMonth = () => {
-    const d = new Date(viewYear, viewMonth + 1, 1);
-    setViewYear(d.getFullYear());
-    setViewMonth(d.getMonth());
-    setSelectedDay(null);
-  };
+  if (loadingEvents || loadingTeams) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-light/60">{t('common.loading')}...</div>
+      </div>
+    );
+  }
 
-  // ---------- render ----------
+  if (eventsError || teamsError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-red-400">Error loading calendar</div>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-6">
-      {/* Hidden palette to keep Tailwind classes (safe) */}
-      <div className="sr-only" aria-hidden="true">
-        <span className="bg-green-100 text-green-700" />
-        <span className="bg-yellow-100 text-yellow-700" />
-        <span className="bg-orange-100 text-orange-700" />
-        <span className="bg-purple-100 text-purple-700" />
-        <span className="bg-blue-100 text-blue-700" />
-        <span className="bg-gray-100 text-gray-700" />
+    <div className="min-h-screen">
+      {/* Header */}
+      <div className="mb-8 animate-fade-in">
+        <h1 className="font-display text-6xl md:text-7xl text-light mb-2 tracking-wider">
+          <span className="text-primary">CALENDAR</span>
+        </h1>
+        <p className="text-light/60 text-lg">
+          {filteredEvents.length} {filteredEvents.length === 1 ? 'event' : 'events'}
+        </p>
       </div>
 
-      {/* header controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
-        <div className="flex items-center gap-4">
-          <h1 className="text-3xl font-bold">{t('calendar.title')}</h1>
-
-          <div className="inline-flex rounded-md shadow-sm" role="group" aria-label="View mode">
+      {/* Controls Bar */}
+      <div className="mb-6 space-y-4 animate-fade-in" style={{ animationDelay: '0.1s' }}>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* View Mode Buttons */}
+          <div className="flex gap-2 bg-white/5 rounded-lg p-1">
             <button
-              type="button"
-              onClick={() => setMode("table")}
-              className={`px-3 py-1 text-sm rounded-l-md border ${mode === "table" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-700 border-gray-200"}`}
+              onClick={() => setMode('table')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                mode === 'table'
+                  ? 'bg-primary text-white'
+                  : 'text-light/60 hover:text-light hover:bg-white/5'
+              }`}
             >
-              {t('common.table')}
+              Table
             </button>
             <button
-              type="button"
-              onClick={() => setMode("timeline")}
-              className={`px-3 py-1 text-sm border ${mode === "timeline" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-700 border-gray-200"}`}
+              onClick={() => setMode('timeline')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                mode === 'timeline'
+                  ? 'bg-primary text-white'
+                  : 'text-light/60 hover:text-light hover:bg-white/5'
+              }`}
             >
-              {t('calendar.timeline')}
+              Timeline
             </button>
             <button
-              type="button"
-              onClick={() => setMode("month")}
-              className={`px-3 py-1 text-sm rounded-r-md border ${mode === "month" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-700 border-gray-200"}`}
+              onClick={() => setMode('month')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                mode === 'month'
+                  ? 'bg-primary text-white'
+                  : 'text-light/60 hover:text-light hover:bg-white/5'
+              }`}
             >
-              {t('calendar.monthView')}
+              Month View
             </button>
           </div>
-        </div>
 
-        {/* right side controls: team filter + create */}
-        <div className="ml-auto flex items-center gap-3">
-          {/* Multi-level filter UI (keeps original team filter functionality too) */}
-          <div className="flex items-center gap-2">
+          {/* Filters */}
+          <select
+            value={filterType}
+            onChange={(e) => { setFilterType(e.target.value); setFilterValue(''); }}
+            className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+          >
+            <option value="all" className="bg-mid-dark">{t('common.all')}</option>
+            <option value="club" className="bg-mid-dark">Club</option>
+            <option value="team" className="bg-mid-dark">Team</option>
+            {user?.role === 'parent' && <option value="athlete" className="bg-mid-dark">Athlete</option>}
+          </select>
+
+          {filterType !== 'all' && (
             <select
-              value={filterType}
-              onChange={(e) => { setFilterType(e.target.value); setFilterValue(""); }}
-              className="border rounded px-2 py-1 text-sm"
+              value={filterValue}
+              onChange={(e) => setFilterValue(e.target.value)}
+              className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
             >
-              <option value="all">{t('common.all')}</option>
-              <option value="club">Club</option>
-              <option value="team">Team</option>
-              {user?.role === "parent" && <option value="athlete">Athlete</option>}
+              <option value="" className="bg-mid-dark">
+                {filterType === 'club' ? 'Select club' : filterType === 'team' ? 'Select team' : 'Select athlete'}
+              </option>
+
+              {filterType === 'club' && filterOptions.clubs.map(c => (
+                <option key={c.id} value={c.id} className="bg-mid-dark">{c.name || c.id}</option>
+              ))}
+
+              {filterType === 'team' && filterOptions.teams.map(t => (
+                <option key={t.id} value={t.id} className="bg-mid-dark">{t.name || t.id}</option>
+              ))}
+
+              {filterType === 'athlete' && (filterOptions.athletes || []).map(a => (
+                <option key={a.id} value={a.id} className="bg-mid-dark">{a.name || a.id}</option>
+              ))}
             </select>
+          )}
 
-            {filterType === "all" && (
-              // show original "teamFilter" select for backwards compatibility
-              <select
-                value={teamFilter}
-                onChange={(e) => setTeamFilter(e.target.value)}
-                className="border rounded px-3 py-1 text-sm"
-                aria-label="Filter by team"
-              >
-                <option value="">{t('nav.teams')}</option>
-                {/* only list teams that belong to clubs current user belongs to (if user.clubIds exists) */}
-                {teams
-                  .filter(t => {
-                    if (!t) return false;
-                    if (!user?.clubIds || user.clubIds.length === 0) return true; // if no clubIds info, show all
-                    return String(t.clubId) ? user.clubIds.map(String).includes(String(t.clubId)) : false;
-                  })
-                  .map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-              </select>
-            )}
+          <div className="flex-1"></div>
 
-            {filterType !== "all" && (
-              // dynamic second select for club/team/athlete when chosen
-              <select
-                value={filterValue}
-                onChange={(e) => setFilterValue(e.target.value)}
-                className="border rounded px-2 py-1 text-sm"
-              >
-                <option value="">{filterType === "club" ? "Select club" : filterType === "team" ? "Select team" : "Select athlete"}</option>
-
-                {filterType === "club" && filterOptions.clubs.map(c => (
-                  <option key={c.id} value={c.id}>{c.name || c.id}</option>
-                ))}
-
-                {filterType === "team" && filterOptions.teams.map(t => (
-                  <option key={t.id} value={t.id}>{t.name || t.id}</option>
-                ))}
-
-                {filterType === "athlete" && (filterOptions.athletes || []).map(a => (
-                  <option key={a.id} value={a.id}>{a.name || a.id}</option>
-                ))}
-              </select>
-            )}
-          </div>
-
-            <Link
-              to="/events/new"
-              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-md text-sm font-medium"
-            >
-              {t('calendar.createEvent')}
-            </Link>
+          <Link
+            to="/events/new"
+            className="btn-primary flex items-center gap-2"
+          >
+            <span>+</span>
+            <span>{t('calendar.createEvent') || 'Create Event'}</span>
+          </Link>
         </div>
       </div>
 
-      {mode === "table" && (
-        <div className="bg-white shadow rounded overflow-x-auto p-4">
-          <table className="w-full text-sm">
-            <thead className="border-b font-medium">
-              <tr>
-                <th className="py-2 text-left">{t('event.date')}</th>
-                <th className="text-left">{t('event.time')}</th>
-                <th className="text-left">{t('event.type')}</th>
-                <th className="text-left">Title</th>
-                <th className="text-left">{t('event.location')}</th>
-                <th className="text-left">Team</th>
+      {/* Month View */}
+      {mode === 'month' && (
+        <div className="animate-fade-in" style={{ animationDelay: '0.2s' }}>
+          {/* Month Navigation */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={prevMonth}
+                className="w-10 h-10 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-light transition-all"
+              >
+                ◀
+              </button>
+              <div className="font-title text-2xl text-light">
+                {new Date(viewYear, viewMonth, 1).toLocaleString(undefined, { month: 'long', year: 'numeric' })}
+              </div>
+              <button
+                onClick={nextMonth}
+                className="w-10 h-10 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-light transition-all"
+              >
+                ▶
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <select
+                value={viewMonth}
+                onChange={(e) => { setViewMonth(Number(e.target.value)); setSelectedDay(null); }}
+                className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-light focus:border-primary focus:ring-2 focus:ring-primary/20"
+              >
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <option key={i} value={i} className="bg-mid-dark">
+                    {new Date(0, i).toLocaleString(undefined, { month: 'long' })}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={viewYear}
+                onChange={(e) => { setViewYear(Number(e.target.value)); setSelectedDay(null); }}
+                className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-light focus:border-primary focus:ring-2 focus:ring-primary/20"
+              >
+                {Array.from({ length: 7 }).map((_, i) => {
+                  const y = today.getFullYear() - 3 + i;
+                  return <option key={y} value={y} className="bg-mid-dark">{y}</option>;
+                })}
+              </select>
+            </div>
+          </div>
+
+          {/* Calendar Grid */}
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4">
+            {/* Day Headers */}
+            <div className="grid grid-cols-7 gap-2 mb-2">
+              {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((d) => (
+                <div key={d} className="text-center font-semibold text-light/60 text-sm py-2">
+                  {d}
+                </div>
+              ))}
+            </div>
+
+            {/* Calendar Days */}
+            <div className="grid grid-cols-7 gap-2">
+              {monthGrid.map((week, wi) =>
+                week.map((cell, ci) => {
+                  if (!cell) {
+                    return (
+                      <div
+                        key={`${wi}-${ci}`}
+                        className="aspect-square rounded-lg bg-white/5"
+                      />
+                    );
+                  }
+                  
+                  const key = toKey(cell);
+                  const evs = eventsByDate[key] || [];
+                  const isToday = key === toKey(new Date());
+                  const isSelected = key === selectedDay;
+
+                  return (
+                    <div
+                      key={key}
+                      onClick={() => evs.length > 0 && setSelectedDay(key)}
+                      className={`aspect-square rounded-lg p-2 flex flex-col cursor-pointer transition-all ${
+                        isToday
+                          ? 'bg-primary/20 border-2 border-primary'
+                          : isSelected
+                          ? 'bg-accent/20 border-2 border-accent'
+                          : 'bg-white/5 hover:bg-white/10 border border-white/10'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-1">
+                        <div className={`text-sm font-medium ${isToday ? 'text-primary' : 'text-light'}`}>
+                          {cell.getDate()}
+                        </div>
+                        {evs.length > 0 && (
+                          <div className="text-xs px-1.5 py-0.5 rounded-full bg-primary/30 text-primary font-semibold">
+                            {evs.length}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex-1 overflow-hidden space-y-1">
+                        {evs.slice(0, 2).map((ev) => (
+                          <div
+                            key={ev.id}
+                            className="text-xs px-1.5 py-0.5 rounded bg-white/10 text-light/80 truncate hover:bg-white/20"
+                            title={ev.title}
+                          >
+                            {ev.title}
+                          </div>
+                        ))}
+                        {evs.length > 2 && (
+                          <div className="text-xs text-accent">
+                            +{evs.length - 2} more
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Selected Day Details */}
+          {selectedDay && (
+            <div className="mt-6 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 animate-fade-in">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="font-title text-2xl text-light mb-1">
+                    {new Date(selectedDay).toDateString()}
+                  </h3>
+                  <div className="text-sm text-light/60">
+                    {(eventsByDate[selectedDay] || []).length} {t('team.events') || 'events'}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedDay(null)}
+                  className="text-light/60 hover:text-light transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {(eventsByDate[selectedDay] || []).map((ev) => (
+                  <Link
+                    key={ev.id}
+                    to={`/events/${ev.id}`}
+                    className="block p-4 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-primary/50 transition-all group"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className={`text-xs px-2 py-1 rounded ${typeColor(ev.type)}`}>
+                            {(ev.type || '').toUpperCase()}
+                          </span>
+                          {ev.time && (
+                            <span className="text-sm text-light/60">{ev.time}</span>
+                          )}
+                        </div>
+                        <h4 className="font-medium text-light group-hover:text-primary transition-colors">
+                          {ev.title}
+                        </h4>
+                        {ev.description && (
+                          <p className="text-sm text-light/60 mt-1 line-clamp-2">
+                            {ev.description}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                        →
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Table View */}
+      {mode === 'table' && (
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl overflow-hidden animate-fade-in" style={{ animationDelay: '0.2s' }}>
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-white/10">
+                <th className="text-left p-4 text-light/60 font-semibold">Date</th>
+                <th className="text-left p-4 text-light/60 font-semibold">Time</th>
+                <th className="text-left p-4 text-light/60 font-semibold">Event</th>
+                <th className="text-left p-4 text-light/60 font-semibold">Type</th>
+                <th className="text-left p-4 text-light/60 font-semibold">Team</th>
               </tr>
             </thead>
             <tbody>
-              {sortedDates.flatMap((date) =>
-                grouped[date].map((ev) => (
-                  <tr key={ev.id} className="border-b hover:bg-gray-50">
-                    <td className="py-2">{new Date(ev.date).toDateString()}</td>
-                    <td>{ev.time || ""}</td>
-                    <td>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${typeColor(ev.type)}`}>
-                        {(ev.type || "event").toUpperCase()}
-                      </span>
+              {filteredEvents.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="p-8 text-center text-light/40">
+                    No events found
+                  </td>
+                </tr>
+              ) : (
+                filteredEvents.map((ev) => (
+                  <tr
+                    key={ev.id}
+                    className="border-b border-white/5 hover:bg-white/5 transition-colors group"
+                  >
+                    <td className="p-4 text-light">
+                      {new Date(ev.date).toLocaleDateString()}
                     </td>
-                    <td>
-                      <Link to={`/events/${ev.id}`} className="text-blue-600 hover:underline">
+                    <td className="p-4 text-light/80">{ev.time || '-'}</td>
+                    <td className="p-4">
+                      <Link
+                        to={`/events/${ev.id}`}
+                        className="text-light hover:text-primary transition-colors font-medium"
+                      >
                         {ev.title}
                       </Link>
                     </td>
-                    <td>{ev.location}</td>
-                    <td>{teamName(ev.team ?? ev.teamId)}</td>
+                    <td className="p-4">
+                      <span className={`text-xs px-2 py-1 rounded ${typeColor(ev.type)}`}>
+                        {(ev.type || '').toUpperCase()}
+                      </span>
+                    </td>
+                    <td className="p-4 text-light/60">
+                      {teams.find(t => t.id === ev.team)?.name || '-'}
+                    </td>
                   </tr>
                 ))
               )}
@@ -600,177 +644,51 @@ export default function Calendar() {
         </div>
       )}
 
-      {mode === "timeline" && (
-        <div className="space-y-6">
-          {sortedDates.map((date) => {
-            const items = grouped[date];
-            const pretty = date === "unknown" ? "Unknown date" : new Date(date).toDateString();
-
-            return (
-              <section key={date}>
-                <h2 className="text-xl font-semibold text-gray-700 mb-3">{pretty}</h2>
-
-                <div className="space-y-3">
-                  {items.map((ev) => (
-                    <article
-                      key={ev.id}
-                      className="border rounded-lg bg-white shadow p-4 hover:shadow-md transition"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${typeColor(ev.type)}`}>
-                              {(ev.type || "event").toUpperCase()}
-                            </span>
-
-                            <Link to={`/events/${ev.id}`} className="font-semibold text-gray-900 hover:underline">
-                              {ev.title}
-                            </Link>
-
-                            <span className="text-gray-500">— {ev.location}</span>
-
-                            {ev._isRecurringInstance && <span className="ml-2 text-xs text-gray-500">(recurring)</span>}
-                          </div>
-
-                          <p className="text-sm text-gray-600">{ev.time || ""}</p>
-                        </div>
-
-                        <div className="text-right text-sm">
-                          <div className="text-gray-600">Team</div>
-                          <div className="text-blue-600 font-medium">{teamName(ev.team ?? ev.teamId)}</div>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
-        </div>
-      )}
-
-      {/* MONTH GRID */}
-      {mode === "month" && (
-        <div>
-          <div className="flex items-center justify-between mb-4 gap-4">
-            <div className="flex items-center gap-2">
-              <button onClick={prevMonth} className="px-3 py-1 border rounded">◀</button>
-              <div className="font-semibold">
-                {new Date(viewYear, viewMonth, 1).toLocaleString(undefined, { month: "long", year: "numeric" })}
-              </div>
-              <button onClick={nextMonth} className="px-3 py-1 border rounded">▶</button>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <select
-                value={viewMonth}
-                onChange={(e) => { setViewMonth(Number(e.target.value)); setSelectedDay(null); }}
-                className="border rounded px-2 py-1 text-sm"
+      {/* Timeline View */}
+      {mode === 'timeline' && (
+        <div className="space-y-4 animate-fade-in" style={{ animationDelay: '0.2s' }}>
+          {filteredEvents.length === 0 ? (
+            <div className="text-center p-8 text-light/40">No events found</div>
+          ) : (
+            filteredEvents.map((ev) => (
+              <Link
+                key={ev.id}
+                to={`/events/${ev.id}`}
+                className="block p-6 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-primary/50 backdrop-blur-sm transition-all group"
               >
-                {Array.from({ length: 12 }).map((_, i) => (
-                  <option key={i} value={i}>
-                    {new Date(0, i).toLocaleString(undefined, { month: "long" })}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={viewYear}
-                onChange={(e) => { setViewYear(Number(e.target.value)); setSelectedDay(null); }}
-                className="border rounded px-2 py-1 text-sm"
-              >
-                {Array.from({ length: 7 }).map((_, i) => {
-                  const y = today.getFullYear() - 3 + i;
-                  return <option key={y} value={y}>{y}</option>;
-                })}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-7 gap-1 text-sm">
-            {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d) => (
-              <div key={d} className="text-xs font-semibold text-center py-1">{d}</div>
-            ))}
-
-            {monthGrid.map((week, wi) =>
-              week.map((cell, ci) => {
-                if (!cell) {
-                  return <div key={`${wi}-${ci}`} className="h-20 border rounded p-2 bg-gray-50" />;
-                }
-                const key = toKey(cell);
-                const evs = eventsByDate[key] || [];
-                const isToday = key === toKey(new Date());
-
-                return (
-                  <div
-                    key={key}
-                    className={`h-36 border rounded p-2 flex flex-col justify-between ${isToday ? "ring-2 ring-blue-200" : "bg-white"}`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="text-sm font-medium">{cell.getDate()}</div>
-                      {evs.length > 0 && (
-                        <div className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
-                          {evs.length}
-                        </div>
-                      )}
+                <div className="flex items-start gap-4">
+                  <div className="text-center min-w-[80px]">
+                    <div className="text-2xl font-bold text-primary">
+                      {new Date(ev.date).getDate()}
                     </div>
-
-                    <div className="space-y-1 overflow-auto">
-                      {evs.slice(0, 3).map((ev) => (
-                        <Link
-                          key={ev.id}
-                          to={`/events/${ev.id}`}
-                          className="block text-xs p-1 rounded hover:bg-gray-50"
-                        >
-                          <span className={`px-1 rounded text-xs ${typeColor(ev.type)}`}>{(ev.type||"").toUpperCase()}</span>
-                          <span className="ml-1 text-gray-800">{ev.title}</span>
-                        </Link>
-                      ))}
-
-                      {evs.length > 3 && (
-                        <button
-                          onClick={() => setSelectedDay(key)}
-                          className="text-xs text-blue-600 hover:underline"
-                        >
-                          +{evs.length - 3} more
-                        </button>
-                      )}
+                    <div className="text-sm text-light/60">
+                      {new Date(ev.date).toLocaleString(undefined, { month: 'short' })}
                     </div>
+                    {ev.time && (
+                      <div className="text-xs text-light/40 mt-1">{ev.time}</div>
+                    )}
                   </div>
-                );
-              })
-            )}
-          </div>
-
-          {/* Selected day modal-like area below calendar */}
-          {selectedDay && (
-            <div className="mt-4 bg-white border rounded shadow p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <h3 className="font-semibold">{new Date(selectedDay).toDateString()}</h3>
-                  <div className="text-xs text-gray-500">{(eventsByDate[selectedDay] || []).length} {t('team.events')}</div>
-                </div>
-                <button onClick={() => setSelectedDay(null)} className="text-sm text-gray-600">{t('common.close')}</button>
-              </div>
-
-              <div className="space-y-3">
-                {(eventsByDate[selectedDay] || []).map((ev) => (
-                  <Link key={ev.id} to={`/events/${ev.id}`} className="block border rounded p-3 hover:shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-semibold">{ev.title}</div>
-                        <div className="text-xs text-gray-500">{ev.time || ""} — {teamName(ev.team ?? ev.teamId)}</div>
-                      </div>
-                      <div className="text-xs">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${typeColor(ev.type)}`}>
-                          {(ev.type || "event").toUpperCase()}
-                        </span>
-                      </div>
+                  
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`text-xs px-2 py-1 rounded ${typeColor(ev.type)}`}>
+                        {(ev.type || '').toUpperCase()}
+                      </span>
                     </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
+                    <h3 className="font-title text-xl text-light group-hover:text-primary transition-colors mb-1">
+                      {ev.title}
+                    </h3>
+                    {ev.description && (
+                      <p className="text-sm text-light/60 line-clamp-2">{ev.description}</p>
+                    )}
+                  </div>
+
+                  <div className="text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                    →
+                  </div>
+                </div>
+              </Link>
+            ))
           )}
         </div>
       )}

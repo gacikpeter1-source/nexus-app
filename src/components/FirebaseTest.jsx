@@ -1,5 +1,5 @@
 // src/components/FirebaseTest.jsx
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { db } from '../firebase/config';
 import { collection, addDoc, getDocs } from 'firebase/firestore';
 
@@ -19,19 +19,19 @@ export default function FirebaseTest() {
         testNumber: Math.random()
       });
       
-      setStatus(prev => prev + '\n✅ WRITE TEST PASSED! Document ID: ' + docRef.id);
+      setStatus(prev => `${prev  }\n✅ WRITE TEST PASSED! Document ID: ${  docRef.id}`);
 
       // Test read
       const snapshot = await getDocs(collection(db, 'test'));
-      setStatus(prev => prev + '\n✅ READ TEST PASSED! Found ' + snapshot.size + ' documents');
+      setStatus(prev => `${prev  }\n✅ READ TEST PASSED! Found ${  snapshot.size  } documents`);
 
       snapshot.forEach(doc => {
-        setStatus(prev => prev + '\n📄 Document: ' + doc.id);
+        setStatus(prev => `${prev  }\n📄 Document: ${  doc.id}`);
       });
 
-      setStatus(prev => prev + '\n\n🎉 FIREBASE IS WORKING PERFECTLY!');
+      setStatus(prev => `${prev  }\n\n🎉 FIREBASE IS WORKING PERFECTLY!`);
     } catch (error) {
-      setStatus('❌ FIREBASE ERROR: ' + error.message);
+      setStatus(`❌ FIREBASE ERROR: ${  error.message}`);
       console.error('Full error:', error);
     } finally {
       setLoading(false);

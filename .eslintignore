@@ -1,0 +1,40 @@
+# Build outputs
+dist
+build
+.next
+out
+
+# Dependencies
+node_modules
+
+# Config files
+vite.config.js
+tailwind.config.js
+postcss.config.js
+.eslintrc.cjs
+
+# Environment files
+.env
+.env.*
+
+# Logs
+*.log
+npm-debug.log*
+
+# Testing
+coverage
+
+# Misc
+.DS_Store
+*.swp
+*.swo
+
+# Firebase
+.firebase
+firebase-debug.log
+firestore-debug.log
+
+# Package manager
+package-lock.json
+yarn.lock
+pnpm-lock.yaml

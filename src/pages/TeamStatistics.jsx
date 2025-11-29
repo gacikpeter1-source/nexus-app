@@ -1,6 +1,6 @@
 // src/pages/TeamStatistics.jsx
-import React, { useState, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useState, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 
 export default function TeamStatistics() {
   const { id } = useParams();

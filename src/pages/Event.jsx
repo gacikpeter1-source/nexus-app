@@ -1,8 +1,8 @@
 // src/pages/Event.jsx
-import React, { useState, useEffect } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getEvent, getCurrentUser, deleteEvent } from "../api/localApi";
+import React, { useState, useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getEvent, getCurrentUser, deleteEvent } from '../api/localApi';
 
 const LS_KEY = (id) => `eventResponses:${id}`;
 
@@ -12,12 +12,12 @@ export default function EventPage() {
   const queryClient = useQueryClient();
 
   const { data: event, isLoading, error } = useQuery({
-    queryKey: ["event", id],
+    queryKey: ['event', id],
     queryFn: () => getEvent(id),
   });
 
   const { data: user } = useQuery({
-    queryKey: ["currentUser"],
+    queryKey: ['currentUser'],
     queryFn: getCurrentUser,
   });
 
@@ -50,7 +50,6 @@ export default function EventPage() {
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
-        console.log('📥 Loaded responses for event:', event.id, parsed);
         setResponses(parsed);
       } catch {
         setResponses({});
@@ -61,13 +60,11 @@ export default function EventPage() {
   }, [event]);
 
   function saveResponses(obj) {
-    console.log('💾 Saving responses:', obj);
     setResponses(obj);
     try {
       localStorage.setItem(LS_KEY(event.id), JSON.stringify(obj));
-      console.log('✅ Saved to localStorage:', LS_KEY(event.id));
     } catch (e) {
-      console.warn("Could not save RSVP:", e);
+      console.warn('Could not save RSVP:', e);
     }
   }
 
@@ -77,13 +74,11 @@ export default function EventPage() {
       return;
     }
     
-    console.log('🎯 RSVP clicked:', { userId, status });
     const now = new Date().toISOString();
     const updated = {
       ...responses,
       [userId]: { status, timestamp: now },
     };
-    console.log('📝 Updated responses:', updated);
     saveResponses(updated);
   }
 
@@ -168,7 +163,7 @@ export default function EventPage() {
       if (memberIds.has(userId)) {
         filtered[userId] = response;
       } else {
-        console.log('⚠️ Ignoring response from non-member:', userId);
+        /* Non-member - no action needed */
       }
     });
     
@@ -232,8 +227,8 @@ export default function EventPage() {
   const deleteMutation = useMutation({
     mutationFn: () => deleteEvent(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["events"] });
-      navigate("/calendar");
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      navigate('/calendar');
     },
   });
 
@@ -305,7 +300,7 @@ export default function EventPage() {
           <div className="flex-1">
             <h1 className="text-2xl font-bold">{event.title}</h1>
             <p className="text-sm text-gray-600 mt-1">
-              {event.date} {event.time ? `• ${event.time}` : ""}
+              {event.date} {event.time ? `• ${event.time}` : ''}
             </p>
             <p className="text-sm text-gray-600">{event.location}</p>
 
@@ -381,7 +376,7 @@ export default function EventPage() {
               disabled={deleteMutation.isPending}
               className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded font-medium disabled:bg-gray-400"
             >
-              🗑️ {deleteMutation.isPending ? "Deleting..." : "Delete Event"}
+              🗑️ {deleteMutation.isPending ? 'Deleting...' : 'Delete Event'}
             </button>
           </div>
         )}
@@ -544,7 +539,7 @@ export default function EventPage() {
           
           <div className="flex gap-2">
             <button 
-              onClick={() => handleRsvp(user?.id, "confirmed")} 
+              onClick={() => handleRsvp(user?.id, 'confirmed')} 
               className={`px-3 py-2 rounded font-medium ${
                 responses?.[user?.id]?.status === 'confirmed' 
                   ? 'bg-green-700 text-white' 
@@ -555,7 +550,7 @@ export default function EventPage() {
               Yes {responses?.[user?.id]?.status === 'confirmed' && '✓'}
             </button>
             <button 
-              onClick={() => handleRsvp(user?.id, "declined")} 
+              onClick={() => handleRsvp(user?.id, 'declined')} 
               className={`px-3 py-2 rounded font-medium ${
                 responses?.[user?.id]?.status === 'declined' 
                   ? 'bg-red-700 text-white' 
@@ -566,7 +561,7 @@ export default function EventPage() {
               No {responses?.[user?.id]?.status === 'declined' && '✓'}
             </button>
             <button 
-              onClick={() => handleRsvp(user?.id, "backup")} 
+              onClick={() => handleRsvp(user?.id, 'backup')} 
               className={`px-3 py-2 rounded font-medium ${
                 responses?.[user?.id]?.status === 'backup' 
                   ? 'bg-yellow-600 text-white' 

@@ -1,8 +1,10 @@
 // src/api/localApi.js
-import users from "../data/users.json";
-import teams from "../data/teams.json";
-import baseEvents from "../data/events.json";
-import currentUser from "../data/currentUser.json";
+import users from '../data/users.json';
+import teams from '../data/teams.json';
+import baseEvents from '../data/events.json';
+import currentUser from '../data/currentUser.json';
+import clubsData from '../data/clubs.json'; // NEW: Import clubs data
+
 export const getCurrentUser = async () => {
   const storedUser = localStorage.getItem('currentUser');
   if (storedUser) {
@@ -14,7 +16,9 @@ export const getCurrentUser = async () => {
   }
   return currentUser;
 };
-const LS_KEY = "sportsapp:localEvents";
+
+const LS_KEY = 'sportsapp:localEvents';
+const CLUBS_KEY = 'sportsapp:localClubs'; // NEW: Key for clubs in localStorage
 
 /** helpers **/
 function readLocalEvents() {
@@ -31,7 +35,30 @@ function writeLocalEvents(arr) {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify(arr));
   } catch (e) {
-    console.warn("Failed to save local events", e);
+    console.warn('Failed to save local events', e);
+  }
+}
+
+// NEW: Helpers for clubs
+function readLocalClubs() {
+  try {
+    const raw = localStorage.getItem(CLUBS_KEY);
+    if (!raw) {
+      // Initialize with default clubs from JSON file
+      writeLocalClubs(clubsData || []);
+      return clubsData || [];
+    }
+    return JSON.parse(raw);
+  } catch {
+    return clubsData || [];
+  }
+}
+
+function writeLocalClubs(arr) {
+  try {
+    localStorage.setItem(CLUBS_KEY, JSON.stringify(arr));
+  } catch (e) {
+    console.warn('Failed to save local clubs', e);
   }
 }
 
@@ -50,12 +77,38 @@ export function createTeam(newTeam) {
   const teams = JSON.parse(localStorage.getItem('teams') || '[]');
   teams.push(newTeam);
   localStorage.setItem('teams', JSON.stringify(teams));
-  return Promise.resolve(newTeam); // resolves like a normal API
+  return Promise.resolve(newTeam);
 }
 
-// ---- CLUBS ----
+// ---- CLUBS ---- (UPDATED)
 export function getClubs() {
-  return Promise.resolve(JSON.parse(localStorage.getItem('clubs') || '[]'));
+  const clubs = readLocalClubs();
+  return Promise.resolve(structuredClone(clubs));
+}
+
+export function createClub(newClub) {
+  const clubs = readLocalClubs();
+  clubs.push(newClub);
+  writeLocalClubs(clubs);
+  return Promise.resolve(newClub);
+}
+
+export function updateClub(clubId, updates) {
+  const clubs = readLocalClubs();
+  const idx = clubs.findIndex(c => c.id === clubId);
+  if (idx >= 0) {
+    clubs[idx] = { ...clubs[idx], ...updates };
+    writeLocalClubs(clubs);
+    return Promise.resolve(clubs[idx]);
+  }
+  return Promise.reject(new Error('Club not found'));
+}
+
+export function deleteClub(clubId) {
+  const clubs = readLocalClubs();
+  const filtered = clubs.filter(c => c.id !== clubId);
+  writeLocalClubs(filtered);
+  return Promise.resolve({ success: true });
 }
 
 // ---- JOIN REQUESTS ----
@@ -66,7 +119,7 @@ export function getJoinRequests() {
 export function createJoinRequest({ userId, clubId, teamId }) {
   const requests = JSON.parse(localStorage.getItem('joinRequests') || '[]');
   const newRequest = {
-    id: 'jr-' + Date.now(),
+    id: `jr-${Date.now()}`,
     userId,
     clubId: clubId || null,
     teamId: teamId || null,
@@ -80,18 +133,14 @@ export function createJoinRequest({ userId, clubId, teamId }) {
 
 // ---- EVENTS ----
 export async function getEvents() {
-  // return base events (from src/data/events.json) + local events (from localStorage)
   const base = structuredClone(baseEvents || []);
   const local = readLocalEvents();
-  // ensure local events come after base events
   return [...base, ...local];
 }
 
 export async function getTeam(id) {
   if (id === undefined || id === null) return null;
-  // teams is expected to be an array of team objects with .id field
   const found = (Array.isArray(teams) ? teams : []).find(t => String(t.id) === String(id));
-  // structuredClone to preserve immutability like other API functions
   return structuredClone(found || null);
 }
 
@@ -100,14 +149,8 @@ export async function getEvent(id) {
   return all.find((e) => String(e.id) === String(id)) || null;
 }
 
-/**
- * addEvent(event)
- * - event must be an object with at least: id, title, date, team or teamId
- * - returns the saved event
- */
 export async function addEvent(event) {
   const local = readLocalEvents();
-  // simple dedupe: if id exists, override it
   const idx = local.findIndex((e) => String(e.id) === String(event.id));
   if (idx >= 0) {
     local[idx] = event;
@@ -118,35 +161,22 @@ export async function addEvent(event) {
   return event;
 }
 
-/**
- * updateEvent(id, updates)
- * - Updates an existing event with the given id
- * - Only updates local events (not base events from JSON)
- * - returns the updated event or null if not found
- */
 export async function updateEvent(id, updates) {
   const local = readLocalEvents();
   const idx = local.findIndex((e) => String(e.id) === String(id));
   if (idx < 0) {
     throw new Error(`Event ${id} not found in local events`);
   }
-  // Merge updates with existing event
   local[idx] = { ...local[idx], ...updates };
   writeLocalEvents(local);
   return local[idx];
 }
 
-/**
- * deleteEvent(id)
- * - Deletes an event with the given id
- * - Only deletes from local events (not base events from JSON)
- * - returns true if deleted, false if not found
- */
 export async function deleteEvent(id) {
   const local = readLocalEvents();
   const idx = local.findIndex((e) => String(e.id) === String(id));
   if (idx < 0) {
-    return false; // Not found in local events
+    return false;
   }
   local.splice(idx, 1);
   writeLocalEvents(local);

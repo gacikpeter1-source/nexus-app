@@ -25,9 +25,9 @@ export async function fetchUsers() {
           role: 'independent',
           teams: []
         }
-      })
+      });
     }, 300)
-  )
+  );
 }
 
 export async function fetchTeams() {
@@ -55,9 +55,9 @@ export async function fetchTeams() {
           owner: 'trainer1',
           members: ['trainer1']
         }
-      })
+      });
     }, 300)
-  )
+  );
 }
 
 export async function fetchEvents() {
@@ -65,7 +65,7 @@ export async function fetchEvents() {
     setTimeout(() => {
       resolve([
         // Your event objects go here (same as your component)
-      ])
+      ]);
     }, 300)
-  )
+  );
 }

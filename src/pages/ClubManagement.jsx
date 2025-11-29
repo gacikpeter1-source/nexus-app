@@ -1,5 +1,5 @@
 // src/pages/ClubManagement.jsx
-import React, { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useAuth, ROLES } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 
@@ -230,7 +230,7 @@ export default function ClubManagement() {
           localStorage.setItem('currentUser', JSON.stringify(updatedCU));
         }
       }
-    } catch (e) {}
+    } catch (e) { /* Ignore error */ }
 
     const remainingClubs = clubsAll;
     const stillTrainer = remainingClubs.some(rc => (rc.trainers || []).includes(userId));
@@ -482,32 +482,32 @@ export default function ClubManagement() {
   if (!user) return <div className="p-6 text-red-600">Please login</div>;
 
   return (
-    <div className="flex flex-col min-h-screen p-6 bg-gray-50">
+    <div className="flex flex-col min-h-screen p-6">
       <div className="flex-1 overflow-auto">
-        <h1 className="text-2xl font-bold mb-4">Club Management</h1>
+        <h1 className="font-display text-6xl text-light mb-4"><span className="text-primary">CLUB</span> MANAGEMENT</h1>
 
         {/* Club selector */}
         <div className="mb-4 flex flex-col md:flex-row md:gap-4 md:items-center">
           <div>
-            <label className="block mb-1 font-medium">Select Club</label>
+            <label className="block mb-1 font-medium text-light/80">Select Club</label>
             <select
               value={selectedClubId}
               onChange={e => setSelectedClubId(e.target.value)}
-              className="border p-2 rounded"
+              className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
             >
-              <option value="">-- Select club --</option>
-              {clubs.map(c => <option key={c.id} value={c.id}>{c.name} {c.clubNumber ? `(${c.clubNumber})` : ''}</option>)}
+              <option value="" className="bg-mid-dark">-- Select club --</option>
+              {clubs.map(c => <option key={c.id} value={c.id} className="bg-mid-dark">{c.name} {c.clubNumber ? `(${c.clubNumber})` : ''}</option>)}
             </select>
           </div>
         </div>
 
         {/* Create team */}
         {selectedClubId && isClubManager(clubs.find(c => c.id === selectedClubId)) && (
-          <div className="mb-6 bg-white p-4 rounded shadow max-w-md">
+          <div className="mb-6 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 max-w-md">
             <h2 className="font-semibold mb-2">Create Team</h2>
             <div className="flex gap-2">
-              <input value={newTeamName} onChange={e => setNewTeamName(e.target.value)} placeholder="Team name" className="border p-2 rounded flex-1" />
-              <button onClick={handleCreateTeam} className="px-4 py-2 bg-blue-600 text-white rounded">Create</button>
+              <input value={newTeamName} onChange={e => setNewTeamName(e.target.value)} placeholder="Team name" className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all flex-1" />
+              <button onClick={handleCreateTeam} className="px-4 py-2 bg-primary text-white rounded">Create</button>
             </div>
           </div>
         )}
@@ -531,30 +531,30 @@ export default function ClubManagement() {
 
         {/* Add user */}
         {selectedClubId && isClubManager(clubs.find(c => c.id === selectedClubId)) && (
-          <div className="mb-6 bg-white p-4 rounded shadow max-w-2xl">
+          <div className="mb-6 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 max-w-2xl">
             <h2 className="font-semibold mb-2">Add User</h2>
             <div className="flex gap-2">
-              <select value={selectedUserToAdd} onChange={e => setSelectedUserToAdd(e.target.value)} className="border p-2 rounded flex-1">
-                <option value="">-- Select user --</option>
-                {allUsers.filter(u => !(clubMembers || []).some(m => m.id === u.id)).map(u => <option key={u.id} value={u.id}>{u.username || u.email}</option>)}
+              <select value={selectedUserToAdd} onChange={e => setSelectedUserToAdd(e.target.value)} className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all flex-1">
+                <option value="" className="bg-mid-dark">-- Select user --</option>
+                {allUsers.filter(u => !(clubMembers || []).some(m => m.id === u.id)).map(u => <option key={u.id} value={u.id} className="bg-mid-dark">{u.username || u.email}</option>)}
               </select>
-              <button onClick={() => addUserToClub(selectedUserToAdd)} className="px-4 py-2 bg-green-600 text-white rounded">Add</button>
+              <button onClick={() => addUserToClub(selectedUserToAdd)} className="px-4 py-2 bg-green-500 text-white rounded">Add</button>
             </div>
           </div>
         )}
 
         {/* Search */}
         <div className="mb-4 max-w-2xl">
-          <input type="text" placeholder="Search members by username or email" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="border p-2 rounded w-full" />
+          <input type="text" placeholder="Search members by username or email" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all w-full" />
         </div>
 
         {/* Team filter */}
         <div className="mb-4 max-w-md">
-          <label className="block mb-1 font-medium">Filter by Team</label>
-          <select value={selectedTeamFilter} onChange={e => setSelectedTeamFilter(e.target.value)} className="border p-2 rounded w-full">
-            <option value="">All</option>
+          <label className="block mb-1 font-medium text-light/80">Filter by Team</label>
+          <select value={selectedTeamFilter} onChange={e => setSelectedTeamFilter(e.target.value)} className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all w-full">
+            <option value="" className="bg-mid-dark">All</option>
             <option value="none">No team</option>
-            {clubTeams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            {clubTeams.map(t => <option key={t.id} value={t.id} className="bg-mid-dark">{t.name}</option>)}
           </select>
         </div>
 
@@ -563,20 +563,20 @@ export default function ClubManagement() {
           {loading ? (
             <p>Loading members…</p>
           ) : (
-            <table className="w-full bg-white border rounded shadow">
-              <thead className="bg-gray-100">
+            <table className="w-full">
+              <thead>
                 <tr>
-                  <th className="p-2 border text-left">Username</th>
-                  <th className="p-2 border text-left">Email</th>
-                  <th className="p-2 border text-left">Role</th>
-                  <th className="p-2 border text-left">Teams</th>
-                  <th className="p-2 border text-left">Actions</th>
+                  <th className="px-4 py-3 text-left text-light font-semibold border-b border-white/10">Username</th>
+                  <th className="px-4 py-3 text-left text-light font-semibold border-b border-white/10">Email</th>
+                  <th className="px-4 py-3 text-left text-light font-semibold border-b border-white/10">Role</th>
+                  <th className="px-4 py-3 text-left text-light font-semibold border-b border-white/10">Teams</th>
+                  <th className="px-4 py-3 text-left text-light font-semibold border-b border-white/10">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="bg-transparent">
                 {filteredMembers.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="p-4 text-center text-gray-500">No members found.</td>
+                    <td colSpan={5} className="py-8 text-center text-light/40" className="text-light/60">No members found.</td>
                   </tr>
                 ) : filteredMembers.map(m => {
                   const isSelected = selectedMemberId === m.id;
@@ -588,23 +588,23 @@ export default function ClubManagement() {
                         setRemoveSearch('');
                         setRemoveMatches([]);
                       }}
-                      className={`${isSelected ? 'bg-blue-50' : ''} cursor-pointer`}
+                      className={`${isSelected ? 'bg-primary/10' : ''} cursor-pointer`}
                     >
-                      <td className="p-2 border">{m.username || '—'}</td>
-                      <td className="p-2 border">{m.email || '—'}</td>
-                      <td className="p-2 border">{m.role}</td>
-                      <td className="p-2 border">
+                      <td className="p-2 border text-light">{m.username || '—'}</td>
+                      <td className="p-2 border text-light">{m.email || '—'}</td>
+                      <td className="p-2 border text-light">{m.role}</td>
+                      <td className="p-2 border text-light">
                         {(m.teamNames || []).length === 0 ? '—' : (
                           <div className="flex flex-wrap gap-2">
                             {(m.teamNames || []).map((tName, idx) => (
-                              <span key={`${m.id}-t-${idx}`} className="inline-flex items-center gap-2 bg-gray-100 px-2 py-1 rounded text-sm">
+                              <span key={`${m.id}-t-${idx}`} className="inline-flex items-center gap-2 bg-white/5 px-2 py-1 rounded text-sm">
                                 {tName}
                               </span>
                             ))}
                           </div>
                         )}
                       </td>
-                      <td className="p-2 border space-x-1">
+                      <td className="p-2 border space-x-1 text-light">
                         {isClubManager(clubs.find(c => c.id === selectedClubId)) ? (
                           <>
                             {m.id !== user.id && (
@@ -613,7 +613,7 @@ export default function ClubManagement() {
                                 {m.role !== ROLES.TRAINER && m.role !== ROLES.ASSISTANT && (
                                   <button
                                     onClick={(ev) => { ev.stopPropagation(); promoteToTrainer(m.id); }}
-                                    className="px-2 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+                                    className="px-2 py-1 bg-primary text-white rounded text-sm hover:bg-primary/80"
                                   >
                                     ⬆️ Trainer
                                   </button>
@@ -621,7 +621,7 @@ export default function ClubManagement() {
                                 {m.role !== ROLES.TRAINER && m.role !== ROLES.ASSISTANT && (
                                   <button
                                     onClick={(ev) => { ev.stopPropagation(); promoteToAssistant(m.id); }}
-                                    className="px-2 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
+                                    className="px-2 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
                                   >
                                     ⬆️ Assistant
                                   </button>
@@ -629,7 +629,7 @@ export default function ClubManagement() {
                                 {m.role === ROLES.ASSISTANT && (
                                   <button
                                     onClick={(ev) => { ev.stopPropagation(); promoteToTrainer(m.id); }}
-                                    className="px-2 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+                                    className="px-2 py-1 bg-primary text-white rounded text-sm hover:bg-primary/80"
                                   >
                                     ⬆️ Trainer
                                   </button>
@@ -663,7 +663,7 @@ export default function ClubManagement() {
                                 {/* Remove from Team button (per-row) */}
                                 <button
                                   onClick={(ev) => { ev.stopPropagation(); removeUserFromTeam(m.id); }}
-                                  className="px-2 py-1 bg-gray-200 text-gray-800 rounded text-sm hover:bg-gray-300"
+                                  className="px-2 py-1 bg-white/10 text-light rounded text-sm hover:bg-white/15"
                                 >
                                   ❌ Remove from Team
                                 </button>
@@ -676,10 +676,10 @@ export default function ClubManagement() {
                                 </button>
                               </>
                             )}
-                            {m.id === user.id && <span className="text-gray-500">You</span>}
+                            {m.id === user.id && <span className="text-light/50">You</span>}
                           </>
                         ) : (
-                          <span className="text-xs text-gray-500">No actions</span>
+                          <span className="text-xs text-light/50">No actions</span>
                         )}
                       </td>
                     </tr>
@@ -695,9 +695,9 @@ export default function ClubManagement() {
       <div className="mt-4">
         {selectedClubId && isClubManager(clubs.find(c => c.id === selectedClubId)) && (
           <div className="mb-3 max-w-2xl">
-            <div className="bg-white p-4 rounded shadow">
+            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4">
               <div className="mb-2">
-                <label className="block text-sm font-medium mb-1">Find member to remove</label>
+                <label className="block text-sm font-medium mb-1 text-light/80">Find member to remove</label>
                 <input
                   value={removeSearch}
                   onChange={e => {
@@ -707,10 +707,10 @@ export default function ClubManagement() {
                   onFocus={() => setShowRemoveDropdown(true)}
                   onBlur={() => setTimeout(() => setShowRemoveDropdown(false), 150)} // small delay to allow click
                   placeholder="Type username or email..."
-                  className="border p-2 rounded w-full"
+                  className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all w-full"
                 />
                 {showRemoveDropdown && removeMatches.length > 0 && (
-                  <ul className="border rounded mt-1 max-h-48 overflow-auto bg-white shadow z-20">
+                  <ul className="border border-white/20 rounded-lg mt-1 max-h-48 overflow-auto bg-mid-dark shadow-xl z-20">
                     {removeMatches.map(m => (
                       <li
                         key={m.id}
@@ -721,10 +721,10 @@ export default function ClubManagement() {
                           setRemoveMatches([]);
                           setShowRemoveDropdown(false);
                         }}
-                        className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                        className="px-3 py-2 hover:bg-white/5 cursor-pointer"
                       >
                         <div className="text-sm font-medium">{m.username || '—'}</div>
-                        <div className="text-xs text-gray-500">{m.email || '—'}</div>
+                        <div className="text-xs text-light/50">{m.email || '—'}</div>
                       </li>
                     ))}
                   </ul>
@@ -734,7 +734,7 @@ export default function ClubManagement() {
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <div className="text-sm">Selected member: <strong>{(clubMembers.find(m => m.id === selectedMemberId)?.username) || selectedMemberId || '—'}</strong></div>
-                  <div className="text-xs text-gray-500">You can select a row or pick a member with the search above.</div>
+                  <div className="text-xs text-light/50">You can select a row or pick a member with the search above.</div>
                 </div>
 <div className="flex gap-2">
   <button
@@ -743,7 +743,7 @@ export default function ClubManagement() {
       if (selectedMemberId === user.id) return showToast('You cannot remove yourself here', 'error');
       removeUserFromClub(selectedMemberId);
     }}
-    className="px-4 py-2 bg-red-600 text-white rounded"
+    className="px-4 py-2 bg-red-500 text-white rounded"
   >
     Remove selected user from Club
   </button>
@@ -756,7 +756,7 @@ export default function ClubManagement() {
       setShowRemoveDropdown(false);
       showToast('Removal cancelled', 'info');
     }}
-    className="px-4 py-2 bg-gray-300 text-gray-800 rounded"
+    className="px-4 py-2 bg-white/15 text-light rounded"
   >
     Cancel
   </button>
@@ -772,7 +772,7 @@ export default function ClubManagement() {
           <div className="mt-6">
             <button
               onClick={() => handleDeleteClub(selectedClubId)}
-              className="w-full px-4 py-3 bg-red-600 text-white rounded shadow-lg hover:bg-red-700 transition"
+              className="w-full px-4 py-3 bg-red-500 text-white rounded shadow-lg hover:bg-red-600 transition"
             >
               Delete Club
             </button>
@@ -783,12 +783,12 @@ export default function ClubManagement() {
       {/* Team Assignment Modal */}
       {showTeamAssignModal && userToAssign && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
-            <h2 className="text-2xl font-bold mb-4 text-gray-800">
+          <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <h2 className="font-title text-2xl text-light mb-4">
               📋 Assign Teams
             </h2>
             
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
+            <div className="mb-4 p-3 bg-primary/10 border border-blue-200 rounded">
               <p className="text-sm text-blue-800">
                 <strong>User:</strong> {userToAssign.username || 'Unknown'}
               </p>
@@ -800,14 +800,14 @@ export default function ClubManagement() {
             {/* Team List */}
             <div className="space-y-2 mb-6">
               {clubTeams.length === 0 ? (
-                <p className="text-gray-500 text-center py-4">
+                <p className="text-light/50 text-center py-4">
                   No teams in this club yet. Create a team first.
                 </p>
               ) : (
                 clubTeams.map(team => (
                   <label
                     key={team.id}
-                    className="flex items-center gap-3 p-3 border rounded hover:bg-gray-50 cursor-pointer transition"
+                    className="flex items-center gap-3 p-3 border rounded hover:bg-white/5 cursor-pointer transition"
                   >
                     <input
                       type="checkbox"
@@ -816,8 +816,8 @@ export default function ClubManagement() {
                       className="w-5 h-5 text-purple-600 rounded focus:ring-2 focus:ring-purple-500"
                     />
                     <div className="flex-1">
-                      <div className="font-medium text-gray-800">{team.name}</div>
-                      <div className="text-xs text-gray-500">
+                      <div className="font-medium text-light">{team.name}</div>
+                      <div className="text-xs text-light/50">
                         {team.sport || 'Sport'} • {(team.members || []).length} members
                       </div>
                     </div>
@@ -841,7 +841,7 @@ export default function ClubManagement() {
                   setUserToAssign(null);
                   setSelectedTeamsForAssignment([]);
                 }}
-                className="flex-1 px-4 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium transition"
+                className="flex-1 px-4 py-3 bg-white/10 text-light rounded-lg hover:bg-white/15 font-medium transition"
               >
                 Cancel
               </button>
