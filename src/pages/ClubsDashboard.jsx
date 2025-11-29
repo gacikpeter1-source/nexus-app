@@ -76,29 +76,30 @@ export default function ClubsDashboard() {
     }
   }
 
-  function loadClubs() {
+  async function loadClubs() {
     setLoading(true);
     try {
-      let list = listClubsForUser ? listClubsForUser() : [];
-      if (!Array.isArray(list)) list = [];
-
+      // Load all clubs from Firebase
+      const allClubs = await getAllClubs();
+      
       // Filter clubs where user is a member
-      if (user.role !== ROLES.ADMIN) {
-        list = list.filter(c =>
-          c.createdBy === user.id ||
-          (c.trainers || []).includes(user.id) ||
-          (c.assistants || []).includes(user.id) ||
-          (c.members || []).includes(user.id)
-        );
-      }
+      let userClubs = allClubs.filter(club => {
+        // SuperAdmin sees all clubs
+        if (user?.isSuperAdmin) return true;
+        
+        // Admin sees all clubs
+        if (user?.role === ROLES.ADMIN) return true;
+        
+        // Regular users see clubs they're part of
+        return club.createdBy === user?.id ||
+               (club.trainers || []).includes(user?.id) ||
+               (club.assistants || []).includes(user?.id) ||
+               (club.members || []).includes(user?.id);
+      });
 
-      const deduped = list.reduce((acc, club) => {
-        if (!acc.find(c => c.id === club.id)) acc.push(club);
-        return acc;
-      }, []);
-
-      setClubs(deduped);
-    } catch {
+      setClubs(userClubs);
+    } catch (error) {
+      console.error('Error loading clubs:', error);
       setClubs([]);
     } finally {
       setLoading(false);
