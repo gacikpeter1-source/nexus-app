@@ -428,8 +428,34 @@ export default function ClubManagement() {
     if (!selectedClubId) return;
     
     try {
-      // Update user's role in Firebase
+      // Update user's role in Firebase users collection
       await updateUser(userId, { role: newRole });
+      
+      // Get fresh club data
+      const club = await getClub(selectedClubId);
+      if (!club) return;
+
+      // Remove user from all role arrays first
+      let updatedTrainers = (club.trainers || []).filter(id => id !== userId);
+      let updatedAssistants = (club.assistants || []).filter(id => id !== userId);
+      let updatedMembers = (club.members || []).filter(id => id !== userId);
+
+      // Add user to correct array based on new role
+      if (newRole === 'trainer') {
+        updatedTrainers.push(userId);
+      } else if (newRole === 'assistant') {
+        updatedAssistants.push(userId);
+      } else {
+        // user, parent, or any other role goes to members
+        updatedMembers.push(userId);
+      }
+
+      // Update club in Firebase
+      await updateClub(selectedClubId, {
+        trainers: updatedTrainers,
+        assistants: updatedAssistants,
+        members: updatedMembers
+      });
       
       showToast(`Role updated to ${newRole}`, 'success');
       await loadClubData(selectedClubId);
