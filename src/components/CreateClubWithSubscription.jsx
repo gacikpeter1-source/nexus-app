@@ -18,8 +18,8 @@ export default function CreateClubWithSubscription() {
   // Get list of clubs user already owns (for display purposes)
   const ownedClubs = React.useMemo(() => {
     if (!user) return [];
-    const clubs = JSON.parse(localStorage.getItem('clubs') || '[]');
-    return clubs.filter(c => c.superTrainer === user.id);
+    // This will be populated from user.ownedClubIds in Firebase
+    return user.ownedClubIds || [];
   }, [user]);
 
   // Generate unique 15-character Customer ID
@@ -58,30 +58,19 @@ export default function CreateClubWithSubscription() {
       const newCustomerID = generateCustomerID();
       setCustomerID(newCustomerID);
 
-      // Create the club with special SuperTrainer privileges
+      // Create club object
+      const clubCode = String(Math.floor(100000 + Math.random() * 900000)); // 6-digit code
+      
       const clubData = {
         name: clubName.trim(),
         customerID: newCustomerID,
         subscriptionActive: true,
         subscriptionDate: new Date().toISOString(),
-        superTrainer: user.id, // Club owner
-        createdAt: new Date().toISOString()
-      };
-
-      // Save to localStorage
-      const clubs = JSON.parse(localStorage.getItem('clubs') || '[]');
-      
-      const newClub = {
-        id: `club_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        name: clubData.name,
-        customerID: clubData.customerID,
-        subscriptionActive: true,
-        subscriptionDate: clubData.subscriptionDate,
         superTrainer: user.id,
-        clubCode: String(Math.floor(100000 + Math.random() * 900000)), // 6-digit code
+        clubCode: clubCode,
+        clubNumber: clubCode,
         createdBy: user.id,
-        createdAt: clubData.createdAt,
-        trainers: [user.id], // SuperTrainer is also a trainer
+        trainers: [user.id],
         assistants: [],
         members: [],
         teams: []
@@ -92,61 +81,43 @@ export default function CreateClubWithSubscription() {
         const team = {
           id: `team_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           name: initialTeamName.trim(),
-          clubId: newClub.id,
           trainers: [user.id],
           assistants: [],
-          members: [user.id],
-          createdAt: new Date().toISOString()
+          members: [user.id]
         };
-        newClub.teams.push(team);
-        newClub.members.push(user.id);
+        clubData.teams.push(team);
+        clubData.members.push(user.id);
       }
 
-      clubs.push(newClub);
-      localStorage.setItem('clubs', JSON.stringify(clubs));
+      // Save to Firebase
+      const { createClub: createClubInFirestore } = await import('../firebase/firestore');
+      const newClub = await createClubInFirestore(clubData);
+      
+      // Update user in Firebase
+      const { updateUser } = await import('../firebase/firestore');
+      const newRole = (user.role === ROLES.TRAINER || user.role === ROLES.ADMIN) 
+        ? user.role 
+        : ROLES.TRAINER;
+      
+      await updateUser(user.id, {
+        role: newRole,
+        clubIds: [...(user.clubIds || []), newClub.id],
+        ownedClubIds: [...(user.ownedClubIds || []), newClub.id],
+        isSuperTrainer: true
+      });
 
-      // Update user to track this new club ownership
-      const users = JSON.parse(localStorage.getItem('users') || '[]');
-      const userIndex = users.findIndex(u => u.id === user.id);
-      if (userIndex !== -1) {
-        // Set role to TRAINER if not already
-        if (users[userIndex].role !== ROLES.TRAINER && users[userIndex].role !== ROLES.ADMIN) {
-          users[userIndex].role = ROLES.TRAINER;
-        }
-        
-        // Add club to clubIds
-        users[userIndex].clubIds = [...(users[userIndex].clubIds || []), newClub.id];
-        
-        // Track owned clubs (clubs where user is SuperTrainer)
-        users[userIndex].ownedClubIds = [...(users[userIndex].ownedClubIds || []), newClub.id];
-        
-        // Mark as SuperTrainer (they can be SuperTrainer of multiple clubs)
-        users[userIndex].isSuperTrainer = true;
-        
-        localStorage.setItem('users', JSON.stringify(users));
-
-        // Update current user
-        const currentUser = JSON.parse(localStorage.getItem('currentUser'));
-        if (currentUser.role !== ROLES.TRAINER && currentUser.role !== ROLES.ADMIN) {
-          currentUser.role = ROLES.TRAINER;
-        }
-        currentUser.clubIds = [...(currentUser.clubIds || []), newClub.id];
-        currentUser.ownedClubIds = [...(currentUser.ownedClubIds || []), newClub.id];
-        currentUser.isSuperTrainer = true;
-        localStorage.setItem('currentUser', JSON.stringify(currentUser));
+      // Refresh user data
+      if (refreshUser) {
+        await refreshUser();
       }
 
-      // Send simulated email
-      const mailbox = JSON.parse(localStorage.getItem('mailbox') || '[]');
-      const isAdditionalClub = ownedClubs.length > 0;
-      mailbox.unshift({
-        id: `mail_${Date.now()}`,
-        to: user.email,
-        subject: isAdditionalClub 
-          ? `NEXUS - Additional Club Created: ${newClub.name}`
-          : 'Welcome to NEXUS - Your Club is Ready!',
-        body: `
-${isAdditionalClub ? `Your additional club "${newClub.name}" has been created successfully!` : `Congratulations! Your club "${newClub.name}" has been created successfully.`}
+      setCreatedClub({
+        ...newClub,
+        clubCode: clubCode
+      });
+      setStep(4); // Move to Success screen
+      
+      showToast('Club created successfully!', 'success');
 
 Your Customer ID: ${newCustomerID}
 
@@ -154,7 +125,7 @@ Club Code (share with trainers): ${newClub.clubCode}
 
 You are now the SuperTrainer (Club Owner) with full access to all teams.
 
-${isAdditionalClub ? `\n⚠️ BILLING NOTICE:\nThis is subscription #${ownedClubs.length + 1}. You now own ${ownedClubs.length + 1} club(s), each with separate billing.\n\nYour clubs:\n${ownedClubs.map((c, i) => `  ${i + 1}. ${c.name} (ID: ${c.customerID})`).join('\n')}\n  ${ownedClubs.length + 1}. ${newClub.name} (ID: ${newCustomerID})\n` : ''}
+${isAdditionalClub ? `\nâš ï¸ BILLING NOTICE:\nThis is subscription #${ownedClubs.length + 1}. You now own ${ownedClubs.length + 1} club(s), each with separate billing.\n\nYour clubs:\n${ownedClubs.map((c, i) => `  ${i + 1}. ${c.name} (ID: ${c.customerID})`).join('\n')}\n  ${ownedClubs.length + 1}. ${newClub.name} (ID: ${newCustomerID})\n` : ''}
 
 Important: Keep your Customer ID safe. You'll need it for support and billing.
 
@@ -210,7 +181,7 @@ Welcome to NEXUS!
           {hasExistingClubs && (
             <div className="bg-accent/10 border border-accent/30 rounded-lg p-4 mb-6">
               <h3 className="font-semibold text-accent mb-2 flex items-center gap-2">
-                <span>ℹ️</span>
+                <span>â„¹ï¸</span>
                 Additional Subscription Required
               </h3>
               <p className="text-light/80 text-sm mb-3">
@@ -263,15 +234,15 @@ Welcome to NEXUS!
 
             <div className="bg-accent/10 border border-accent/30 rounded-lg p-4">
               <h3 className="font-semibold text-accent mb-2 flex items-center gap-2">
-                <span>ℹ️</span>
+                <span>â„¹ï¸</span>
                 What happens next?
               </h3>
               <ul className="text-sm text-light/70 space-y-1">
-                <li>• You&apos;ll review and accept our terms</li>
-                <li>• Complete subscription setup (simulated for dev)</li>
-                <li>• Receive your unique Customer ID</li>
-                <li>• Become SuperTrainer with full club access</li>
-                <li>• Get a club code to share with trainers</li>
+                <li>â€¢ You&apos;ll review and accept our terms</li>
+                <li>â€¢ Complete subscription setup (simulated for dev)</li>
+                <li>â€¢ Receive your unique Customer ID</li>
+                <li>â€¢ Become SuperTrainer with full club access</li>
+                <li>â€¢ Get a club code to share with trainers</li>
               </ul>
             </div>
 
@@ -375,7 +346,7 @@ Welcome to NEXUS!
 
           {hasExistingClubs && (
             <div className="bg-accent/10 border border-accent/30 rounded-lg p-4 mb-6">
-              <p className="text-accent font-semibold mb-2">💳 Additional Club Subscription</p>
+              <p className="text-accent font-semibold mb-2">ðŸ’³ Additional Club Subscription</p>
               <p className="text-light/70 text-sm">
                 This is subscription #{ownedClubs.length + 1}. You will be charged separately for this club.
                 Each club has its own billing and Customer ID.
@@ -384,7 +355,7 @@ Welcome to NEXUS!
           )}
 
           <div className="bg-warning/10 border border-warning/30 rounded-lg p-4 mb-6">
-            <p className="text-warning font-semibold mb-2">🚧 Development Mode</p>
+            <p className="text-warning font-semibold mb-2">ðŸš§ Development Mode</p>
             <p className="text-light/70 text-sm">
               This is a simulated payment for development purposes. In production, this will integrate with a real payment processor.
             </p>
@@ -447,7 +418,7 @@ Welcome to NEXUS!
         <div className="bg-white/5 backdrop-blur-sm border border-success/30 rounded-xl p-6 animate-scale-in">
           <div className="text-center mb-6">
             <div className="w-20 h-20 bg-success/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-4xl">🎉</span>
+              <span className="text-4xl">ðŸŽ‰</span>
             </div>
             <h2 className="font-title text-4xl text-light mb-2">
               Congratulations!
@@ -463,7 +434,7 @@ Welcome to NEXUS!
               </code>
             </div>
             <p className="text-xs text-light/60 text-center mt-3">
-              ⚠️ Save this ID! You&apos;ll need it for support and billing.
+              âš ï¸ Save this ID! You&apos;ll need it for support and billing.
             </p>
           </div>
 
@@ -490,19 +461,19 @@ Welcome to NEXUS!
               <h3 className="font-semibold text-light mb-2">Next Steps</h3>
               <ul className="text-sm text-light/70 space-y-2">
                 <li className="flex items-start gap-2">
-                  <span className="text-primary">✓</span>
+                  <span className="text-primary">âœ“</span>
                   <span>Share Club Code <code className="text-secondary font-mono">{createdClub?.clubCode}</code> with trainers</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-primary">✓</span>
+                  <span className="text-primary">âœ“</span>
                   <span>Create teams for different age groups</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-primary">✓</span>
+                  <span className="text-primary">âœ“</span>
                   <span>Invite athletes and parents</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-primary">✓</span>
+                  <span className="text-primary">âœ“</span>
                   <span>Start scheduling events</span>
                 </li>
               </ul>
@@ -510,7 +481,7 @@ Welcome to NEXUS!
           </div>
 
           <div className="bg-accent/10 border border-accent/30 rounded-lg p-4 mb-6">
-            <p className="text-accent font-semibold mb-2">📧 Email Sent</p>
+            <p className="text-accent font-semibold mb-2">ðŸ“§ Email Sent</p>
             <p className="text-light/70 text-sm">
               A confirmation email with your Customer ID has been sent to <strong>{user.email}</strong>
             </p>
