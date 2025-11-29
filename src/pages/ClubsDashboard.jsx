@@ -143,26 +143,8 @@ export default function ClubsDashboard() {
 
     if (clubs.length === 0) {
       return (
-        <div className="rounded-2xl border-2 border-dashed border-white/20 bg-white/5 backdrop-blur-sm p-12 text-center">
-          <div className="text-6xl mb-4">🏆</div>
-          <h3 className="font-title text-2xl text-light mb-2">No Clubs Yet</h3>
-          <p className="text-light/60 mb-6 max-w-md mx-auto">
-            You haven&apos;t joined any clubs yet. Create a club or request to join an existing one to get started.
-          </p>
-          <div className="flex justify-center gap-4">
-            <button 
-              onClick={() => setOpenCreateModal(true)} 
-              className="btn-primary"
-            >
-              + Create Club
-            </button>
-            <button 
-              onClick={() => setOpenRequestModal(true)} 
-              className="btn-secondary"
-            >
-              + Request to Join
-            </button>
-          </div>
+        <div className="text-light/40 text-sm">
+          No clubs yet. Use the buttons above to get started.
         </div>
       );
     }
@@ -307,7 +289,25 @@ export default function ClubsDashboard() {
           <h1 className="font-display text-6xl md:text-7xl text-light mb-2 tracking-wider">
             MY <span className="text-primary">CLUBS</span>
           </h1>
-          <p className="text-light/60 text-lg">Manage your clubs and teams</p>
+          <p className="text-light/60 text-lg mb-4">Manage your clubs and teams</p>
+          
+          {/* Action Buttons */}
+          <div className="flex gap-3">
+            <button 
+              onClick={() => setOpenCreateModal(true)} 
+              className="px-6 py-2.5 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all flex items-center gap-2"
+            >
+              <span>+</span>
+              <span>Create Club</span>
+            </button>
+            <button 
+              onClick={() => setOpenRequestModal(true)} 
+              className="px-6 py-2.5 bg-accent hover:bg-accent/80 text-white rounded-lg font-medium transition-all flex items-center gap-2"
+            >
+              <span>+</span>
+              <span>Request to Join</span>
+            </button>
+          </div>
         </div>
 
         {/* Main Content */}
