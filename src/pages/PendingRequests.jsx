@@ -14,7 +14,7 @@ export default function PendingRequests() {
   const [clubs, setClubs] = useState([]);
   const [users, setUsers] = useState([]);
 
-  const isManager = user && [ROLES.ADMIN, ROLES.TRAINER, ROLES.ASSISTANT].includes(user.role);
+  const isManager = user && (user.isSuperAdmin || [ROLES.ADMIN, ROLES.TRAINER, ROLES.ASSISTANT].includes(user.role));
 
   useEffect(() => {
     if (user) {

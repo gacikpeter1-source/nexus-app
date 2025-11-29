@@ -1,4 +1,4 @@
-// src/pages/AdminDashboard.jsx - EMOJI FIXED VERSION
+// src/pages/AdminDashboard.jsx - FIXED VERSION
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -31,7 +31,10 @@ export default function AdminDashboard() {
     );
   }
 
-  if (!isAdmin()) {
+  // Check if user is SuperAdmin OR regular Admin
+  const isSuperAdminOrAdmin = user.isSuperAdmin === true || isAdmin();
+  
+  if (!isSuperAdminOrAdmin) {
     return (
       <div className="text-center py-12">
         <h1 className="text-2xl text-red-500">Access Denied</h1>
@@ -44,7 +47,7 @@ export default function AdminDashboard() {
     <div className="max-w-7xl mx-auto px-4 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-4xl font-bold text-light mb-2">👑 Admin Dashboard</h1>
+        <h1 className="text-4xl font-bold text-light mb-2">ðŸ‘‘ Admin Dashboard</h1>
         <p className="text-light/60">Manage users, clubs, teams, and requests</p>
       </div>
 
@@ -54,25 +57,25 @@ export default function AdminDashboard() {
           <TabButton
             active={activeTab === 'users'}
             onClick={() => setActiveTab('users')}
-            icon="👥"
+            icon="ðŸ‘¥"
             label="Users"
           />
           <TabButton
             active={activeTab === 'clubs'}
             onClick={() => setActiveTab('clubs')}
-            icon="🏢"
+            icon="ðŸ¢"
             label="Clubs"
           />
           <TabButton
             active={activeTab === 'teams'}
             onClick={() => setActiveTab('teams')}
-            icon="⚽"
+            icon="âš½"
             label="Teams"
           />
           <TabButton
             active={activeTab === 'requests'}
             onClick={() => setActiveTab('requests')}
-            icon="📋"
+            icon="ðŸ“‹"
             label="Requests"
           />
         </div>
@@ -166,7 +169,7 @@ function UsersTab() {
       const clubIds = Array.isArray(targetUser.clubIds) ? targetUser.clubIds : [];
       await updateUser(targetUser.id, { clubIds: [...clubIds, selectedId] });
       
-      showToast('✅ User assigned to club successfully!', 'success');
+      showToast('âœ… User assigned to club successfully!', 'success');
       setAssignModal({ open: false, user: null, selectedId: '' });
       await loadData();
     } catch (err) {
@@ -182,7 +185,7 @@ function UsersTab() {
     }
     try {
       await updateUser(targetUser.id, { role: newRole });
-      showToast('✅ Role updated successfully!', 'success');
+      showToast('âœ… Role updated successfully!', 'success');
       setRoleModal({ open: false, user: null, newRole: '' });
       await loadData();
     } catch (err) {
@@ -194,7 +197,7 @@ function UsersTab() {
     const { user: targetUser } = deleteModal;
     try {
       await deleteUserFromFirestore(targetUser.id);
-      showToast('✅ User deleted successfully!', 'success');
+      showToast('âœ… User deleted successfully!', 'success');
       setDeleteModal({ open: false, user: null });
       await loadData();
     } catch (err) {
@@ -218,7 +221,7 @@ function UsersTab() {
     try {
       // Note: This requires Firebase Admin SDK or Cloud Function
       // For now, we'll show a toast that this needs backend implementation
-      showToast('⚠️ Password change requires backend implementation with Firebase Admin SDK', 'info');
+      showToast('âš ï¸ Password change requires backend implementation with Firebase Admin SDK', 'info');
       
       // TODO: Implement with Firebase Admin SDK:
       // await updateUserPassword(targetUser.id, newPassword);
@@ -226,7 +229,7 @@ function UsersTab() {
       setPasswordModal({ open: false, user: null, newPassword: '', confirmPassword: '' });
       
       // Uncomment when implemented:
-      // showToast('✅ Password changed successfully!', 'success');
+      // showToast('âœ… Password changed successfully!', 'success');
     } catch (err) {
       showToast('Failed to change password: ' + err.message, 'error');
     }
@@ -250,7 +253,7 @@ function UsersTab() {
       <div className="bg-mid-dark rounded-lg p-6 mb-6 border border-white/10">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm text-light/80 mb-2">🔍 Search Users</label>
+            <label className="block text-sm text-light/80 mb-2">ðŸ” Search Users</label>
             <input
               type="text"
               value={searchTerm}
@@ -260,7 +263,7 @@ function UsersTab() {
             />
           </div>
           <div>
-            <label className="block text-sm text-light/80 mb-2">🎭 Filter by Role</label>
+            <label className="block text-sm text-light/80 mb-2">ðŸŽ­ Filter by Role</label>
             <select
               value={filterRole}
               onChange={(e) => setFilterRole(e.target.value)}
@@ -279,10 +282,10 @@ function UsersTab() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Total Users" value={users.length} icon="👥" />
-        <StatCard label="Admins" value={users.filter(u => u.role === 'admin').length} icon="👑" />
-        <StatCard label="Trainers" value={users.filter(u => u.role === 'trainer').length} icon="🏃" />
-        <StatCard label="Users" value={users.filter(u => u.role === 'user').length} icon="👤" />
+        <StatCard label="Total Users" value={users.length} icon="ðŸ‘¥" />
+        <StatCard label="Admins" value={users.filter(u => u.role === 'admin').length} icon="ðŸ‘‘" />
+        <StatCard label="Trainers" value={users.filter(u => u.role === 'trainer').length} icon="ðŸƒ" />
+        <StatCard label="Users" value={users.filter(u => u.role === 'user').length} icon="ðŸ‘¤" />
       </div>
 
       {/* Users List */}
@@ -302,9 +305,9 @@ function UsersTab() {
                     </span>
                   )}
                 </div>
-                <p className="text-light/60 mb-1">📧 {u.email}</p>
+                <p className="text-light/60 mb-1">ðŸ“§ {u.email}</p>
                 <p className="text-light/60 text-sm">
-                  🏢 Clubs: {u.clubIds?.length || 0}
+                  ðŸ¢ Clubs: {u.clubIds?.length || 0}
                 </p>
               </div>
               <div className="flex gap-2 flex-wrap">
@@ -313,27 +316,27 @@ function UsersTab() {
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition text-sm"
                   disabled={u.isSuperAdmin}
                 >
-                  🎭 Role
+                  ðŸŽ­ Role
                 </button>
                 <button
                   onClick={() => setAssignModal({ open: true, user: u, selectedId: '' })}
                   className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition text-sm"
                 >
-                  ➕ Assign
+                  âž• Assign
                 </button>
                 <button
                   onClick={() => setPasswordModal({ open: true, user: u, newPassword: '', confirmPassword: '' })}
                   className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition text-sm"
                   disabled={u.isSuperAdmin && u.id !== currentUser?.id}
                 >
-                  🔑 Password
+                  ðŸ” Password
                 </button>
                 <button
                   onClick={() => setDeleteModal({ open: true, user: u })}
                   className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition text-sm"
                   disabled={u.isSuperAdmin || u.id === currentUser?.id}
                 >
-                  🗑️ Delete
+                  ðŸ—‘ï¸ Delete
                 </button>
               </div>
             </div>
@@ -426,7 +429,7 @@ function UsersTab() {
 
       {deleteModal.open && (
         <Modal
-          title="⚠️ Delete User"
+          title="âš ï¸ Delete User"
           onClose={() => setDeleteModal({ open: false, user: null })}
           danger
         >
@@ -435,7 +438,7 @@ function UsersTab() {
           </p>
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-6">
             <p className="text-red-400 text-sm">
-              ⚠️ This action cannot be undone!
+              âš ï¸ This action cannot be undone!
             </p>
           </div>
           <div className="flex gap-2">
@@ -457,7 +460,7 @@ function UsersTab() {
 
       {passwordModal.open && (
         <Modal
-          title="🔑 Change User Password"
+          title="ðŸ” Change User Password"
           onClose={() => setPasswordModal({ open: false, user: null, newPassword: '', confirmPassword: '' })}
         >
           <p className="text-light mb-4">
@@ -488,7 +491,7 @@ function UsersTab() {
           </div>
           <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 mb-6">
             <p className="text-yellow-400 text-sm">
-              ⚠️ This will immediately change the user&apos;s password. They will need to use the new password to log in.
+              âš ï¸ This will immediately change the user&apos;s password. They will need to use the new password to log in.
             </p>
           </div>
           <div className="flex gap-2">
@@ -555,7 +558,7 @@ function ClubsTab() {
         members: [],
         teams: []
       });
-      showToast('✅ Club created successfully!', 'success');
+      showToast('âœ… Club created successfully!', 'success');
       setCreateModal({ open: false, name: '' });
       await loadClubs();
     } catch (err) {
@@ -570,7 +573,7 @@ function ClubsTab() {
     }
     try {
       await updateClub(editModal.club.id, { name: editModal.name.trim() });
-      showToast('✅ Club updated successfully!', 'success');
+      showToast('âœ… Club updated successfully!', 'success');
       setEditModal({ open: false, club: null, name: '' });
       await loadClubs();
     } catch (err) {
@@ -581,7 +584,7 @@ function ClubsTab() {
   const handleDeleteClub = async () => {
     try {
       await deleteClubFromFirestore(deleteModal.club.id);
-      showToast('✅ Club deleted successfully!', 'success');
+      showToast('âœ… Club deleted successfully!', 'success');
       setDeleteModal({ open: false, club: null });
       await loadClubs();
     } catch (err) {
@@ -602,20 +605,20 @@ function ClubsTab() {
       {/* Header with Create Button */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-light">🏢 All Clubs</h2>
+          <h2 className="text-2xl font-bold text-light">ðŸ¢ All Clubs</h2>
           <p className="text-light/60">Total: {clubs.length} clubs</p>
         </div>
         <button
           onClick={() => setCreateModal({ open: true, name: '' })}
           className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium"
         >
-          ➕ Create Club
+          âž• Create Club
         </button>
       </div>
 
       {/* Search */}
       <div className="bg-mid-dark rounded-lg p-6 mb-6 border border-white/10">
-        <label className="block text-sm text-light/80 mb-2">🔍 Search Clubs</label>
+        <label className="block text-sm text-light/80 mb-2">ðŸ” Search Clubs</label>
         <input
           type="text"
           value={searchTerm}
@@ -631,23 +634,23 @@ function ClubsTab() {
           <div key={club.id} className="bg-mid-dark rounded-lg p-6 border border-white/10">
             <h3 className="text-xl font-bold text-light mb-3">{club.name}</h3>
             <div className="space-y-2 mb-4">
-              <p className="text-light/60 text-sm">🔒 Code: <code className="bg-dark px-2 py-1 rounded">{club.clubCode}</code></p>
-              <p className="text-light/60 text-sm">👥 Members: {club.members?.length || 0}</p>
-              <p className="text-light/60 text-sm">⚽ Teams: {club.teams?.length || 0}</p>
-              <p className="text-light/60 text-sm">🏃 Trainers: {club.trainers?.length || 0}</p>
+              <p className="text-light/60 text-sm">ðŸ”‘ Code: <code className="bg-dark px-2 py-1 rounded">{club.clubCode}</code></p>
+              <p className="text-light/60 text-sm">ðŸ‘¥ Members: {club.members?.length || 0}</p>
+              <p className="text-light/60 text-sm">âš½ Teams: {club.teams?.length || 0}</p>
+              <p className="text-light/60 text-sm">ðŸƒ Trainers: {club.trainers?.length || 0}</p>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setEditModal({ open: true, club, name: club.name })}
                 className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition text-sm"
               >
-                ✏️ Edit
+                âœï¸ Edit
               </button>
               <button
                 onClick={() => setDeleteModal({ open: true, club })}
                 className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition text-sm"
               >
-                🗑️ Delete
+                ðŸ—‘ï¸ Delete
               </button>
             </div>
           </div>
@@ -663,7 +666,7 @@ function ClubsTab() {
       {/* MODALS */}
       {createModal.open && (
         <Modal
-          title="➕ Create New Club"
+          title="âž• Create New Club"
           onClose={() => setCreateModal({ open: false, name: '' })}
         >
           <input
@@ -692,7 +695,7 @@ function ClubsTab() {
 
       {editModal.open && (
         <Modal
-          title="✏️ Edit Club"
+          title="âœï¸ Edit Club"
           onClose={() => setEditModal({ open: false, club: null, name: '' })}
         >
           <input
@@ -721,7 +724,7 @@ function ClubsTab() {
 
       {deleteModal.open && (
         <Modal
-          title="⚠️ Delete Club"
+          title="âš ï¸ Delete Club"
           onClose={() => setDeleteModal({ open: false, club: null })}
           danger
         >
@@ -730,7 +733,7 @@ function ClubsTab() {
           </p>
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-6">
             <p className="text-red-400 text-sm">
-              ⚠️ This will delete all teams and remove all members!
+              âš ï¸ This will delete all teams and remove all members!
             </p>
           </div>
           <div className="flex gap-2">
@@ -804,12 +807,12 @@ function TeamsTab() {
     <div>
       {/* Header with Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <StatCard label="Total Clubs" value={clubs.length} icon="🏢" />
-        <StatCard label="Total Teams" value={allTeams.length} icon="⚽" />
+        <StatCard label="Total Clubs" value={clubs.length} icon="ðŸ¢" />
+        <StatCard label="Total Teams" value={allTeams.length} icon="âš½" />
         <StatCard 
           label="Total Members" 
           value={allTeams.reduce((sum, team) => sum + (team.members?.length || 0), 0)} 
-          icon="👥" 
+          icon="ðŸ'¥" 
         />
       </div>
 
@@ -818,7 +821,7 @@ function TeamsTab() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Search */}
           <div>
-            <label className="block text-sm text-light/80 mb-2">🔍 Search Teams</label>
+            <label className="block text-sm text-light/80 mb-2">ðŸ" Search Teams</label>
             <input
               type="text"
               value={searchTerm}
@@ -830,7 +833,7 @@ function TeamsTab() {
 
           {/* Club Filter */}
           <div>
-            <label className="block text-sm text-light/80 mb-2">🏢 Filter by Club</label>
+            <label className="block text-sm text-light/80 mb-2">ðŸ¢ Filter by Club</label>
             <select
               value={selectedClub}
               onChange={(e) => setSelectedClub(e.target.value)}
@@ -848,7 +851,7 @@ function TeamsTab() {
       {/* Teams Display */}
       {filteredTeams.length === 0 ? (
         <div className="bg-mid-dark rounded-lg p-12 border border-white/10 text-center">
-          <div className="text-6xl mb-4">⚽</div>
+          <div className="text-6xl mb-4">âš½</div>
           <h3 className="text-xl font-bold text-light mb-2">No Teams Found</h3>
           <p className="text-light/60">
             {allTeams.length === 0 
@@ -859,7 +862,7 @@ function TeamsTab() {
       ) : (
         <div>
           <div className="mb-4">
-            <h2 className="text-2xl font-bold text-light">⚽ All Teams</h2>
+            <h2 className="text-2xl font-bold text-light">âš½ All Teams</h2>
             <p className="text-light/60">Showing {filteredTeams.length} of {allTeams.length} teams</p>
           </div>
           
@@ -878,11 +881,11 @@ function TeamsTab() {
                 
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-light/60 text-sm">
-                    <span>👥</span>
+                    <span>ðŸ'¥</span>
                     <span>Members: <strong>{team.members?.length || 0}</strong></span>
                   </div>
                   <div className="flex items-center gap-2 text-light/60 text-sm">
-                    <span>🏃</span>
+                    <span>ðŸƒ</span>
                     <span>Trainers: <strong>{team.trainers?.length || 0}</strong></span>
                   </div>
                   {team.description && (
@@ -929,7 +932,7 @@ function RequestsTab() {
   const handleApprove = async (requestId) => {
     try {
       await updateRequest(requestId, { status: 'approved', handledBy: user.id });
-      showToast('✅ Request approved!', 'success');
+      showToast('âœ… Request approved!', 'success');
       await loadRequests();
     } catch (err) {
       showToast('Failed to approve request: ' + err.message, 'error');
@@ -939,7 +942,7 @@ function RequestsTab() {
   const handleDeny = async (requestId) => {
     try {
       await updateRequest(requestId, { status: 'denied', handledBy: user.id });
-      showToast('❌ Request denied', 'info');
+      showToast('âŒ Request denied', 'info');
       await loadRequests();
     } catch (err) {
       showToast('Failed to deny request: ' + err.message, 'error');
@@ -953,7 +956,7 @@ function RequestsTab() {
   return (
     <div>
       <div className="bg-mid-dark rounded-lg p-6 mb-6 border border-white/10">
-        <h2 className="text-2xl font-bold text-light mb-2">📋 Join Requests</h2>
+        <h2 className="text-2xl font-bold text-light mb-2">ðŸ“‹ Join Requests</h2>
         <p className="text-light/60">Pending: <strong>{requests.length}</strong> requests</p>
       </div>
 
@@ -976,13 +979,13 @@ function RequestsTab() {
                     onClick={() => handleApprove(req.id)}
                     className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition"
                   >
-                    ✅ Approve
+                    âœ… Approve
                   </button>
                   <button
                     onClick={() => handleDeny(req.id)}
                     className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition"
                   >
-                    ❌ Deny
+                    âŒ Deny
                   </button>
                 </div>
               </div>

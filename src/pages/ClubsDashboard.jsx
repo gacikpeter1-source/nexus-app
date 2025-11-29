@@ -159,26 +159,8 @@ export default function ClubsDashboard() {
 
     if (clubs.length === 0) {
       return (
-        <div className="rounded-2xl border-2 border-dashed border-white/20 bg-white/5 backdrop-blur-sm p-12 text-center">
-          <div className="text-6xl mb-4">ðŸ†</div>
-          <h3 className="font-title text-2xl text-light mb-2">No Clubs Yet</h3>
-          <p className="text-light/60 mb-6 max-w-md mx-auto">
-            You haven&apos;t joined any clubs yet. Create a club or request to join an existing one to get started.
-          </p>
-          <div className="flex justify-center gap-4">
-            <button 
-              onClick={() => setOpenCreateModal(true)} 
-              className="btn-primary"
-            >
-              + Create Club
-            </button>
-            <button 
-              onClick={() => setOpenRequestModal(true)} 
-              className="btn-secondary"
-            >
-              + Request to Join
-            </button>
-          </div>
+        <div className="text-center py-8">
+          <p className="text-light/50 text-sm">No clubs yet. Use the buttons above to get started.</p>
         </div>
       );
     }
