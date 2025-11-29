@@ -1,419 +1,452 @@
 // src/pages/Team.jsx
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { getClub } from '../firebase/firestore';
 
 export default function Team() {
-  const { id } = useParams();
+  const { clubId, teamId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   
-  const [activeTab, setActiveTab] = useState('events'); // events, trainers, members
+  const [activeTab, setActiveTab] = useState('overview');
+  const [club, setClub] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Load team data from localStorage
-  const team = useMemo(() => {
-    
+  // Load club and team from Firebase
+  useEffect(() => {
+    loadTeamData();
+  }, [clubId, teamId]);
+
+  async function loadTeamData() {
     try {
-      const clubs = JSON.parse(localStorage.getItem('clubs') || '[]');
-      
-      for (const club of clubs) {
-        if (!Array.isArray(club.teams)) {
-          continue;
-        }
-        club.teams.forEach(t => {
-        });
-        
-        const foundTeam = club.teams.find(t => t.id === id);
-        if (foundTeam) {
-          return { ...foundTeam, clubId: club.id, clubName: club.name };
-        }
+      setLoading(true);
+      const clubData = await getClub(clubId);
+      if (clubData) {
+        setClub(clubData);
       }
-      return null;
-    } catch (e) {
-      console.error('  ❌ Error loading team:', e);
-      return null;
+    } catch (error) {
+      console.error('Error loading team:', error);
+    } finally {
+      setLoading(false);
     }
-  }, [id]);
+  }
 
-  // Load users data
-  const users = useMemo(() => {
-    try {
-      return JSON.parse(localStorage.getItem('users') || '[]');
-    } catch {
-      return [];
+  const team = useMemo(() => {
+    if (!club || !club.teams) return null;
+    const foundTeam = club.teams.find(t => t.id === teamId);
+    if (foundTeam) {
+      return { ...foundTeam, clubId: club.id, clubName: club.name };
     }
-  }, []);
+    return null;
+  }, [club, teamId]);
 
-  // Load events
-  const allEvents = useMemo(() => {
-    try {
-      // Events are stored in 'sportsapp:localEvents', not 'events'
-      const events = JSON.parse(localStorage.getItem('sportsapp:localEvents') || '[]');
-      events.forEach(e => {
-      });
-      return events;
-    } catch (e) {
-      console.error('  ❌ Error loading events:', e);
-      return [];
-    }
-  }, []);
-
-  // Get team events (next 5 days or closest 5)
+  // Get upcoming events (mock for now - TODO: integrate with events)
   const upcomingEvents = useMemo(() => {
     if (!team) return [];
-    
-    
-    // Filter events for this team
-    // An event belongs to this team if:
-    // 1. teamId matches team.id, OR
-    // 2. visibilityLevel is 'team' and teamId matches, OR
-    // 3. visibilityLevel is 'club' and clubId matches (show club events too)
-    const teamEvents = allEvents.filter(e => {
-      const matchesTeamId = e.teamId === team.id;
-      const matchesClubId = e.visibilityLevel === 'club' && e.clubId === team.clubId;
-      const isMatch = matchesTeamId || matchesClubId;
-      
-      if (isMatch) {
-        /* Matching logic completed */
-      }
-      
-      return isMatch;
-    });
-    
-    
-    const now = new Date();
-    const fiveDaysLater = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
+    // TODO: Load events from Firebase
+    return [];
+  }, [team]);
 
-    // Events in next 5 days
-    const next5Days = teamEvents.filter(e => {
-      const eventDate = new Date(e.date);
-      const isInRange = eventDate >= now && eventDate <= fiveDaysLater;
-      return isInRange;
-    }).sort((a, b) => new Date(a.date) - new Date(b.date));
+  // Calculate statistics
+  const statistics = useMemo(() => {
+    if (!team) return { trainings: 0, matches: 0, tournaments: 0, meetings: 0 };
+    // TODO: Calculate from events
+    return {
+      trainings: 0,
+      matches: 0,
+      tournaments: 0,
+      meetings: 0
+    };
+  }, [team]);
 
-
-    // If we have events in next 5 days, return them
-    if (next5Days.length > 0) {
-      return next5Days.slice(0, 5);
-    }
-
-    // Otherwise, return 5 closest future events
-    const futureEvents = teamEvents
-      .filter(e => {
-        const isFuture = new Date(e.date) >= now;
-        return isFuture;
-      })
-      .sort((a, b) => new Date(a.date) - new Date(b.date))
-      .slice(0, 5);
-
-    
-    return futureEvents;
-  }, [team, allEvents]);
+  // Get team members
+  const members = useMemo(() => {
+    if (!team) return [];
+    return team.members || [];
+  }, [team]);
 
   // Get trainers
   const trainers = useMemo(() => {
     if (!team) return [];
-    const trainerIds = team.trainers || [];
-    return users.filter(u => trainerIds.includes(u.id));
-  }, [team, users]);
+    return team.trainers || [];
+  }, [team]);
 
-  // Get members
-  const members = useMemo(() => {
+  // Get assistants
+  const assistants = useMemo(() => {
     if (!team) return [];
-    const memberIds = team.members || [];
-    return users.filter(u => memberIds.includes(u.id));
-  }, [team, users]);
+    return team.assistants || [];
+  }, [team]);
 
-  // Check if user is member of this team
-  const isUserMember = useMemo(() => {
-    if (!team || !user) return false;
-    const memberIds = team.members || [];
-    return memberIds.includes(user.id);
-  }, [team, user]);
-
-  // Leave Team function
-  const handleLeaveTeam = () => {
-    if (!window.confirm(`Are you sure you want to leave ${team.name}? You will no longer have access to team events and information.`)) {
-      return;
-    }
-
-    try {
-      // Load clubs
-      const clubs = JSON.parse(localStorage.getItem('clubs') || '[]');
-      const clubIndex = clubs.findIndex(c => c.id === team.clubId);
-      
-      if (clubIndex === -1) {
-        alert('Club not found');
-        return;
-      }
-
-      // Find and update team
-      const club = clubs[clubIndex];
-      const teamIndex = (club.teams || []).findIndex(t => t.id === team.id);
-      
-      if (teamIndex === -1) {
-        alert('Team not found');
-        return;
-      }
-
-      // Remove user from team members
-      club.teams[teamIndex].members = (club.teams[teamIndex].members || []).filter(id => id !== user.id);
-      
-      // Save updated clubs
-      localStorage.setItem('clubs', JSON.stringify(clubs));
-      
-      alert(`You have left ${team.name}`);
-      navigate('/clubs');
-    } catch (error) {
-      console.error('Error leaving team:', error);
-      alert('Failed to leave team. Please try again.');
-    }
-  };
-
-  if (!team) {
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-6xl mb-4">😕</div>
-          <h2 className="font-title text-2xl text-light mb-2">Team Not Found</h2>
-          <p className="text-light/60 mb-6">The team you&apos;re looking for doesn&apos;t exist.</p>
-          <button
-            onClick={() => navigate('/clubs')}
-            className="btn-primary"
-          >
-            ← Back to Clubs
-          </button>
-        </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-light/60">Loading team...</div>
       </div>
     );
   }
 
-  const formatDate = (dateStr) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'short', 
-      month: 'short', 
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const getEventIcon = (type) => {
-    switch(type?.toLowerCase()) {
-      case 'training': return '🏋️';
-      case 'game': return '⚽';
-      case 'match': return '🏆';
-      case 'tournament': return '🥇';
-      default: return '📅';
-    }
-  };
+  if (!team) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-6">
+        <div className="text-6xl mb-4">❌</div>
+        <h2 className="font-title text-2xl text-light mb-2">Team Not Found</h2>
+        <p className="text-light/60 mb-6">This team doesn't exist or has been deleted.</p>
+        <button
+          onClick={() => navigate('/dashboard')}
+          className="px-6 py-3 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
+        >
+          Back to Dashboard
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen">
+    <div className="flex flex-col min-h-screen p-6">
       {/* Header */}
-      <div className="mb-8 animate-fade-in">
-        <div className="flex items-center justify-between gap-4 mb-4">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate('/clubs')}
-              className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center text-light transition-all"
-            >
-              ←
-            </button>
-            <div>
-              <h1 className="font-display text-5xl md:text-6xl text-light tracking-wider">
-                {team.name}
-              </h1>
-              <p className="text-light/60 text-lg">
-                {team.clubName} • {team.sport || 'Sport'}
-              </p>
-            </div>
+      <div className="mb-8">
+        <button
+          onClick={() => navigate('/dashboard')}
+          className="mb-4 flex items-center gap-2 text-light/60 hover:text-light transition-colors"
+        >
+          <span>←</span>
+          <span>Back to Dashboard</span>
+        </button>
+        
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="font-display text-5xl md:text-6xl text-light mb-2">
+              {team.name}
+            </h1>
+            <p className="text-light/60 text-lg">{team.clubName}</p>
           </div>
           
-          {/* Leave Team Button */}
-          {isUserMember && (
-            <button
-              onClick={handleLeaveTeam}
-              className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 hover:text-red-300 rounded-lg transition-all border border-red-600/30 hover:border-red-600/50 flex items-center gap-2"
-            >
-              <span>🚪</span>
-              <span className="font-medium">Leave Team</span>
-            </button>
-          )}
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4">
+            <div className="text-sm text-light/60 mb-1">Team Members</div>
+            <div className="text-3xl font-bold text-primary">{members.length}</div>
+          </div>
         </div>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="mb-6 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-        <div className="flex gap-2 border-b border-white/20">
-          <button
-            onClick={() => setActiveTab('events')}
-            className={`px-6 py-3 font-title text-lg transition-all ${
-              activeTab === 'events'
-                ? 'text-primary border-b-2 border-primary'
-                : 'text-light/60 hover:text-light'
-            }`}
-          >
-            📅 Events
-          </button>
-          <button
-            onClick={() => setActiveTab('trainers')}
-            className={`px-6 py-3 font-title text-lg transition-all ${
-              activeTab === 'trainers'
-                ? 'text-primary border-b-2 border-primary'
-                : 'text-light/60 hover:text-light'
-            }`}
-          >
-            👔 Trainers
-          </button>
-          <button
-            onClick={() => setActiveTab('members')}
-            className={`px-6 py-3 font-title text-lg transition-all ${
-              activeTab === 'members'
-                ? 'text-primary border-b-2 border-primary'
-                : 'text-light/60 hover:text-light'
-            }`}
-          >
-            👥 Members
-          </button>
-          <button
-            onClick={() => navigate(`/teams/${id}/statistics`)}
-            className="ml-auto px-6 py-3 font-title text-lg bg-gradient-to-r from-primary to-accent text-dark rounded-lg hover:shadow-lg transition-all"
-          >
-            📊 Statistics
-          </button>
-        </div>
+      {/* Tabs */}
+      <div className="flex gap-2 mb-6 border-b border-white/10">
+        <button
+          onClick={() => setActiveTab('overview')}
+          className={`px-6 py-3 font-medium transition-all ${
+            activeTab === 'overview'
+              ? 'text-primary border-b-2 border-primary'
+              : 'text-light/60 hover:text-light'
+          }`}
+        >
+          Overview
+        </button>
+        <button
+          onClick={() => setActiveTab('members')}
+          className={`px-6 py-3 font-medium transition-all ${
+            activeTab === 'members'
+              ? 'text-primary border-b-2 border-primary'
+              : 'text-light/60 hover:text-light'
+          }`}
+        >
+          Members ({members.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('staff')}
+          className={`px-6 py-3 font-medium transition-all ${
+            activeTab === 'staff'
+              ? 'text-primary border-b-2 border-primary'
+              : 'text-light/60 hover:text-light'
+          }`}
+        >
+          Trainers & Staff ({trainers.length + assistants.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('statistics')}
+          className={`px-6 py-3 font-medium transition-all ${
+            activeTab === 'statistics'
+              ? 'text-primary border-b-2 border-primary'
+              : 'text-light/60 hover:text-light'
+          }`}
+        >
+          Statistics
+        </button>
       </div>
 
-      {/* Content */}
-      <div className="animate-fade-in" style={{ animationDelay: '0.2s' }}>
-        {/* Events Tab */}
-        {activeTab === 'events' && (
-          <div>
-            <h2 className="font-title text-2xl text-light mb-4 flex items-center gap-3">
-              <span className="w-1 h-6 bg-primary rounded"></span>
-              Upcoming Events
-            </h2>
-            {upcomingEvents.length === 0 ? (
-              <div className="rounded-2xl border-2 border-dashed border-white/20 bg-white/5 backdrop-blur-sm p-12 text-center">
-                <div className="text-6xl mb-4">📅</div>
-                <h3 className="font-title text-2xl text-light mb-2">No Upcoming Events</h3>
-                <p className="text-light/60">No events scheduled in the next 5 days.</p>
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {upcomingEvents.map((event, idx) => (
-                  <div
-                    key={event.id}
-                    onClick={() => navigate(`/events/${event.id}`)}
-                    className="group cursor-pointer bg-white/5 backdrop-blur-sm border border-white/10 p-5 rounded-xl hover:bg-white/10 hover:border-primary/50 transition-all duration-300 card-hover"
-                    style={{ animationDelay: `${idx * 0.05}s` }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="text-4xl">{getEventIcon(event.type)}</div>
+      {/* Tab Content */}
+      <div className="flex-1">
+        {activeTab === 'overview' && (
+          <div className="space-y-6 animate-fade-in">
+            {/* Upcoming Events */}
+            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+              <h2 className="font-title text-2xl text-light mb-4">Upcoming Events</h2>
+              
+              {upcomingEvents.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="text-4xl mb-2">📅</div>
+                  <p className="text-light/60">No upcoming events</p>
+                  <p className="text-light/40 text-sm mt-1">Events will appear here</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {upcomingEvents.map((event, idx) => (
+                    <div
+                      key={event.id || idx}
+                      className="bg-white/5 border border-white/10 rounded-lg p-4 hover:bg-white/10 transition-all"
+                    >
+                      <div className="flex items-start justify-between">
                         <div>
-                          <h3 className="font-title text-xl text-light group-hover:text-primary transition-colors">
-                            {event.title}
-                          </h3>
-                          <p className="text-sm text-light/60">
-                            {event.type || 'Event'} • {formatDate(event.date)}
-                          </p>
-                          {event.location && (
-                            <p className="text-xs text-light/40 mt-1">📍 {event.location}</p>
-                          )}
+                          <h3 className="font-semibold text-light">{event.title}</h3>
+                          <p className="text-sm text-light/60">{event.type}</p>
                         </div>
-                      </div>
-                      <div className="text-primary opacity-0 group-hover:opacity-100 transform translate-x-2 group-hover:translate-x-0 transition-all">
-                        →
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Trainers Tab */}
-        {activeTab === 'trainers' && (
-          <div>
-            <h2 className="font-title text-2xl text-light mb-4 flex items-center gap-3">
-              <span className="w-1 h-6 bg-primary rounded"></span>
-              Trainers ({trainers.length})
-            </h2>
-            {trainers.length === 0 ? (
-              <div className="rounded-2xl border-2 border-dashed border-white/20 bg-white/5 backdrop-blur-sm p-12 text-center">
-                <div className="text-6xl mb-4">👔</div>
-                <h3 className="font-title text-2xl text-light mb-2">No Trainers</h3>
-                <p className="text-light/60">No trainers assigned to this team yet.</p>
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {trainers.map((trainer, idx) => (
-                  <div
-                    key={trainer.id}
-                    className="bg-white/5 backdrop-blur-sm border border-white/10 p-5 rounded-xl hover:bg-white/10 transition-all duration-300"
-                    style={{ animationDelay: `${idx * 0.05}s` }}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-2xl font-bold text-dark">
-                        {trainer.username?.charAt(0).toUpperCase() || '?'}
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-title text-xl text-light">{trainer.username || 'Unknown'}</h3>
-                        <div className="flex flex-col gap-1 mt-2">
-                          <p className="text-sm text-light/60">
-                            📧 {trainer.email || 'No email'}
-                          </p>
-                          <p className="text-sm text-light/60">
-                            📱 {trainer.phone || 'No phone'}
-                          </p>
+                        <div className="text-right">
+                          <div className="text-sm text-light/80">{new Date(event.date).toLocaleDateString()}</div>
+                          <div className="text-xs text-light/60">{event.time}</div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Quick Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+                <div className="text-3xl mb-2">🏋️</div>
+                <div className="text-2xl font-bold text-light">{statistics.trainings}</div>
+                <div className="text-sm text-light/60">Trainings</div>
               </div>
-            )}
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+                <div className="text-3xl mb-2">⚽</div>
+                <div className="text-2xl font-bold text-light">{statistics.matches}</div>
+                <div className="text-sm text-light/60">Matches</div>
+              </div>
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+                <div className="text-3xl mb-2">🏆</div>
+                <div className="text-2xl font-bold text-light">{statistics.tournaments}</div>
+                <div className="text-sm text-light/60">Tournaments</div>
+              </div>
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+                <div className="text-3xl mb-2">💼</div>
+                <div className="text-2xl font-bold text-light">{statistics.meetings}</div>
+                <div className="text-sm text-light/60">Meetings</div>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* Members Tab */}
         {activeTab === 'members' && (
-          <div>
-            <h2 className="font-title text-2xl text-light mb-4 flex items-center gap-3">
-              <span className="w-1 h-6 bg-primary rounded"></span>
-              Members ({members.length})
-            </h2>
-            {members.length === 0 ? (
-              <div className="rounded-2xl border-2 border-dashed border-white/20 bg-white/5 backdrop-blur-sm p-12 text-center">
-                <div className="text-6xl mb-4">👥</div>
-                <h3 className="font-title text-2xl text-light mb-2">No Members</h3>
-                <p className="text-light/60">No members in this team yet.</p>
-              </div>
-            ) : (
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {members.map((member, idx) => (
-                  <div
-                    key={member.id}
-                    className="bg-white/5 backdrop-blur-sm border border-white/10 p-4 rounded-xl hover:bg-white/10 transition-all duration-300"
-                    style={{ animationDelay: `${idx * 0.05}s` }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-accent to-primary flex items-center justify-center text-xl font-bold text-dark">
-                        {member.username?.charAt(0).toUpperCase() || '?'}
+          <div className="animate-fade-in">
+            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+              <h2 className="font-title text-2xl text-light mb-4">Team Members</h2>
+              
+              {members.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="text-4xl mb-2">👥</div>
+                  <p className="text-light/60">No members yet</p>
+                </div>
+              ) : (
+                <div className="grid gap-3">
+                  {members.map((memberId, idx) => (
+                    <div
+                      key={memberId || idx}
+                      className="bg-white/5 border border-white/10 rounded-lg p-4 flex items-center gap-4"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold">
+                        {idx + 1}
                       </div>
                       <div>
-                        <h3 className="font-title text-lg text-light">{member.username || 'Unknown'}</h3>
-                        <p className="text-xs text-light/50">{member.role || 'user'}</p>
+                        <div className="font-medium text-light">Member {idx + 1}</div>
+                        <div className="text-sm text-light/60">ID: {memberId.substring(0, 8)}...</div>
                       </div>
                     </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'staff' && (
+          <div className="space-y-6 animate-fade-in">
+            {/* Trainers */}
+            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+              <h2 className="font-title text-2xl text-light mb-4">Trainers</h2>
+              
+              {trainers.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="text-3xl mb-2">👨‍🏫</div>
+                  <p className="text-light/60">No trainers assigned</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {trainers.map((trainerId, idx) => (
+                    <div
+                      key={trainerId || idx}
+                      className="bg-white/5 border border-white/10 rounded-lg p-4"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white text-2xl">
+                          👨‍🏫
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-light mb-2">Trainer {idx + 1}</h3>
+                          <div className="space-y-1 text-sm">
+                            <div className="flex items-center gap-2 text-light/70">
+                              <span>📧</span>
+                              <span>trainer{idx + 1}@example.com</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-light/70">
+                              <span>📱</span>
+                              <span>+1 (555) 000-{String(idx).padStart(4, '0')}</span>
+                            </div>
+                            <div className="text-xs text-light/50 mt-2">ID: {trainerId}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Assistants */}
+            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+              <h2 className="font-title text-2xl text-light mb-4">Assistants</h2>
+              
+              {assistants.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="text-3xl mb-2">👨‍💼</div>
+                  <p className="text-light/60">No assistants assigned</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {assistants.map((assistantId, idx) => (
+                    <div
+                      key={assistantId || idx}
+                      className="bg-white/5 border border-white/10 rounded-lg p-4"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-accent to-secondary flex items-center justify-center text-white text-2xl">
+                          👨‍💼
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-light mb-2">Assistant {idx + 1}</h3>
+                          <div className="space-y-1 text-sm">
+                            <div className="flex items-center gap-2 text-light/70">
+                              <span>📧</span>
+                              <span>assistant{idx + 1}@example.com</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-light/70">
+                              <span>📱</span>
+                              <span>+1 (555) 100-{String(idx).padStart(4, '0')}</span>
+                            </div>
+                            <div className="text-xs text-light/50 mt-2">ID: {assistantId}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'statistics' && (
+          <div className="animate-fade-in">
+            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+              <h2 className="font-title text-2xl text-light mb-6">Team Statistics</h2>
+              
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* Events Breakdown */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-light/80">Events Breakdown</h3>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">🏋️</span>
+                        <span className="text-light">Trainings</span>
+                      </div>
+                      <span className="text-2xl font-bold text-primary">{statistics.trainings}</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">⚽</span>
+                        <span className="text-light">Matches</span>
+                      </div>
+                      <span className="text-2xl font-bold text-primary">{statistics.matches}</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">🏆</span>
+                        <span className="text-light">Tournaments</span>
+                      </div>
+                      <span className="text-2xl font-bold text-primary">{statistics.tournaments}</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">💼</span>
+                        <span className="text-light">Meetings</span>
+                      </div>
+                      <span className="text-2xl font-bold text-primary">{statistics.meetings}</span>
+                    </div>
                   </div>
-                ))}
+                </div>
+
+                {/* Team Composition */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-light/80">Team Composition</h3>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">👥</span>
+                        <span className="text-light">Members</span>
+                      </div>
+                      <span className="text-2xl font-bold text-accent">{members.length}</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">👨‍🏫</span>
+                        <span className="text-light">Trainers</span>
+                      </div>
+                      <span className="text-2xl font-bold text-accent">{trainers.length}</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">👨‍💼</span>
+                        <span className="text-light">Assistants</span>
+                      </div>
+                      <span className="text-2xl font-bold text-accent">{assistants.length}</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between p-3 bg-primary/10 rounded-lg border border-primary/30">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">📊</span>
+                        <span className="text-light font-semibold">Total</span>
+                      </div>
+                      <span className="text-2xl font-bold text-primary">
+                        {members.length + trainers.length + assistants.length}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
-            )}
+
+              <div className="mt-6 p-4 bg-accent/10 border border-accent/30 rounded-lg">
+                <p className="text-accent text-sm">
+                  💡 Tip: Statistics will update automatically as you add events and activities
+                </p>
+              </div>
+            </div>
           </div>
         )}
       </div>
