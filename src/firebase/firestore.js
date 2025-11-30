@@ -297,7 +297,7 @@ export const updateEventResponse = async (eventId, userId, status) => {
   }
 };
 
-// Get all events for a user (where they're a member of the team/club)
+// Get all events for a user (where they're a member of the team/club OR invited)
 export const getUserEvents = async (userId) => {
   try {
     // Get all clubs user is part of
@@ -325,6 +325,14 @@ export const getUserEvents = async (userId) => {
     const personalEvents = personalSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
     allEvents.push(...personalEvents);
+
+    // Get all events where user has RSVP'd (invited events)
+    const allEventsSnapshot = await getDocs(collection(db, 'events'));
+    const invitedEvents = allEventsSnapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(event => event.responses && event.responses[userId]);
+
+    allEvents.push(...invitedEvents);
 
     // Remove duplicates
     const uniqueEvents = Array.from(new Map(allEvents.map(e => [e.id, e])).values());

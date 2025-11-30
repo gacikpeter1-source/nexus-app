@@ -278,79 +278,22 @@ export default function Calendar() {
         </div>
 
         {/* Second Row - Type Filter */}
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-light/80 mb-2">Type</label>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setTypeFilter('all')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                typeFilter === 'all'
-                  ? 'bg-primary text-white'
-                  : 'bg-white/10 text-light hover:bg-white/15'
-              }`}
+        <div className="mt-4 grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-light/80 mb-2">Event Type</label>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
             >
-              All Types
-            </button>
-            <button
-              onClick={() => setTypeFilter('training')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                typeFilter === 'training'
-                  ? 'bg-primary text-white'
-                  : 'bg-white/10 text-light hover:bg-white/15'
-              }`}
-            >
-              🏋️ Training
-            </button>
-            <button
-              onClick={() => setTypeFilter('game')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                typeFilter === 'game'
-                  ? 'bg-primary text-white'
-                  : 'bg-white/10 text-light hover:bg-white/15'
-              }`}
-            >
-              ⚽ Game
-            </button>
-            <button
-              onClick={() => setTypeFilter('match')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                typeFilter === 'match'
-                  ? 'bg-primary text-white'
-                  : 'bg-white/10 text-light hover:bg-white/15'
-              }`}
-            >
-              ⚽ Match
-            </button>
-            <button
-              onClick={() => setTypeFilter('tournament')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                typeFilter === 'tournament'
-                  ? 'bg-primary text-white'
-                  : 'bg-white/10 text-light hover:bg-white/15'
-              }`}
-            >
-              🏆 Tournament
-            </button>
-            <button
-              onClick={() => setTypeFilter('meeting')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                typeFilter === 'meeting'
-                  ? 'bg-primary text-white'
-                  : 'bg-white/10 text-light hover:bg-white/15'
-              }`}
-            >
-              💼 Meeting
-            </button>
-            <button
-              onClick={() => setTypeFilter('social')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                typeFilter === 'social'
-                  ? 'bg-primary text-white'
-                  : 'bg-white/10 text-light hover:bg-white/15'
-              }`}
-            >
-              🎉 Social
-            </button>
+              <option value="all" className="bg-mid-dark">All Types</option>
+              <option value="training" className="bg-mid-dark">🏋️ Training</option>
+              <option value="game" className="bg-mid-dark">⚽ Game</option>
+              <option value="match" className="bg-mid-dark">⚽ Match</option>
+              <option value="tournament" className="bg-mid-dark">🏆 Tournament</option>
+              <option value="meeting" className="bg-mid-dark">💼 Meeting</option>
+              <option value="social" className="bg-mid-dark">🎉 Social</option>
+            </select>
           </div>
         </div>
       </div>
