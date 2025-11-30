@@ -13,8 +13,10 @@ export default function Calendar() {
   const [events, setEvents] = useState([]);
   const [clubs, setClubs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [clubFilter, setClubFilter] = useState('all');
   const [teamFilter, setTeamFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [userFilter, setUserFilter] = useState('all'); // 'all' or 'mine'
   const [viewMode, setViewMode] = useState('list'); // list | month
 
   const today = new Date();
@@ -53,10 +55,12 @@ export default function Calendar() {
     }
   }
 
-  // Get unique teams from clubs for filter
+  // Get teams filtered by selected club
   const teams = useMemo(() => {
     const allTeams = [];
-    clubs.forEach(club => {
+    const clubsToShow = clubFilter === 'all' ? clubs : clubs.filter(c => c.id === clubFilter);
+    
+    clubsToShow.forEach(club => {
       (club.teams || []).forEach(team => {
         allTeams.push({
           ...team,
@@ -67,11 +71,21 @@ export default function Calendar() {
       });
     });
     return allTeams;
-  }, [clubs]);
+  }, [clubs, clubFilter]);
 
   // Filter events
   const filteredEvents = useMemo(() => {
     let filtered = [...events];
+
+    // Filter by user (mine vs all)
+    if (userFilter === 'mine') {
+      filtered = filtered.filter(e => e.createdBy === user.id);
+    }
+
+    // Filter by club
+    if (clubFilter !== 'all') {
+      filtered = filtered.filter(e => e.clubId === clubFilter);
+    }
 
     // Filter by team
     if (teamFilter !== 'all') {
@@ -85,7 +99,7 @@ export default function Calendar() {
 
     // Sort by date (soonest first)
     return filtered.sort((a, b) => new Date(a.date) - new Date(b.date));
-  }, [events, teamFilter, typeFilter]);
+  }, [events, clubFilter, teamFilter, typeFilter, userFilter, user]);
 
   // Split into upcoming and past
   const upcomingEvents = filteredEvents.filter(e => new Date(e.date) >= new Date().setHours(0, 0, 0, 0));
@@ -181,9 +195,9 @@ export default function Calendar() {
 
       {/* Filters */}
       <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 mb-6">
-        <div className="grid md:grid-cols-3 gap-4">
+        <div className="grid md:grid-cols-4 gap-4">
           {/* View Mode */}
-          <div>
+          <div className="md:col-span-1">
             <label className="block text-sm font-medium text-light/80 mb-2">View</label>
             <div className="flex gap-2">
               <button
@@ -209,6 +223,39 @@ export default function Calendar() {
             </div>
           </div>
 
+          {/* User Filter */}
+          <div>
+            <label className="block text-sm font-medium text-light/80 mb-2">Show</label>
+            <select
+              value={userFilter}
+              onChange={(e) => setUserFilter(e.target.value)}
+              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+            >
+              <option value="all" className="bg-mid-dark">All Events</option>
+              <option value="mine" className="bg-mid-dark">My Events Only</option>
+            </select>
+          </div>
+
+          {/* Club Filter */}
+          <div>
+            <label className="block text-sm font-medium text-light/80 mb-2">Club</label>
+            <select
+              value={clubFilter}
+              onChange={(e) => {
+                setClubFilter(e.target.value);
+                setTeamFilter('all'); // Reset team filter when club changes
+              }}
+              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+            >
+              <option value="all" className="bg-mid-dark">All Clubs</option>
+              {clubs.map(c => (
+                <option key={c.id} value={c.id} className="bg-mid-dark">
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Team Filter */}
           <div>
             <label className="block text-sm font-medium text-light/80 mb-2">Team</label>
@@ -216,32 +263,94 @@ export default function Calendar() {
               value={teamFilter}
               onChange={(e) => setTeamFilter(e.target.value)}
               className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+              disabled={clubFilter === 'all' && teams.length === 0}
             >
-              <option value="all" className="bg-mid-dark">All Teams</option>
+              <option value="all" className="bg-mid-dark">
+                {clubFilter === 'all' ? 'All Teams' : 'All Teams in Club'}
+              </option>
               {teams.map(t => (
                 <option key={t.id} value={t.id} className="bg-mid-dark">
-                  {t.displayName}
+                  {clubFilter === 'all' ? t.displayName : t.name}
                 </option>
               ))}
             </select>
           </div>
+        </div>
 
-          {/* Type Filter */}
-          <div>
-            <label className="block text-sm font-medium text-light/80 mb-2">Type</label>
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+        {/* Second Row - Type Filter */}
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-light/80 mb-2">Type</label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setTypeFilter('all')}
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                typeFilter === 'all'
+                  ? 'bg-primary text-white'
+                  : 'bg-white/10 text-light hover:bg-white/15'
+              }`}
             >
-              <option value="all" className="bg-mid-dark">All Types</option>
-              <option value="training" className="bg-mid-dark">🏋️ Training</option>
-              <option value="game" className="bg-mid-dark">⚽ Game</option>
-              <option value="match" className="bg-mid-dark">⚽ Match</option>
-              <option value="tournament" className="bg-mid-dark">🏆 Tournament</option>
-              <option value="meeting" className="bg-mid-dark">💼 Meeting</option>
-              <option value="social" className="bg-mid-dark">🎉 Social</option>
-            </select>
+              All Types
+            </button>
+            <button
+              onClick={() => setTypeFilter('training')}
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                typeFilter === 'training'
+                  ? 'bg-primary text-white'
+                  : 'bg-white/10 text-light hover:bg-white/15'
+              }`}
+            >
+              🏋️ Training
+            </button>
+            <button
+              onClick={() => setTypeFilter('game')}
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                typeFilter === 'game'
+                  ? 'bg-primary text-white'
+                  : 'bg-white/10 text-light hover:bg-white/15'
+              }`}
+            >
+              ⚽ Game
+            </button>
+            <button
+              onClick={() => setTypeFilter('match')}
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                typeFilter === 'match'
+                  ? 'bg-primary text-white'
+                  : 'bg-white/10 text-light hover:bg-white/15'
+              }`}
+            >
+              ⚽ Match
+            </button>
+            <button
+              onClick={() => setTypeFilter('tournament')}
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                typeFilter === 'tournament'
+                  ? 'bg-primary text-white'
+                  : 'bg-white/10 text-light hover:bg-white/15'
+              }`}
+            >
+              🏆 Tournament
+            </button>
+            <button
+              onClick={() => setTypeFilter('meeting')}
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                typeFilter === 'meeting'
+                  ? 'bg-primary text-white'
+                  : 'bg-white/10 text-light hover:bg-white/15'
+              }`}
+            >
+              💼 Meeting
+            </button>
+            <button
+              onClick={() => setTypeFilter('social')}
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                typeFilter === 'social'
+                  ? 'bg-primary text-white'
+                  : 'bg-white/10 text-light hover:bg-white/15'
+              }`}
+            >
+              🎉 Social
+            </button>
           </div>
         </div>
       </div>

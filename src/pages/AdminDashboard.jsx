@@ -618,7 +618,7 @@ function ClubsTab() {
 
       {/* Search */}
       <div className="bg-mid-dark rounded-lg p-6 mb-6 border border-white/10">
-        <label className="block text-sm text-light/80 mb-2">ðŸ” Search Clubs</label>
+        <label className="block text-sm text-light/80 mb-2">earch Clubs</label>
         <input
           type="text"
           value={searchTerm}
@@ -634,17 +634,17 @@ function ClubsTab() {
           <div key={club.id} className="bg-mid-dark rounded-lg p-6 border border-white/10">
             <h3 className="text-xl font-bold text-light mb-3">{club.name}</h3>
             <div className="space-y-2 mb-4">
-              <p className="text-light/60 text-sm">ðŸ”‘ Code: <code className="bg-dark px-2 py-1 rounded">{club.clubCode}</code></p>
-              <p className="text-light/60 text-sm">ðŸ‘¥ Members: {club.members?.length || 0}</p>
-              <p className="text-light/60 text-sm">âš½ Teams: {club.teams?.length || 0}</p>
-              <p className="text-light/60 text-sm">ðŸƒ Trainers: {club.trainers?.length || 0}</p>
+              <p className="text-light/60 text-sm">Code: <code className="bg-dark px-2 py-1 rounded">{club.clubCode}</code></p>
+              <p className="text-light/60 text-sm">Members: {club.members?.length || 0}</p>
+              <p className="text-light/60 text-sm">Teams: {club.teams?.length || 0}</p>
+              <p className="text-light/60 text-sm">Trainers: {club.trainers?.length || 0}</p>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setEditModal({ open: true, club, name: club.name })}
                 className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition text-sm"
               >
-                âœï¸ Edit
+                Edit
               </button>
               <button
                 onClick={() => setDeleteModal({ open: true, club })}

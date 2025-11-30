@@ -1,22 +1,20 @@
 // src/pages/EditEvent.jsx
 import { useState, useEffect } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { updateEvent, getEvent, getCurrentUser } from '../api/localApi';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
+import { getEvent, updateEvent } from '../firebase/firestore';
 
 export default function EditEvent() {
-  const { id } = useParams();
+  const { eventId } = useParams();
   const navigate = useNavigate();
-  const qc = useQueryClient();
   const { user } = useAuth();
+  const { showToast } = useToast();
 
-  // Load the existing event
-  const { data: existingEvent, isLoading } = useQuery({
-    queryKey: ['event', id],
-    queryFn: () => getEvent(id),
-  });
-
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [event, setEvent] = useState(null);
+  
   const [form, setForm] = useState({
     title: '',
     type: 'training',
@@ -24,157 +22,194 @@ export default function EditEvent() {
     time: '',
     location: '',
     description: '',
-    teamId: '',
-    clubId: '',
-    visibilityLevel: 'personal',
   });
 
-  // Populate form when event loads
   useEffect(() => {
-    if (existingEvent) {
+    loadEvent();
+  }, [eventId]);
+
+  async function loadEvent() {
+    try {
+      setLoading(true);
+      const eventData = await getEvent(eventId);
+      
+      if (!eventData) {
+        showToast('Event not found', 'error');
+        navigate('/calendar');
+        return;
+      }
+
+      setEvent(eventData);
       setForm({
-        title: existingEvent.title || '',
-        type: existingEvent.type || 'training',
-        date: existingEvent.date || '',
-        time: existingEvent.time || '',
-        location: existingEvent.location || '',
-        description: existingEvent.description || '',
-        teamId: existingEvent.teamId || '',
-        clubId: existingEvent.clubId || '',
-        visibilityLevel: existingEvent.visibilityLevel || 'personal',
+        title: eventData.title || '',
+        type: eventData.type || 'training',
+        date: eventData.date || '',
+        time: eventData.time || '',
+        location: eventData.location || '',
+        description: eventData.description || '',
       });
+    } catch (error) {
+      console.error('Error loading event:', error);
+      showToast('Failed to load event', 'error');
+    } finally {
+      setLoading(false);
     }
-  }, [existingEvent]);
+  }
 
-  const mutation = useMutation({
-    mutationFn: (updates) => updateEvent(id, updates),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['events'] });
-      qc.invalidateQueries({ queryKey: ['event', id] });
-      navigate(`/events/${id}`);
-    },
-  });
-
-  const handleSubmit = (e) => {
+  async function handleSubmit(e) {
     e.preventDefault();
     
     if (!form.title || !form.date) {
-      alert('Please fill Title and Date');
+      showToast('Please fill Title and Date', 'error');
       return;
     }
 
-    mutation.mutate(form);
-  };
+    try {
+      setSaving(true);
+      await updateEvent(eventId, form);
+      showToast('Event updated successfully', 'success');
+      navigate(`/event/${eventId}`);
+    } catch (error) {
+      console.error('Error updating event:', error);
+      showToast('Failed to update event', 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const update = (field) => (e) =>
     setForm((f) => ({ ...f, [field]: e.target.value }));
 
-  if (isLoading) return <div className="p-6">Loading event...</div>;
-  if (!existingEvent) return <div className="p-6">Event not found.</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-light/60">Loading event...</div>
+      </div>
+    );
+  }
+
+  if (!event) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-light/60">Event not found</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-6 max-w-xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Edit Event</h1>
+    <div className="p-6 max-w-2xl mx-auto">
+      <button
+        onClick={() => navigate(`/event/${eventId}`)}
+        className="mb-4 flex items-center gap-2 text-light/60 hover:text-light transition-colors"
+      >
+        <span>←</span>
+        <span>Back to Event</span>
+      </button>
 
-      <form onSubmit={handleSubmit} className="space-y-4 bg-white p-4 rounded shadow">
-        {/* Event info badge */}
-        {existingEvent.visibilityLevel && (
-          <div className="p-3 bg-blue-50 border border-blue-200 rounded">
-            <p className="text-sm text-blue-800">
-              <strong>Event Type:</strong> {
-                existingEvent.visibilityLevel === 'personal' ? '👤 Personal' :
-                existingEvent.visibilityLevel === 'team' ? '👥 Team' :
-                '🏛️ Club'
-              }
+      <h1 className="font-title text-4xl text-light mb-6">Edit Event</h1>
+
+      <form onSubmit={handleSubmit} className="space-y-6 bg-white/5 backdrop-blur-sm border border-white/10 p-6 rounded-xl">
+        {/* Event Type Badge */}
+        {event.visibilityLevel && (
+          <div className="p-4 bg-primary/10 border border-primary/30 rounded-lg">
+            <p className="text-sm text-light">
+              <strong>Event Type:</strong>{' '}
+              {event.visibilityLevel === 'personal' && '👤 Personal'}
+              {event.visibilityLevel === 'team' && '👥 Team'}
+              {event.visibilityLevel === 'club' && '🏛️ Club'}
             </p>
-            <p className="text-xs text-blue-600 mt-1">
+            <p className="text-xs text-light/60 mt-1">
               You cannot change the event type or team/club assignment while editing.
             </p>
           </div>
         )}
 
         <div>
-          <label className="block font-medium">Title</label>
+          <label className="block font-medium text-light/80 mb-2">Title *</label>
           <input
             type="text"
-            className="border rounded px-3 py-1 w-full"
+            className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
             value={form.title}
             onChange={update('title')}
             required
+            placeholder="Event title"
           />
         </div>
 
         <div>
-          <label className="block font-medium">Type</label>
+          <label className="block font-medium text-light/80 mb-2">Type</label>
           <select
-            className="border rounded px-3 py-1 w-full"
+            className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
             value={form.type}
             onChange={update('type')}
           >
-            <option value="training">Training</option>
-            <option value="game">Game</option>
-            <option value="match">Match</option>
-            <option value="meeting">Meeting</option>
-            <option value="social">Social</option>
-            <option value="other">Other</option>
+            <option value="training" className="bg-mid-dark">Training</option>
+            <option value="game" className="bg-mid-dark">Game</option>
+            <option value="match" className="bg-mid-dark">Match</option>
+            <option value="tournament" className="bg-mid-dark">Tournament</option>
+            <option value="meeting" className="bg-mid-dark">Meeting</option>
+            <option value="social" className="bg-mid-dark">Social</option>
+            <option value="other" className="bg-mid-dark">Other</option>
           </select>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <label className="block">
-            <div className="text-sm font-medium mb-1">Date</div>
+          <div>
+            <label className="block font-medium text-light/80 mb-2">Date *</label>
             <input
               type="date"
               value={form.date}
               onChange={update('date')}
-              className="w-full border p-2 rounded"
+              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
               required
             />
-          </label>
+          </div>
 
-          <label className="block">
-            <div className="text-sm font-medium mb-1">Time</div>
+          <div>
+            <label className="block font-medium text-light/80 mb-2">Time</label>
             <input
               type="time"
               value={form.time}
               onChange={update('time')}
-              className="w-full border p-2 rounded"
+              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
             />
-          </label>
+          </div>
         </div>
 
         <div>
-          <label className="block font-medium">Location</label>
+          <label className="block font-medium text-light/80 mb-2">Location</label>
           <input
             type="text"
-            className="border rounded px-3 py-1 w-full"
+            className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
             value={form.location}
             onChange={update('location')}
+            placeholder="Event location"
           />
         </div>
 
         <div>
-          <label className="block font-medium">Description</label>
+          <label className="block font-medium text-light/80 mb-2">Description</label>
           <textarea
-            rows={3}
-            className="border rounded px-3 py-1 w-full"
+            rows={4}
+            className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none"
             value={form.description}
             onChange={update('description')}
+            placeholder="Event description"
           />
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-3 pt-4">
           <button
             type="submit"
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-medium"
-            disabled={mutation.isPending}
+            className="flex-1 bg-primary hover:bg-primary/80 text-white px-6 py-3 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={saving}
           >
-            {mutation.isPending ? 'Saving...' : 'Save Changes'}
+            {saving ? 'Saving...' : 'Save Changes'}
           </button>
           <button
             type="button"
-            className="bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400"
-            onClick={() => navigate(`/events/${id}`)}
+            className="px-6 py-3 bg-white/10 text-light rounded-lg hover:bg-white/15 font-medium transition-all"
+            onClick={() => navigate(`/event/${eventId}`)}
           >
             Cancel
           </button>
