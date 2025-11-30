@@ -316,42 +316,60 @@ export default function Calendar() {
               </div>
             ) : (
               <div className="grid gap-4">
-                {upcomingEvents.map(event => (
-                  <Link
-                    key={event.id}
-                    to={`/event/${event.id}`}
-                    className="group bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5 hover:bg-white/10 hover:border-primary/50 transition-all"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-4 flex-1">
-                        <div className="text-4xl">{getEventIcon(event.type)}</div>
-                        <div className="flex-1">
-                          <h3 className="font-title text-xl text-light group-hover:text-primary transition-colors mb-1">
-                            {event.title}
-                          </h3>
-                          <p className="text-sm text-light/60 capitalize mb-2">
-                            {event.type || 'Event'}
-                            {event.visibilityLevel === 'team' && ' • Team Event'}
-                            {event.visibilityLevel === 'club' && ' • Club Event'}
-                          </p>
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-light/70">
-                            <span>📅 {new Date(event.date).toLocaleDateString()}</span>
-                            {event.time && <span>🕐 {event.time}</span>}
-                            {event.location && <span>📍 {event.location}</span>}
+                {upcomingEvents.map(event => {
+                  // Check if current user declined this event
+                  const userResponse = event.responses?.[user?.id];
+                  const isDeclined = userResponse?.status === 'declined';
+                  
+                  return (
+                    <Link
+                      key={event.id}
+                      to={`/event/${event.id}`}
+                      className={`group bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5 hover:bg-white/10 hover:border-primary/50 transition-all ${
+                        isDeclined ? 'opacity-50' : ''
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-4 flex-1">
+                          {/* Circle placeholder for club/team logo */}
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold shrink-0">
+                            {event.type?.charAt(0).toUpperCase() || 'E'}
+                          </div>
+                          <div className="flex-1">
+                            <h3 className={`font-title text-xl group-hover:text-primary transition-colors mb-1 ${
+                              isDeclined ? 'text-light/50 line-through' : 'text-light'
+                            }`}>
+                              {event.title}
+                            </h3>
+                            {isDeclined && (
+                              <div className="inline-block px-2 py-1 bg-red-500/20 text-red-300 rounded text-xs font-medium mb-2">
+                                ❌ Declined
+                              </div>
+                            )}
+                            <p className="text-sm text-light/60 capitalize mb-2">
+                              {event.type || 'Event'}
+                              {event.visibilityLevel === 'team' && ' • Team Event'}
+                              {event.visibilityLevel === 'club' && ' • Club Event'}
+                            </p>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-light/70">
+                              <span>📅 {new Date(event.date).toLocaleDateString()}</span>
+                              {event.time && <span>🕐 {event.time}</span>}
+                              {event.location && <span>📍 {event.location}</span>}
+                            </div>
                           </div>
                         </div>
+                        <div className="flex items-center gap-2">
+                          {event.responses && Object.keys(event.responses).length > 0 && (
+                            <div className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium">
+                              {Object.values(event.responses).filter(r => r.status === 'attending').length} attending
+                            </div>
+                          )}
+                          <span className="text-primary opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {event.responses && Object.keys(event.responses).length > 0 && (
-                          <div className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium">
-                            {Object.values(event.responses).filter(r => r.status === 'attending').length} attending
-                          </div>
-                        )}
-                        <span className="text-primary opacity-0 group-hover:opacity-100 transition-opacity">→</span>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
+                    </Link>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -365,30 +383,47 @@ export default function Calendar() {
               </h2>
               
               <div className="grid gap-4">
-                {pastEvents.slice(0, 10).map(event => (
-                  <Link
-                    key={event.id}
-                    to={`/event/${event.id}`}
-                    className="group bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5 hover:bg-white/10 transition-all opacity-60 hover:opacity-100"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-4 flex-1">
-                        <div className="text-3xl">{getEventIcon(event.type)}</div>
-                        <div className="flex-1">
-                          <h3 className="font-medium text-light mb-1">{event.title}</h3>
-                          <div className="flex gap-3 text-xs text-light/60">
-                            <span>📅 {new Date(event.date).toLocaleDateString()}</span>
-                            {event.responses && (
-                              <span className="text-green-400">
-                                ✅ {Object.values(event.responses).filter(r => r.status === 'attending').length} attended
-                              </span>
-                            )}
+                {pastEvents.slice(0, 10).map(event => {
+                  const userResponse = event.responses?.[user?.id];
+                  const isDeclined = userResponse?.status === 'declined';
+                  
+                  return (
+                    <Link
+                      key={event.id}
+                      to={`/event/${event.id}`}
+                      className={`group bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5 hover:bg-white/10 transition-all ${
+                        isDeclined ? 'opacity-40' : 'opacity-60 hover:opacity-100'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-4 flex-1">
+                          {/* Circle placeholder */}
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/50 to-accent/50 flex items-center justify-center text-white text-sm font-bold shrink-0">
+                            {event.type?.charAt(0).toUpperCase() || 'E'}
+                          </div>
+                          <div className="flex-1">
+                            <h3 className={`font-medium mb-1 ${
+                              isDeclined ? 'text-light/40 line-through' : 'text-light'
+                            }`}>
+                              {event.title}
+                            </h3>
+                            <div className="flex gap-3 text-xs text-light/60">
+                              <span>📅 {new Date(event.date).toLocaleDateString()}</span>
+                              {event.responses && !isDeclined && (
+                                <span className="text-green-400">
+                                  ✅ {Object.values(event.responses).filter(r => r.status === 'attending').length} attended
+                                </span>
+                              )}
+                              {isDeclined && (
+                                <span className="text-red-400">❌ Declined</span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </Link>
-                ))}
+                    </Link>
+                  );
+                })}
               </div>
             </div>
           )}

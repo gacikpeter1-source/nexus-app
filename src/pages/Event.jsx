@@ -290,30 +290,11 @@ export default function EventPage() {
       <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 mb-6">
         <div className="flex items-start justify-between gap-6 mb-4">
           <div className="flex-1">
-            <h1 className="font-title text-4xl text-light mb-2">{event.title}</h1>
+            {/* 1. Event Title */}
+            <h1 className="font-title text-4xl text-light mb-4">{event.title}</h1>
             
-            <div className="flex flex-wrap gap-2 mb-4">
-              <span className="inline-block px-3 py-1 text-sm rounded-full bg-primary/20 text-primary capitalize">
-                {event.type || 'event'}
-              </span>
-              {event.visibilityLevel === 'personal' && (
-                <span className="inline-block px-3 py-1 text-sm rounded-full bg-blue-500/20 text-blue-300">
-                  👤 Personal
-                </span>
-              )}
-              {event.visibilityLevel === 'team' && (
-                <span className="inline-block px-3 py-1 text-sm rounded-full bg-green-500/20 text-green-300">
-                  👥 Team Event
-                </span>
-              )}
-              {event.visibilityLevel === 'club' && (
-                <span className="inline-block px-3 py-1 text-sm rounded-full bg-orange-500/20 text-orange-300">
-                  🏛️ Club Event
-                </span>
-              )}
-            </div>
-
-            <div className="space-y-2 text-light/70">
+            {/* 2. Date and Time */}
+            <div className="space-y-2 text-light/70 mb-4">
               <div className="flex items-center gap-2">
                 <span>📅</span>
                 <span>{new Date(event.date).toLocaleDateString('en-US', { 
@@ -335,22 +316,50 @@ export default function EventPage() {
                   <span>{event.location}</span>
                 </div>
               )}
-              {team && (
-                <div className="flex items-center gap-2">
-                  <span>👥</span>
-                  <Link 
-                    to={`/team/${team.clubId}/${team.id}`}
-                    className="text-primary hover:text-primary/80"
-                  >
-                    {team.name}
-                  </Link>
-                </div>
+            </div>
+
+            {/* 3. Club and Team */}
+            {(team || (club && event.visibilityLevel === 'club')) && (
+              <div className="space-y-2 text-light/70 mb-4">
+                {club && event.visibilityLevel === 'club' && (
+                  <div className="flex items-center gap-2">
+                    <span>🏛️</span>
+                    <span className="font-medium">{club.name}</span>
+                  </div>
+                )}
+                {team && (
+                  <div className="flex items-center gap-2">
+                    <span>👥</span>
+                    <Link 
+                      to={`/team/${team.clubId}/${team.id}`}
+                      className="text-primary hover:text-primary/80 font-medium"
+                    >
+                      {team.name}
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Type badges */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              <span className="inline-block px-3 py-1 text-sm rounded-full bg-primary/20 text-primary capitalize">
+                {event.type || 'event'}
+              </span>
+              {event.visibilityLevel === 'personal' && (
+                <span className="inline-block px-3 py-1 text-sm rounded-full bg-blue-500/20 text-blue-300">
+                  👤 Personal
+                </span>
               )}
-              {club && event.visibilityLevel === 'club' && (
-                <div className="flex items-center gap-2">
-                  <span>🏛️</span>
-                  <span>{club.name}</span>
-                </div>
+              {event.visibilityLevel === 'team' && (
+                <span className="inline-block px-3 py-1 text-sm rounded-full bg-green-500/20 text-green-300">
+                  👥 Team Event
+                </span>
+              )}
+              {event.visibilityLevel === 'club' && (
+                <span className="inline-block px-3 py-1 text-sm rounded-full bg-orange-500/20 text-orange-300">
+                  🏛️ Club Event
+                </span>
               )}
             </div>
 
@@ -364,6 +373,15 @@ export default function EventPage() {
           {/* Right side - RSVP Buttons for non-personal events */}
           {event.visibilityLevel !== 'personal' && user && (
             <div className="flex flex-col gap-2 min-w-[140px]">
+              {userResponse && (
+                <div className="text-xs text-light/60 mb-1 text-center">
+                  Status: <span className="font-medium text-primary">
+                    {userResponse.status === 'attending' && 'Attending'}
+                    {userResponse.status === 'declined' && 'Declined'}
+                    {userResponse.status === 'maybe' && 'Maybe'}
+                  </span>
+                </div>
+              )}
               <button 
                 onClick={() => handleRsvp('attending')} 
                 className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
