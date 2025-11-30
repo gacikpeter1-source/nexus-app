@@ -108,13 +108,13 @@ export default function EventPage() {
 
   // Get all members who should see this event
   function getAllMembers() {
-    if (!event || !club) return [];
+    if (!event) return [];
 
     const memberIds = new Set();
 
     // Personal events - just the creator
     if (event.visibilityLevel === 'personal') {
-      return [user];
+      return [{ ...user, memberType: 'Member' }];
     }
 
     // Team events - get team members
@@ -138,10 +138,43 @@ export default function EventPage() {
       });
     }
 
-    // Convert IDs to user objects
+    // Add invited external users (with RSVP but not in team/club)
+    if (event.responses) {
+      Object.keys(event.responses).forEach(userId => {
+        memberIds.add(userId);
+      });
+    }
+
+    // Convert IDs to user objects with member type
     return Array.from(memberIds).map(id => {
       const userData = allUsers.find(u => u.id === id);
-      return userData || { id, username: 'Unknown', email: 'N/A' };
+      const userObj = userData || { id, username: 'Unknown', email: 'N/A' };
+      
+      // Determine if external (invited but not in team/club)
+      let memberType = 'Member';
+      
+      if (event.visibilityLevel === 'team' && team) {
+        const isInTeam = (team.members || []).includes(id) ||
+                        (team.trainers || []).includes(id) ||
+                        (team.assistants || []).includes(id);
+        if (!isInTeam && event.responses?.[id]) {
+          memberType = 'External';
+        }
+      } else if (event.visibilityLevel === 'club' && club) {
+        const isInClub = (club.members || []).includes(id) ||
+                        (club.trainers || []).includes(id) ||
+                        (club.assistants || []).includes(id);
+        const isInAnyTeam = (club.teams || []).some(t => 
+          (t.members || []).includes(id) ||
+          (t.trainers || []).includes(id) ||
+          (t.assistants || []).includes(id)
+        );
+        if (!isInClub && !isInAnyTeam && event.responses?.[id]) {
+          memberType = 'External';
+        }
+      }
+      
+      return { ...userObj, memberType };
     });
   }
 
@@ -447,33 +480,33 @@ export default function EventPage() {
       </div>
 
       {/* Attendance Statistics */}
-      <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 mb-6">
-        <h2 className="font-title text-2xl text-light mb-4">Attendance Statistics</h2>
+      <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 mb-6">
+        <h2 className="font-title text-lg text-light mb-3">Attendance Statistics</h2>
         
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-center">
-            <div className="text-3xl font-bold text-green-400">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-center">
+            <div className="text-2xl font-bold text-green-400">
               {getResponseCount('attending')}
             </div>
-            <div className="text-sm text-green-300 mt-1">✅ Attending</div>
+            <div className="text-xs text-green-300 mt-1">✅ Attending</div>
           </div>
-          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-center">
-            <div className="text-3xl font-bold text-red-400">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-center">
+            <div className="text-2xl font-bold text-red-400">
               {getResponseCount('declined')}
             </div>
-            <div className="text-sm text-red-300 mt-1">❌ Not Attending</div>
+            <div className="text-xs text-red-300 mt-1">❌ Not Attending</div>
           </div>
-          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-center">
-            <div className="text-3xl font-bold text-yellow-400">
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-center">
+            <div className="text-2xl font-bold text-yellow-400">
               {getResponseCount('maybe')}
             </div>
-            <div className="text-sm text-yellow-300 mt-1">⚠️ Maybe</div>
+            <div className="text-xs text-yellow-300 mt-1">⚠️ Maybe</div>
           </div>
-          <div className="bg-white/5 border border-white/10 rounded-lg p-4 text-center">
-            <div className="text-3xl font-bold text-light">
+          <div className="bg-white/5 border border-white/10 rounded-lg p-3 text-center">
+            <div className="text-2xl font-bold text-light">
               {allMembers.length - Object.keys(event.responses || {}).length}
             </div>
-            <div className="text-sm text-light/60 mt-1">⏳ No Response</div>
+            <div className="text-xs text-light/60 mt-1">⏳ No Response</div>
           </div>
         </div>
       </div>
@@ -518,20 +551,27 @@ export default function EventPage() {
                 return (
                   <div
                     key={member.id}
-                    className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-all"
+                    className="flex items-center justify-between p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-all"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold">
+                    <div className="flex items-center gap-3 flex-1">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold shrink-0">
                         {member.username?.charAt(0).toUpperCase() || '?'}
                       </div>
-                      <div>
-                        <div className="font-medium text-light">{member.username || 'Unknown'}</div>
-                        <div className="text-sm text-light/60">{member.email}</div>
+                      <div className="flex items-center gap-2 flex-1">
+                        <span className="font-medium text-light">{member.username || 'Unknown'}</span>
+                        {member.role && (
+                          <span className="text-xs text-light/50">• {member.role}</span>
+                        )}
+                        {member.memberType === 'External' && (
+                          <span className="px-2 py-1 bg-blue-500/20 text-blue-300 rounded text-xs font-medium">
+                            External
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div>
                       {response ? (
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                           response.status === 'attending' ? 'bg-green-500/20 text-green-300' :
                           response.status === 'declined' ? 'bg-red-500/20 text-red-300' :
                           'bg-yellow-500/20 text-yellow-300'
@@ -541,7 +581,7 @@ export default function EventPage() {
                           {response.status === 'maybe' && '⚠️ Maybe'}
                         </span>
                       ) : (
-                        <span className="px-3 py-1 rounded-full text-sm font-medium bg-white/5 text-light/50">
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-white/5 text-light/50">
                           ⏳ No Response
                         </span>
                       )}

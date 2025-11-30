@@ -195,7 +195,14 @@ export default function ClubsDashboard() {
               key={club.id}
               onClick={() => setSelectedClubId(club.id)}
               className="group relative cursor-pointer bg-white/5 backdrop-blur-sm border border-white/10 p-6 rounded-xl hover:bg-white/10 hover:border-primary/50 transition-all duration-300 card-hover overflow-hidden"
-              style={{ animationDelay: `${idx * 0.05}s` }}
+              style={{ 
+                animationDelay: `${idx * 0.05}s`,
+                ...(club.logoUrl && {
+                  backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url(${club.logoUrl})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center'
+                })
+              }}
             >
               {/* Shine effect on hover */}
               <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
@@ -247,7 +254,7 @@ export default function ClubsDashboard() {
             onClick={() => setSelectedClubId(null)}
             className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center text-light transition-all"
           >
-            â†
+            ←
           </button>
           <div>
             <h2 className="font-title text-3xl text-light">{selectedClub.name}</h2>
@@ -270,7 +277,14 @@ export default function ClubsDashboard() {
                 key={team.id}
                 onClick={() => navigate(`/team/${selectedClubId}/${team.id}`)}
                 className="group relative cursor-pointer bg-white/5 backdrop-blur-sm border border-white/10 p-5 rounded-xl hover:bg-white/10 hover:border-primary/50 transition-all duration-300 card-hover overflow-hidden"
-                style={{ animationDelay: `${idx * 0.05}s` }}
+                style={{
+                  animationDelay: `${idx * 0.05}s`,
+                  ...(team.logoUrl && {
+                    backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url(${team.logoUrl})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center'
+                  })
+                }}
               >
                 {/* Shine effect on hover */}
                 <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500">

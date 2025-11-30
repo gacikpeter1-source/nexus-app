@@ -9,11 +9,26 @@ export default function CreateClubWithSubscription({ onClose }) {
   
   const [step, setStep] = useState(1);
   const [clubName, setClubName] = useState('');
+  const [clubType, setClubType] = useState('');
+  const [customClubType, setCustomClubType] = useState('');
   const [initialTeamName, setInitialTeamName] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [customerID, setCustomerID] = useState('');
   const [createdClub, setCreatedClub] = useState(null);
+
+  const CLUB_TYPES = [
+    'Football',
+    'Basketball',
+    'Volleyball',
+    'Ice Hockey',
+    'Swimming',
+    'Scouting',
+    'Dancing',
+    'Music Academy',
+    'Music Band',
+    'Custom'
+  ];
 
   const ownedClubs = React.useMemo(() => {
     if (!user) return [];
@@ -57,6 +72,7 @@ export default function CreateClubWithSubscription({ onClose }) {
       
       const clubData = {
         name: clubName.trim(),
+        clubType: clubType === 'Custom' ? customClubType.trim() : clubType,
         customerID: newCustomerID,
         subscriptionActive: true,
         subscriptionDate: new Date().toISOString(),
@@ -186,6 +202,44 @@ export default function CreateClubWithSubscription({ onClose }) {
               />
               <p className="text-xs text-light/50 mt-1">You can add more teams later</p>
             </div>
+
+            <div>
+              <label className="block text-light/80 font-medium mb-2">
+                Club Type *
+              </label>
+              <select
+                value={clubType}
+                onChange={(e) => {
+                  setClubType(e.target.value);
+                  if (e.target.value !== 'Custom') {
+                    setCustomClubType('');
+                  }
+                }}
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                required
+              >
+                <option value="">Select club type...</option>
+                {CLUB_TYPES.map(type => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+            </div>
+
+            {clubType === 'Custom' && (
+              <div>
+                <label className="block text-light/80 font-medium mb-2">
+                  Custom Club Type *
+                </label>
+                <input
+                  type="text"
+                  value={customClubType}
+                  onChange={(e) => setCustomClubType(e.target.value)}
+                  placeholder="e.g., Rock Climbing, Martial Arts..."
+                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                  required
+                />
+              </div>
+            )}
 
             <button
               type="submit"

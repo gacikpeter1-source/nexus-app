@@ -49,6 +49,25 @@ export default function ClubManagement() {
   const [userToRemove, setUserToRemove] = useState(null);
   const [teamsToRemoveFrom, setTeamsToRemoveFrom] = useState([]);
 
+  // Edit Club modal state
+  const [showEditClubModal, setShowEditClubModal] = useState(false);
+  const [editClubName, setEditClubName] = useState('');
+  const [editClubType, setEditClubType] = useState('');
+  const [editCustomClubType, setEditCustomClubType] = useState('');
+
+  // Logo upload state
+  const [showLogoUpload, setShowLogoUpload] = useState(false);
+  const [logoUploadType, setLogoUploadType] = useState(''); // 'club' or 'team'
+  const [selectedTeamForLogo, setSelectedTeamForLogo] = useState(null);
+  const [logoFile, setLogoFile] = useState(null);
+  const [logoPreview, setLogoPreview] = useState('');
+
+  const CLUB_TYPES = [
+    'Football', 'Basketball', 'Volleyball', 'Ice Hockey',
+    'Swimming', 'Scouting', 'Dancing', 'Music Academy',
+    'Music Band', 'Custom'
+  ];
+
   // Quick assign to team modal state
   const [showQuickAssignModal, setShowQuickAssignModal] = useState(false);
   const [teamToAssign, setTeamToAssign] = useState(null);
@@ -671,6 +690,90 @@ export default function ClubManagement() {
     }
   };
 
+  // Edit Club function
+  async function handleEditClub() {
+    if (!selectedClub || !editClubName.trim()) {
+      showToast('Club name is required', 'error');
+      return;
+    }
+
+    const finalClubType = editClubType === 'Custom' 
+      ? editCustomClubType.trim() 
+      : editClubType;
+
+    if (!finalClubType) {
+      showToast('Club type is required', 'error');
+      return;
+    }
+
+    try {
+      await updateClub(selectedClubId, {
+        name: editClubName.trim(),
+        clubType: finalClubType
+      });
+
+      showToast('Club updated successfully', 'success');
+      setShowEditClubModal(false);
+      await loadClubData(selectedClubId);
+    } catch (error) {
+      console.error('Error updating club:', error);
+      showToast('Failed to update club', 'error');
+    }
+  }
+
+  // Logo upload functions
+  function handleLogoFileChange(e) {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        showToast('Image must be less than 5MB', 'error');
+        return;
+      }
+      setLogoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  async function handleUploadLogo() {
+    if (!logoFile) {
+      showToast('Please select an image', 'error');
+      return;
+    }
+
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64Image = reader.result;
+        
+        if (logoUploadType === 'club') {
+          await updateClub(selectedClubId, { logoUrl: base64Image });
+          showToast('Club logo updated!', 'success');
+          await loadClubData(selectedClubId);
+        } else if (logoUploadType === 'team' && selectedTeamForLogo) {
+          const club = await getClub(selectedClubId);
+          const updatedTeams = club.teams.map(t =>
+            t.id === selectedTeamForLogo.id ? { ...t, logoUrl: base64Image } : t
+          );
+          await updateClub(selectedClubId, { teams: updatedTeams });
+          showToast('Team logo updated!', 'success');
+          await loadClubData(selectedClubId);
+        }
+        
+        setShowLogoUpload(false);
+        setLogoFile(null);
+        setLogoPreview('');
+      };
+      reader.readAsDataURL(logoFile);
+    } catch (error) {
+      console.error('Error uploading logo:', error);
+      showToast('Failed to upload logo', 'error');
+    }
+  }
+
   const handlePromoteToTrainer = async (memberId) => {
     if (!selectedClubId || !memberId) return;
     
@@ -872,13 +975,40 @@ export default function ClubManagement() {
 
           {/* Create Team Button - Below Select Club */}
           {selectedClubId && isClubManager(clubs.find(c => c.id === selectedClubId)) && (
-            <button
-              onClick={() => setShowCreateTeamModal(true)}
-              className="mt-3 px-4 py-2 bg-primary/80 hover:bg-primary text-white rounded-lg text-sm font-medium transition-all inline-flex items-center gap-2"
-            >
-              <span>+</span>
-              <span>Create Team</span>
-            </button>
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => setShowCreateTeamModal(true)}
+                className="px-4 py-2 bg-primary/80 hover:bg-primary text-white rounded-lg text-sm font-medium transition-all inline-flex items-center gap-2"
+              >
+                <span>+</span>
+                <span>Create Team</span>
+              </button>
+              
+              <button
+                onClick={() => {
+                  const club = clubs.find(c => c.id === selectedClubId);
+                  setEditClubName(club?.name || '');
+                  setEditClubType(club?.clubType || '');
+                  setEditCustomClubType('');
+                  setShowEditClubModal(true);
+                }}
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-all inline-flex items-center gap-2"
+              >
+                <span>✏️</span>
+                <span>Edit Club</span>
+              </button>
+              
+              <button
+                onClick={() => {
+                  setLogoUploadType('club');
+                  setShowLogoUpload(true);
+                }}
+                className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg text-sm font-medium transition-all inline-flex items-center gap-2"
+              >
+                <span>🖼️</span>
+                <span>Change Logo</span>
+              </button>
+            </div>
           )}
 
           {/* Club Info Bar */}
@@ -1124,6 +1254,18 @@ export default function ClubManagement() {
                                     >
                                       <span>➖</span>
                                       <span>Remove User</span>
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setSelectedTeamForLogo(t);
+                                        setLogoUploadType('team');
+                                        setShowLogoUpload(true);
+                                        setTeamActionDropdown(null);
+                                      }}
+                                      className="w-full px-4 py-2 text-left hover:bg-white/10 transition flex items-center gap-2"
+                                    >
+                                      <span>🖼️</span>
+                                      <span>Change Logo</span>
                                     </button>
                                     <div className="border-t border-white/10"></div>
                                     <button
@@ -1979,6 +2121,127 @@ export default function ClubManagement() {
                 className="flex-1 px-4 py-3 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition"
               >
                 Rename
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Club Modal */}
+      {showEditClubModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-mid-dark border border-white/10 rounded-xl p-6 max-w-md w-full">
+            <h3 className="font-title text-2xl text-light mb-4">Edit Club</h3>
+            
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-light/80 font-medium mb-2">Club Name</label>
+                <input
+                  type="text"
+                  value={editClubName}
+                  onChange={(e) => setEditClubName(e.target.value)}
+                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-light/80 font-medium mb-2">Club Type</label>
+                <select
+                  value={editClubType}
+                  onChange={(e) => {
+                    setEditClubType(e.target.value);
+                    if (e.target.value !== 'Custom') {
+                      setEditCustomClubType('');
+                    }
+                  }}
+                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                >
+                  <option value="">Select type...</option>
+                  {CLUB_TYPES.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </div>
+
+              {editClubType === 'Custom' && (
+                <div>
+                  <label className="block text-light/80 font-medium mb-2">Custom Type</label>
+                  <input
+                    type="text"
+                    value={editCustomClubType}
+                    onChange={(e) => setEditCustomClubType(e.target.value)}
+                    placeholder="Enter custom club type"
+                    className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowEditClubModal(false)}
+                className="flex-1 px-4 py-2 bg-white/10 hover:bg-white/15 text-light rounded-lg font-medium transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditClub}
+                className="flex-1 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Logo Upload Modal */}
+      {showLogoUpload && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-mid-dark border border-white/10 rounded-xl p-6 max-w-md w-full">
+            <h3 className="font-title text-2xl text-light mb-4">
+              Change {logoUploadType === 'club' ? 'Club' : 'Team'} Logo
+            </h3>
+            
+            <div className="mb-4">
+              <label className="block text-light/80 font-medium mb-2">Select Image</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleLogoFileChange}
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-primary file:text-white file:cursor-pointer hover:file:bg-primary/80"
+              />
+              <p className="text-xs text-light/50 mt-1">Max size: 5MB (JPG, PNG, GIF, WebP)</p>
+            </div>
+
+            {logoPreview && (
+              <div className="mb-4">
+                <p className="text-light/80 text-sm mb-2">Preview:</p>
+                <img 
+                  src={logoPreview} 
+                  alt="Preview" 
+                  className="w-full h-48 object-cover rounded-lg border border-white/20"
+                />
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowLogoUpload(false);
+                  setLogoFile(null);
+                  setLogoPreview('');
+                }}
+                className="flex-1 px-4 py-2 bg-white/10 hover:bg-white/15 text-light rounded-lg font-medium transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUploadLogo}
+                disabled={!logoFile}
+                className="flex-1 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Upload
               </button>
             </div>
           </div>
