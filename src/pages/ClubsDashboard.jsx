@@ -210,9 +210,15 @@ export default function ClubsDashboard() {
               </div>
 
               <div className="relative z-10">
-                <h3 className="font-title text-2xl text-light group-hover:text-primary transition-colors mb-4">
+                <h3 className="font-title text-2xl text-light group-hover:text-primary transition-colors mb-1">
                   {club.name}
                 </h3>
+                
+                {club.clubType && (
+                  <p className="text-sm text-light/60 mb-3">
+                    {club.clubType}
+                  </p>
+                )}
 
                 {/* Stats */}
                 <div className="flex gap-6">

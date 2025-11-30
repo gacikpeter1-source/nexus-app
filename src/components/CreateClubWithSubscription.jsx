@@ -218,9 +218,9 @@ export default function CreateClubWithSubscription({ onClose }) {
                 className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                 required
               >
-                <option value="">Select club type...</option>
+                <option value="" className="bg-mid-dark text-light">Select club type...</option>
                 {CLUB_TYPES.map(type => (
-                  <option key={type} value={type}>{type}</option>
+                  <option key={type} value={type} className="bg-mid-dark text-light">{type}</option>
                 ))}
               </select>
             </div>

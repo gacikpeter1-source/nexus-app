@@ -692,7 +692,7 @@ export default function ClubManagement() {
 
   // Edit Club function
   async function handleEditClub() {
-    if (!selectedClub || !editClubName.trim()) {
+    if (!editClubName.trim()) {
       showToast('Club name is required', 'error');
       return;
     }
@@ -714,7 +714,9 @@ export default function ClubManagement() {
 
       showToast('Club updated successfully', 'success');
       setShowEditClubModal(false);
-      await loadClubData(selectedClubId);
+      
+      // Reload clubs list
+      await loadClubs();
     } catch (error) {
       console.error('Error updating club:', error);
       showToast('Failed to update club', 'error');
@@ -2156,9 +2158,9 @@ export default function ClubManagement() {
                   }}
                   className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                 >
-                  <option value="">Select type...</option>
+                  <option value="" className="bg-mid-dark text-light">Select type...</option>
                   {CLUB_TYPES.map(type => (
-                    <option key={type} value={type}>{type}</option>
+                    <option key={type} value={type} className="bg-mid-dark text-light">{type}</option>
                   ))}
                 </select>
               </div>
