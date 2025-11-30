@@ -203,25 +203,16 @@ export default function ClubsDashboard() {
               </div>
 
               <div className="relative z-10">
-                {/* Club Icon */}
-                <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-3xl mb-4">
-                  ðŸ›ï¸
-                </div>
-
-                <h3 className="font-title text-2xl text-light group-hover:text-primary transition-colors mb-2">
+                <h3 className="font-title text-2xl text-light group-hover:text-primary transition-colors mb-4">
                   {club.name}
                 </h3>
-                
-                {club.clubNumber && (
-                  <p className="text-sm text-light/40 mb-4">{club.clubNumber}</p>
-                )}
 
                 {/* Stats */}
-                <div className="flex gap-6 mt-4">
+                <div className="flex gap-6">
                   <div>
-                    <div className="text-2xl font-bold text-primary">{userTeams.length}</div>
+                    <div className="text-2xl font-bold text-primary">{clubTeams.length}</div>
                     <div className="text-xs text-light/50 uppercase tracking-wider">
-                      {userTeams.length === 1 ? 'Team' : 'Teams'}
+                      {clubTeams.length === 1 ? 'Team' : 'Teams'}
                     </div>
                   </div>
                   <div>
@@ -260,16 +251,13 @@ export default function ClubsDashboard() {
           </button>
           <div>
             <h2 className="font-title text-3xl text-light">{selectedClub.name}</h2>
-            {selectedClub.clubNumber && (
-              <p className="text-sm text-light/60">{selectedClub.clubNumber}</p>
-            )}
           </div>
         </div>
 
         {/* Teams in this club */}
         {userTeamsInClub.length === 0 ? (
           <div className="rounded-2xl border-2 border-dashed border-white/20 bg-white/5 backdrop-blur-sm p-12 text-center">
-            <div className="text-6xl mb-4">ðŸ‘¥</div>
+            
             <h3 className="font-title text-2xl text-light mb-2">No Teams Yet</h3>
             <p className="text-light/60 mb-6 max-w-md mx-auto">
               You haven&apos;t joined any teams in this club yet.
