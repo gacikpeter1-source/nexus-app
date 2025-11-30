@@ -82,6 +82,10 @@ export default function ClubManagement() {
   const [showRemoveActionModal, setShowRemoveActionModal] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState(null);
 
+  // Remove user from specific team (from Actions dropdown)
+  const [showRemoveUserFromTeamModal, setShowRemoveUserFromTeamModal] = useState(false);
+  const [teamForUserRemoval, setTeamForUserRemoval] = useState(null);
+
   const isClubManager = (club) => {
     if (!user || !club) return false;
     if (user.role === ROLES.ADMIN || user.isSuperAdmin) return true;
@@ -331,26 +335,40 @@ export default function ClubManagement() {
   };
 
   // Remove from teams only
-  const handleRemoveFromTeamsChoice = () => {
-    const club = clubs.find(c => c.id === selectedClubId);
-    if (!club || !memberToRemove) return;
+  const handleRemoveFromTeamsChoice = async () => {
+    if (!selectedClubId || !memberToRemove) return;
     
-    const userTeams = (club.teams || []).filter(team => 
-      (team.members || []).includes(memberToRemove.id) ||
-      (team.trainers || []).includes(memberToRemove.id) ||
-      (team.assistants || []).includes(memberToRemove.id)
-    );
-    
-    if (userTeams.length === 0) {
+    try {
+      // Get fresh club data from Firebase
+      const club = await getClub(selectedClubId);
+      if (!club) {
+        setShowRemoveActionModal(false);
+        return showToast('Club not found', 'error');
+      }
+      
+      const userTeams = (club.teams || []).filter(team => 
+        (team.members || []).includes(memberToRemove.id) ||
+        (team.trainers || []).includes(memberToRemove.id) ||
+        (team.assistants || []).includes(memberToRemove.id)
+      );
+      
+      console.log('User teams found:', userTeams.length, 'for user:', memberToRemove.id);
+      console.log('All teams:', club.teams?.length);
+      
+      if (userTeams.length === 0) {
+        setShowRemoveActionModal(false);
+        return showToast('User is not in any teams', 'info');
+      }
+      
+      // Open team selection modal
+      setUserToRemove(memberToRemove);
+      setTeamsToRemoveFrom([]);
       setShowRemoveActionModal(false);
-      return showToast('User is not in any teams', 'info');
+      setShowRemoveModal(true);
+    } catch (error) {
+      console.error('Error loading teams:', error);
+      showToast('Failed to load teams', 'error');
     }
-    
-    // Open team selection modal
-    setUserToRemove(memberToRemove);
-    setTeamsToRemoveFrom([]);
-    setShowRemoveActionModal(false);
-    setShowRemoveModal(true);
   };
 
   // Remove from club entirely
@@ -695,6 +713,37 @@ export default function ClubManagement() {
     }
   };
 
+  // Handle removing user from specific team (from Actions dropdown)
+  const handleRemoveUserFromTeam = async (userId) => {
+    if (!selectedClubId || !teamForUserRemoval || !userId) return;
+
+    try {
+      const club = await getClub(selectedClubId);
+      if (!club) return;
+
+      const updatedTeams = (club.teams || []).map(t => {
+        if (t.id === teamForUserRemoval.id) {
+          return {
+            ...t,
+            members: (t.members || []).filter(id => id !== userId),
+            trainers: (t.trainers || []).filter(id => id !== userId),
+            assistants: (t.assistants || []).filter(id => id !== userId)
+          };
+        }
+        return t;
+      });
+
+      await updateClub(selectedClubId, { teams: updatedTeams });
+      showToast('User removed from team', 'success');
+      setShowRemoveUserFromTeamModal(false);
+      setTeamForUserRemoval(null);
+      await loadClubData(selectedClubId);
+    } catch (error) {
+      console.error('Error removing user from team:', error);
+      showToast('Failed to remove user from team', 'error');
+    }
+  };
+
   const handleCreateTeam = async () => {
     if (!selectedClubId || !newTeamName.trim()) {
       showToast('Please enter a team name', 'error');
@@ -1017,8 +1066,8 @@ export default function ClubManagement() {
                                     <button
                                       onClick={() => {
                                         setTeamActionDropdown(null);
-                                        // TODO: Implement remove user from team
-                                        showToast('Remove user feature coming soon', 'info');
+                                        setTeamForUserRemoval(t);
+                                        setShowRemoveUserFromTeamModal(true);
                                       }}
                                       className="w-full px-4 py-2 text-left text-light hover:bg-white/10 transition flex items-center gap-2"
                                     >
@@ -1751,6 +1800,78 @@ export default function ClubManagement() {
                 Create Team
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove User from Specific Team Modal */}
+      {showRemoveUserFromTeamModal && teamForUserRemoval && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-lg w-full mx-4">
+            <h3 className="text-2xl font-bold text-light mb-4">
+              Remove User from {teamForUserRemoval.name}
+            </h3>
+            
+            <p className="text-light/70 text-sm mb-6">
+              Select which user to remove from this team:
+            </p>
+
+            <div className="space-y-2 mb-6 max-h-96 overflow-y-auto">
+              {(() => {
+                const allUserIds = [
+                  ...(teamForUserRemoval.members || []),
+                  ...(teamForUserRemoval.trainers || []),
+                  ...(teamForUserRemoval.assistants || [])
+                ];
+                const uniqueUserIds = [...new Set(allUserIds)];
+
+                if (uniqueUserIds.length === 0) {
+                  return <p className="text-light/50 text-center py-4">No users in this team</p>;
+                }
+
+                return uniqueUserIds.map(userId => {
+                  const userInfo = allUsers.find(u => u.id === userId) || { id: userId, email: userId };
+                  const isMember = (teamForUserRemoval.members || []).includes(userId);
+                  const isTrainer = (teamForUserRemoval.trainers || []).includes(userId);
+                  const isAssistant = (teamForUserRemoval.assistants || []).includes(userId);
+
+                  let roleLabel = '';
+                  if (isTrainer) roleLabel = 'Trainer';
+                  else if (isAssistant) roleLabel = 'Assistant';
+                  else if (isMember) roleLabel = 'Member';
+
+                  return (
+                    <div
+                      key={userId}
+                      onClick={() => handleRemoveUserFromTeam(userId)}
+                      className="p-4 bg-white/5 border border-white/10 hover:bg-red-500/20 hover:border-red-500/50 rounded-lg cursor-pointer transition-all"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-semibold text-light">
+                            {userInfo.username || userInfo.email}
+                          </div>
+                          <div className="text-xs text-light/50">{userInfo.email}</div>
+                        </div>
+                        <span className="px-2 py-1 bg-white/10 rounded text-xs text-light/70">
+                          {roleLabel}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            <button
+              onClick={() => {
+                setShowRemoveUserFromTeamModal(false);
+                setTeamForUserRemoval(null);
+              }}
+              className="w-full px-4 py-3 bg-white/10 text-light rounded-lg hover:bg-white/15 font-medium transition"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}

@@ -245,7 +245,7 @@ export default function ClubsDashboard() {
             onClick={() => setSelectedClubId(null)}
             className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center text-light transition-all"
           >
-            ←
+            ←
           </button>
           <div>
             <h2 className="font-title text-3xl text-light">{selectedClub.name}</h2>
