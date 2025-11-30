@@ -257,11 +257,81 @@ export const getClubEvents = async (clubId) => {
 
 export const getTeamEvents = async (teamId) => {
   try {
-    const q = query(collection(db, 'events'), where('teamIds', 'array-contains', teamId));
+    const q = query(collection(db, 'events'), where('teamId', '==', teamId));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
     console.error('Error getting team events:', error);
+    throw error;
+  }
+};
+
+// Add or update RSVP response for an event
+export const updateEventResponse = async (eventId, userId, status) => {
+  try {
+    const eventRef = doc(db, 'events', eventId);
+    const eventDoc = await getDoc(eventRef);
+    
+    if (!eventDoc.exists()) {
+      throw new Error('Event not found');
+    }
+
+    const currentResponses = eventDoc.data().responses || {};
+    const updatedResponses = {
+      ...currentResponses,
+      [userId]: {
+        status, // 'attending', 'declined', 'maybe'
+        timestamp: serverTimestamp()
+      }
+    };
+
+    await updateDoc(eventRef, {
+      responses: updatedResponses,
+      updatedAt: serverTimestamp()
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating event response:', error);
+    throw error;
+  }
+};
+
+// Get all events for a user (where they're a member of the team/club)
+export const getUserEvents = async (userId) => {
+  try {
+    // Get all clubs user is part of
+    const allClubs = await getAllClubs();
+    const userClubs = allClubs.filter(club =>
+      (club.members || []).includes(userId) ||
+      (club.trainers || []).includes(userId) ||
+      (club.assistants || []).includes(userId)
+    );
+
+    // Get all events from user's clubs
+    const allEvents = [];
+    for (const club of userClubs) {
+      const clubEvents = await getClubEvents(club.id);
+      allEvents.push(...clubEvents);
+    }
+
+    // Also get personal events created by user
+    const q = query(
+      collection(db, 'events'),
+      where('createdBy', '==', userId),
+      where('visibilityLevel', '==', 'personal')
+    );
+    const personalSnapshot = await getDocs(q);
+    const personalEvents = personalSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    allEvents.push(...personalEvents);
+
+    // Remove duplicates
+    const uniqueEvents = Array.from(new Map(allEvents.map(e => [e.id, e])).values());
+    
+    return uniqueEvents;
+  } catch (error) {
+    console.error('Error getting user events:', error);
     throw error;
   }
 };
@@ -415,6 +485,8 @@ export default {
   deleteEvent,
   getClubEvents,
   getTeamEvents,
+  getUserEvents,
+  updateEventResponse,
   
   // Requests
   createRequest,

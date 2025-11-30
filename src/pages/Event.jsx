@@ -1,601 +1,483 @@
 // src/pages/Event.jsx
-import React, { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getEvent, getCurrentUser, deleteEvent } from '../api/localApi';
-
-const LS_KEY = (id) => `eventResponses:${id}`;
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
+import { getEvent, updateEventResponse, deleteEvent, getClub, getAllUsers } from '../firebase/firestore';
 
 export default function EventPage() {
-  const { id } = useParams();
+  const { eventId } = useParams();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const { showToast } = useToast();
 
-  const { data: event, isLoading, error } = useQuery({
-    queryKey: ['event', id],
-    queryFn: () => getEvent(id),
-  });
-
-  const { data: user } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: getCurrentUser,
-  });
-
-  // Get team name from clubs (not from old team data)
-  const teamId = event?.team || event?.teamId || event?.teamID;
-  const team = React.useMemo(() => {
-    if (!teamId) return null;
-    const clubs = JSON.parse(localStorage.getItem('clubs') || '[]');
-    for (const club of clubs) {
-      const foundTeam = (club.teams || []).find(t => String(t.id) === String(teamId));
-      if (foundTeam) {
-        return {
-          ...foundTeam,
-          clubId: club.id,
-          clubName: club.name
-        };
-      }
-    }
-    return null;
-  }, [teamId]);
-
-  // local RSVP state persisted to localStorage
-  const [responses, setResponses] = useState({});
+  const [event, setEvent] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [club, setClub] = useState(null);
+  const [team, setTeam] = useState(null);
+  const [allUsers, setAllUsers] = useState([]);
   const [showTracking, setShowTracking] = useState(false);
-  const [trackingFilter, setTrackingFilter] = useState('all'); // 'all' | 'confirmed' | 'declined' | 'backup' | 'noresponse'
+  const [trackingFilter, setTrackingFilter] = useState('all');
+  const [updatingRsvp, setUpdatingRsvp] = useState(false);
 
   useEffect(() => {
-    if (!event) return;
-    const raw = localStorage.getItem(LS_KEY(event.id));
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        setResponses(parsed);
-      } catch {
-        setResponses({});
-      }
-    } else {
-      setResponses(event.responses || {});
-    }
-  }, [event]);
+    loadEventData();
+  }, [eventId]);
 
-  function saveResponses(obj) {
-    setResponses(obj);
+  async function loadEventData() {
     try {
-      localStorage.setItem(LS_KEY(event.id), JSON.stringify(obj));
-    } catch (e) {
-      console.warn('Could not save RSVP:', e);
+      setLoading(true);
+
+      // Load event
+      const eventData = await getEvent(eventId);
+      if (!eventData) {
+        setEvent(null);
+        return;
+      }
+      setEvent(eventData);
+
+      // Load users for name lookup
+      const users = await getAllUsers();
+      setAllUsers(users);
+
+      // Load club if event has clubId
+      if (eventData.clubId) {
+        const clubData = await getClub(eventData.clubId);
+        setClub(clubData);
+
+        // Find team within club if teamId exists
+        if (eventData.teamId && clubData) {
+          const foundTeam = (clubData.teams || []).find(t => t.id === eventData.teamId);
+          if (foundTeam) {
+            setTeam({
+              ...foundTeam,
+              clubId: clubData.id,
+              clubName: clubData.name
+            });
+          }
+        }
+      }
+
+    } catch (error) {
+      console.error('Error loading event:', error);
+      showToast('Failed to load event', 'error');
+    } finally {
+      setLoading(false);
     }
   }
 
-  function handleRsvp(userId, status) {
-    if (!userId) {
-      console.error('❌ No user ID provided');
+  async function handleRsvp(status) {
+    if (!user || !event) return;
+
+    try {
+      setUpdatingRsvp(true);
+      await updateEventResponse(eventId, user.id, status);
+      
+      // Reload event to get updated responses
+      await loadEventData();
+      
+      const statusText = status === 'attending' ? 'attending' : 
+                        status === 'declined' ? 'not attending' : 'maybe';
+      showToast(`Response updated: ${statusText}`, 'success');
+    } catch (error) {
+      console.error('Error updating RSVP:', error);
+      showToast('Failed to update response', 'error');
+    } finally {
+      setUpdatingRsvp(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!window.confirm(`Are you sure you want to delete "${event.title}"?`)) {
       return;
     }
-    
-    const now = new Date().toISOString();
-    const updated = {
-      ...responses,
-      [userId]: { status, timestamp: now },
-    };
-    saveResponses(updated);
+
+    try {
+      await deleteEvent(eventId);
+      showToast('Event deleted successfully', 'success');
+      navigate('/calendar');
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      showToast('Failed to delete event', 'error');
+    }
   }
 
-  // Get all members for this event (for tracking)
+  // Get all members who should see this event
   function getAllMembers() {
-    if (!event || !user) return [];
-    
-    const clubs = JSON.parse(localStorage.getItem('clubs') || '[]');
-    const allUsers = [];
+    if (!event || !club) return [];
+
+    const memberIds = new Set();
 
     // Personal events - just the creator
     if (event.visibilityLevel === 'personal') {
-      return [{ id: user.id, name: user.name || user.email, email: user.email }];
+      return [user];
     }
 
     // Team events - get team members
-    if (event.visibilityLevel === 'team' && event.clubId && event.teamId) {
-      const club = clubs.find(c => c.id === event.clubId);
-      if (club) {
-        const team = (club.teams || []).find(t => t.id === event.teamId);
-        if (team && team.members) {
-          // Get user details for each member ID
-          const usersData = JSON.parse(localStorage.getItem('users') || '[]');
-          team.members.forEach(memberId => {
-            const memberData = usersData.find(u => u.id === memberId);
-            if (memberData) {
-              allUsers.push({
-                id: memberData.id,
-                name: memberData.name || memberData.email,
-                email: memberData.email
-              });
-            }
-          });
-        }
-      }
+    if (event.visibilityLevel === 'team' && team) {
+      (team.members || []).forEach(id => memberIds.add(id));
+      (team.trainers || []).forEach(id => memberIds.add(id));
+      (team.assistants || []).forEach(id => memberIds.add(id));
     }
 
     // Club events - get all members from all teams
-    if (event.visibilityLevel === 'club' && event.clubId) {
-      const club = clubs.find(c => c.id === event.clubId);
-      if (club) {
-        const usersData = JSON.parse(localStorage.getItem('users') || '[]');
-        const memberIds = new Set();
-        
-        // Collect all unique member IDs from all teams
-        (club.teams || []).forEach(team => {
-          (team.members || []).forEach(memberId => {
-            memberIds.add(memberId);
-          });
-        });
-
-        // Get user details
-        memberIds.forEach(memberId => {
-          const memberData = usersData.find(u => u.id === memberId);
-          if (memberData) {
-            allUsers.push({
-              id: memberData.id,
-              name: memberData.name || memberData.email,
-              email: memberData.email
-            });
-          }
-        });
-      }
+    if (event.visibilityLevel === 'club' && club) {
+      (club.trainers || []).forEach(id => memberIds.add(id));
+      (club.assistants || []).forEach(id => memberIds.add(id));
+      (club.members || []).forEach(id => memberIds.add(id));
+      
+      // Also add members from all teams
+      (club.teams || []).forEach(t => {
+        (t.members || []).forEach(id => memberIds.add(id));
+        (t.trainers || []).forEach(id => memberIds.add(id));
+        (t.assistants || []).forEach(id => memberIds.add(id));
+      });
     }
 
-    return allUsers;
-  }
-
-  // Get total member count
-  function getTotalMembers() {
-    return getAllMembers().length;
-  }
-
-  // Get only responses from actual members (filter out non-members)
-  function getMemberResponses() {
-    const members = getAllMembers();
-    const memberIds = new Set(members.map(m => m.id));
-    
-    // Filter responses to only include actual members
-    const filtered = {};
-    Object.entries(responses || {}).forEach(([userId, response]) => {
-      if (memberIds.has(userId)) {
-        filtered[userId] = response;
-      } else {
-        /* Non-member - no action needed */
-      }
+    // Convert IDs to user objects
+    return Array.from(memberIds).map(id => {
+      const userData = allUsers.find(u => u.id === id);
+      return userData || { id, username: 'Unknown', email: 'N/A' };
     });
-    
-    return filtered;
   }
 
-  // Get count of responses by status (only from members)
   function getResponseCount(status) {
-    const memberResponses = getMemberResponses();
-    return Object.values(memberResponses).filter(r => r.status === status).length;
+    if (!event || !event.responses) return 0;
+    return Object.values(event.responses).filter(r => r.status === status).length;
   }
 
-  // Filter members based on tracking filter
-  function getFilteredMembers() {
-    const allMembers = getAllMembers();
-    
-    if (trackingFilter === 'all') {
-      return allMembers;
-    }
-    
-    if (trackingFilter === 'noresponse') {
-      return allMembers.filter(member => !responses?.[member.id]);
-    }
-    
-    // Filter by response status (confirmed, declined, backup)
-    return allMembers.filter(member => {
-      const response = responses?.[member.id];
-      return response && response.status === trackingFilter;
-    });
+  function getUserResponse() {
+    if (!event || !user || !event.responses) return null;
+    return event.responses[user.id];
   }
 
-  // Check if user can view tracking (trainers, assistants, supertrainers)
-  function canViewTracking() {
-    if (!user || !event) return false;
-
-    // Admin can view everything
-    if (user.role === 'admin') return true;
-
-    // Personal events - only creator can track
-    if (event.visibilityLevel === 'personal') {
-      return event.createdBy === user.id;
-    }
-
-    // Team/Club events - trainers, assistants, supertrainers can track
-    if (event.clubId) {
-      const clubs = JSON.parse(localStorage.getItem('clubs') || '[]');
-      const club = clubs.find(c => c.id === event.clubId);
-      if (!club) return false;
-
-      const isTrainer = (club.trainers || []).includes(user.id);
-      const isAssistant = (club.assistants || []).includes(user.id);
-      const isSuperTrainer = club.superTrainer === user.id;
-
-      return isTrainer || isAssistant || isSuperTrainer;
-    }
-
-    return false;
-  }
-
-  // Delete mutation
-  const deleteMutation = useMutation({
-    mutationFn: () => deleteEvent(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['events'] });
-      navigate('/calendar');
-    },
-  });
-
-  // Check if user can edit/delete this event
   function canManageEvent() {
     if (!user || !event) return false;
 
     // Admin can manage everything
-    if (user.role === 'admin') return true;
+    if (user.role === 'admin' || user.isSuperAdmin) return true;
 
-    // Personal events - only creator can manage
-    if (event.visibilityLevel === 'personal') {
-      return event.createdBy === user.id;
-    }
+    // Creator can manage their own
+    if (event.createdBy === user.id) return true;
 
-    // Team events - creator, trainers, assistants, or supertrainer of that club
-    if (event.visibilityLevel === 'team') {
-      // Creator can edit their own
-      if (event.createdBy === user.id) return true;
-
-      // Load clubs to check roles
-      const clubs = JSON.parse(localStorage.getItem('clubs') || '[]');
-      const club = clubs.find(c => c.id === event.clubId);
-      if (!club) return false;
-
+    // Check club roles for team/club events
+    if (club) {
       const isTrainer = (club.trainers || []).includes(user.id);
-      const isAssistant = (club.assistants || []).includes(user.id);
-      const isSuperTrainer = club.superTrainer === user.id;
-
-      return isTrainer || isAssistant || isSuperTrainer;
-    }
-
-    // Club events - only supertrainer of that club or admin
-    if (event.visibilityLevel === 'club') {
-      const clubs = JSON.parse(localStorage.getItem('clubs') || '[]');
-      const club = clubs.find(c => c.id === event.clubId);
-      if (!club) return false;
-
-      return club.superTrainer === user.id;
+      const isOwner = club.createdBy === user.id;
+      return isTrainer || isOwner;
     }
 
     return false;
   }
 
-  const canEdit = canManageEvent();
+  const filteredMembers = getAllMembers().filter(member => {
+    const response = event?.responses?.[member.id];
+    
+    if (trackingFilter === 'all') return true;
+    if (trackingFilter === 'attending') return response?.status === 'attending';
+    if (trackingFilter === 'declined') return response?.status === 'declined';
+    if (trackingFilter === 'maybe') return response?.status === 'maybe';
+    if (trackingFilter === 'noresponse') return !response;
+    
+    return true;
+  });
 
-  // Handle delete with confirmation
-  function handleDelete() {
-    if (!window.confirm(`Are you sure you want to delete "${event.title}"?`)) {
-      return;
-    }
-    deleteMutation.mutate();
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-light/60">Loading event...</div>
+      </div>
+    );
   }
 
-  if (isLoading) return <div className="p-6">Loading event...</div>;
-  if (error) return <div className="p-6 text-red-600">Error: {error.message}</div>;
-  if (!event) return <div className="p-6">Event not found.</div>;
+  if (!event) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-6">
+        <div className="text-6xl mb-4">❌</div>
+        <h2 className="font-title text-2xl text-light mb-2">Event Not Found</h2>
+        <p className="text-light/60 mb-6">This event doesn't exist or has been deleted.</p>
+        <button
+          onClick={() => navigate('/calendar')}
+          className="px-6 py-3 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
+        >
+          Back to Calendar
+        </button>
+      </div>
+    );
+  }
+
+  const userResponse = getUserResponse();
+  const canEdit = canManageEvent();
+  const allMembers = getAllMembers();
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <div className="mb-4">
-        <Link to="/calendar" className="text-blue-600 hover:underline">
-          ← Back to Calendar
-        </Link>
-      </div>
+    <div className="max-w-4xl mx-auto p-6">
+      {/* Back Button */}
+      <button
+        onClick={() => navigate('/calendar')}
+        className="mb-4 flex items-center gap-2 text-light/60 hover:text-light transition-colors"
+      >
+        <span>←</span>
+        <span>Back to Calendar</span>
+      </button>
 
-      <div className="bg-white p-6 rounded-lg shadow">
-        <div className="flex justify-between items-start mb-4">
+      {/* Event Header */}
+      <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 mb-6">
+        <div className="flex items-start justify-between mb-4">
           <div className="flex-1">
-            <h1 className="text-2xl font-bold">{event.title}</h1>
-            <p className="text-sm text-gray-600 mt-1">
-              {event.date} {event.time ? `• ${event.time}` : ''}
-            </p>
-            <p className="text-sm text-gray-600">{event.location}</p>
+            <h1 className="font-title text-4xl text-light mb-2">{event.title}</h1>
+            
+            <div className="flex flex-wrap gap-2 mb-4">
+              <span className="inline-block px-3 py-1 text-sm rounded-full bg-primary/20 text-primary capitalize">
+                {event.type || 'event'}
+              </span>
+              {event.visibilityLevel === 'personal' && (
+                <span className="inline-block px-3 py-1 text-sm rounded-full bg-blue-500/20 text-blue-300">
+                  👤 Personal
+                </span>
+              )}
+              {event.visibilityLevel === 'team' && (
+                <span className="inline-block px-3 py-1 text-sm rounded-full bg-green-500/20 text-green-300">
+                  👥 Team Event
+                </span>
+              )}
+              {event.visibilityLevel === 'club' && (
+                <span className="inline-block px-3 py-1 text-sm rounded-full bg-orange-500/20 text-orange-300">
+                  🏛️ Club Event
+                </span>
+              )}
+            </div>
 
-            {/* Event visibility badge */}
-            {event.visibilityLevel && (
-              <div className="mt-2">
-                {event.visibilityLevel === 'personal' && (
-                  <span className="inline-block px-2 py-1 text-xs rounded bg-blue-100 text-blue-800">
-                    👤 Personal Event
-                  </span>
-                )}
-                {event.visibilityLevel === 'team' && (
-                  <span className="inline-block px-2 py-1 text-xs rounded bg-green-100 text-green-800">
-                    👥 Team Event
-                  </span>
-                )}
-                {event.visibilityLevel === 'club' && (
-                  <span className="inline-block px-2 py-1 text-xs rounded bg-orange-100 text-orange-800">
-                    🏛️ Club Event
-                  </span>
-                )}
+            <div className="space-y-2 text-light/70">
+              <div className="flex items-center gap-2">
+                <span>📅</span>
+                <span>{new Date(event.date).toLocaleDateString('en-US', { 
+                  weekday: 'long', 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric' 
+                })}</span>
               </div>
-            )}
+              {event.time && (
+                <div className="flex items-center gap-2">
+                  <span>🕐</span>
+                  <span>{event.time}</span>
+                </div>
+              )}
+              {event.location && (
+                <div className="flex items-center gap-2">
+                  <span>📍</span>
+                  <span>{event.location}</span>
+                </div>
+              )}
+              {team && (
+                <div className="flex items-center gap-2">
+                  <span>👥</span>
+                  <Link 
+                    to={`/team/${team.clubId}/${team.id}`}
+                    className="text-primary hover:text-primary/80"
+                  >
+                    {team.name}
+                  </Link>
+                </div>
+              )}
+              {club && event.visibilityLevel === 'club' && (
+                <div className="flex items-center gap-2">
+                  <span>🏛️</span>
+                  <span>{club.name}</span>
+                </div>
+              )}
+            </div>
 
             {event.description && (
-              <div className="mt-4 text-gray-700 whitespace-pre-wrap">
+              <div className="mt-4 text-light/80 whitespace-pre-wrap">
                 {event.description}
               </div>
-            )}
-
-            {event.notes && (
-              <div className="mt-3 text-sm text-gray-600">
-                <strong>Notes:</strong> {event.notes}
-              </div>
-            )}
-          </div>
-
-          <div className="text-right ml-4">
-            {teamId && (
-              <>
-                <div className="text-xs text-gray-500">Team</div>
-                <div className="text-blue-600 font-medium">
-                  {team ? <Link to={`/teams/${team.id}`}>{team.name}</Link> : teamId}
-                </div>
-              </>
-            )}
-            {event.visibilityLevel === 'club' && event.clubId && (
-              <>
-                <div className="text-xs text-gray-500 mt-2">Club</div>
-                <div className="text-orange-600 font-medium">
-                  {(() => {
-                    const clubs = JSON.parse(localStorage.getItem('clubs') || '[]');
-                    const club = clubs.find(c => c.id === event.clubId);
-                    return club ? club.name : event.clubId;
-                  })()}
-                </div>
-              </>
             )}
           </div>
         </div>
 
-        {/* Edit/Delete buttons */}
+        {/* Edit/Delete Buttons */}
         {canEdit && (
-          <div className="mb-6 pb-6 border-b flex gap-2">
+          <div className="flex gap-2 pt-4 border-t border-white/10">
             <Link
-              to={`/events/${id}/edit`}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium"
+              to={`/edit-event/${eventId}`}
+              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-all"
             >
               ✏️ Edit Event
             </Link>
             <button
               onClick={handleDelete}
-              disabled={deleteMutation.isPending}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded font-medium disabled:bg-gray-400"
+              className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-all"
             >
-              🗑️ {deleteMutation.isPending ? 'Deleting...' : 'Delete Event'}
+              🗑️ Delete Event
             </button>
           </div>
         )}
+      </div>
 
-        {/* RSVP Statistics */}
-        <div className="mb-6 pb-6 border-b">
-          <h3 className="font-semibold mb-3">Attendance Statistics</h3>
-          <div className="grid grid-cols-4 gap-4">
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-green-700">
-                {getResponseCount('confirmed')}
-              </div>
-              <div className="text-xs text-green-600 font-medium">✅ Yes</div>
-            </div>
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-red-700">
-                {getResponseCount('declined')}
-              </div>
-              <div className="text-xs text-red-600 font-medium">❌ No</div>
-            </div>
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-yellow-700">
-                {getResponseCount('backup')}
-              </div>
-              <div className="text-xs text-yellow-600 font-medium">⚠️ Maybe</div>
-            </div>
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-gray-700">
-                {(() => {
-                  // Calculate no response count (only members)
-                  const memberResponses = getMemberResponses();
-                  const respondedCount = Object.keys(memberResponses).length;
-                  const totalMembers = getTotalMembers();
-                  return Math.max(0, totalMembers - respondedCount);
-                })()}
-              </div>
-              <div className="text-xs text-gray-600 font-medium">⏳ No Response</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Tracking Button - Available for all users who can see the event */}
-        <div className="mb-6 pb-6 border-b">
-          <button
-            onClick={() => setShowTracking(!showTracking)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium"
-          >
-            📊 {showTracking ? 'Hide Tracking' : 'View Tracking'}
-          </button>
-        </div>
-
-        {/* Tracking View - Detailed list of all members with filters */}
-        {showTracking && (
-          <div className="mb-6 pb-6 border-b">
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="font-semibold">Attendance Tracking</h3>
-              
-              {/* Filter Dropdown */}
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-gray-600">Filter:</label>
-                <select
-                  value={trackingFilter}
-                  onChange={(e) => setTrackingFilter(e.target.value)}
-                  className="border rounded px-3 py-1 text-sm bg-white"
-                >
-                  <option value="all">All Members ({getAllMembers().length})</option>
-                  <option value="confirmed">✅ Attending ({getResponseCount('confirmed')})</option>
-                  <option value="declined">❌ Not Attending ({getResponseCount('declined')})</option>
-                  <option value="backup">⚠️ Maybe ({getResponseCount('backup')})</option>
-                  <option value="noresponse">⏳ No Response ({getTotalMembers() - Object.keys(getMemberResponses()).length})</option>
-                </select>
-              </div>
-            </div>
-            
-            {/* Summary */}
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
-              <p className="text-sm text-blue-800">
-                <strong>Total Members:</strong> {getTotalMembers()} | 
-                <strong className="ml-2">Responded:</strong> {Object.keys(getMemberResponses()).length} | 
-                <strong className="ml-2">Not Responded:</strong> {getTotalMembers() - Object.keys(getMemberResponses()).length}
-                {trackingFilter !== 'all' && (
-                  <span className="ml-2">
-                    | <strong>Filtered:</strong> {getFilteredMembers().length}
-                  </span>
-                )}
-              </p>
-            </div>
-
-            {/* Member List */}
-            <div className="space-y-2">
-              {getFilteredMembers().length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <p>No members match this filter</p>
-                </div>
-              ) : (
-                getFilteredMembers().map(member => {
-                  const response = responses?.[member.id];
-                  return (
-                    <div key={member.id} className="flex items-center justify-between p-3 border rounded hover:bg-gray-50">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center font-bold text-gray-600">
-                          {member.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <div className="font-medium">{member.name}</div>
-                          <div className="text-xs text-gray-500">{member.email}</div>
-                        </div>
-                      </div>
-                      <div>
-                        {response ? (
-                          <div className="flex items-center gap-2">
-                            {response.status === 'confirmed' && (
-                              <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
-                                ✅ Attending
-                              </span>
-                            )}
-                            {response.status === 'declined' && (
-                              <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium">
-                                ❌ Not Attending
-                              </span>
-                            )}
-                            {response.status === 'backup' && (
-                              <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium">
-                                ⚠️ Maybe
-                              </span>
-                            )}
-                            <span className="text-xs text-gray-500">
-                              {new Date(response.timestamp).toLocaleDateString()}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm">
-                            ⏳ No Response
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className="mt-6">
-          <h3 className="font-semibold mb-2">RSVP</h3>
+      {/* RSVP Buttons (for non-personal events) */}
+      {event.visibilityLevel !== 'personal' && user && (
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 mb-6">
+          <h2 className="font-title text-2xl text-light mb-4">Your Response</h2>
           
-          {/* Show current user's response if exists */}
-          {user && responses?.[user.id] && (
-            <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm">
-              <span className="text-blue-800">
-                Your response: <strong>
-                  {responses[user.id].status === 'confirmed' && '✅ Attending'}
-                  {responses[user.id].status === 'declined' && '❌ Not Attending'}
-                  {responses[user.id].status === 'backup' && '⚠️ Maybe'}
+          {userResponse && (
+            <div className="mb-4 p-3 bg-primary/10 border border-primary/30 rounded-lg">
+              <span className="text-light">
+                Current: <strong className="text-primary">
+                  {userResponse.status === 'attending' && '✅ Attending'}
+                  {userResponse.status === 'declined' && '❌ Not Attending'}
+                  {userResponse.status === 'maybe' && '⚠️ Maybe'}
                 </strong>
               </span>
             </div>
           )}
           
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             <button 
-              onClick={() => handleRsvp(user?.id, 'confirmed')} 
-              className={`px-3 py-2 rounded font-medium ${
-                responses?.[user?.id]?.status === 'confirmed' 
-                  ? 'bg-green-700 text-white' 
-                  : 'bg-green-600 text-white hover:bg-green-700'
+              onClick={() => handleRsvp('attending')} 
+              className={`flex-1 px-6 py-3 rounded-lg font-medium transition-all ${
+                userResponse?.status === 'attending' 
+                  ? 'bg-green-600 text-white ring-2 ring-green-400' 
+                  : 'bg-green-500 text-white hover:bg-green-600'
               }`}
-              disabled={!user}
+              disabled={updatingRsvp}
             >
-              Yes {responses?.[user?.id]?.status === 'confirmed' && '✓'}
+              ✅ I will attend
             </button>
             <button 
-              onClick={() => handleRsvp(user?.id, 'declined')} 
-              className={`px-3 py-2 rounded font-medium ${
-                responses?.[user?.id]?.status === 'declined' 
-                  ? 'bg-red-700 text-white' 
+              onClick={() => handleRsvp('declined')} 
+              className={`flex-1 px-6 py-3 rounded-lg font-medium transition-all ${
+                userResponse?.status === 'declined' 
+                  ? 'bg-red-600 text-white ring-2 ring-red-400' 
                   : 'bg-red-500 text-white hover:bg-red-600'
               }`}
-              disabled={!user}
+              disabled={updatingRsvp}
             >
-              No {responses?.[user?.id]?.status === 'declined' && '✓'}
+              ❌ Decline
             </button>
             <button 
-              onClick={() => handleRsvp(user?.id, 'backup')} 
-              className={`px-3 py-2 rounded font-medium ${
-                responses?.[user?.id]?.status === 'backup' 
-                  ? 'bg-yellow-600 text-white' 
+              onClick={() => handleRsvp('maybe')} 
+              className={`flex-1 px-6 py-3 rounded-lg font-medium transition-all ${
+                userResponse?.status === 'maybe' 
+                  ? 'bg-yellow-600 text-white ring-2 ring-yellow-400' 
                   : 'bg-yellow-500 text-white hover:bg-yellow-600'
               }`}
-              disabled={!user}
+              disabled={updatingRsvp}
             >
-              Maybe {responses?.[user?.id]?.status === 'backup' && '✓'}
+              ⚠️ Maybe
             </button>
           </div>
+        </div>
+      )}
 
-          <div className="mt-4">
-            <h4 className="font-medium">Responses</h4>
-            <ul className="mt-2 space-y-1">
-              {Object.entries(responses || {}).length === 0 && <li className="text-sm text-gray-500">No responses yet.</li>}
-              {Object.entries(responses || {}).map(([uid, r]) => {
-                // Get user name from users data
-                const usersData = JSON.parse(localStorage.getItem('users') || '[]');
-                const userData = usersData.find(u => u.id === uid);
-                const displayName = userData ? (userData.name || userData.email) : uid;
-                
-                return (
-                  <li key={uid} className="flex justify-between items-center">
-                    <div>
-                      <div className="text-sm font-medium">{displayName}</div>
-                      <div className="text-xs text-gray-500">{r.status} • {new Date(r.timestamp).toLocaleString()}</div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+      {/* Attendance Statistics */}
+      <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 mb-6">
+        <h2 className="font-title text-2xl text-light mb-4">Attendance Statistics</h2>
+        
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-center">
+            <div className="text-3xl font-bold text-green-400">
+              {getResponseCount('attending')}
+            </div>
+            <div className="text-sm text-green-300 mt-1">✅ Attending</div>
+          </div>
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-center">
+            <div className="text-3xl font-bold text-red-400">
+              {getResponseCount('declined')}
+            </div>
+            <div className="text-sm text-red-300 mt-1">❌ Not Attending</div>
+          </div>
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-center">
+            <div className="text-3xl font-bold text-yellow-400">
+              {getResponseCount('maybe')}
+            </div>
+            <div className="text-sm text-yellow-300 mt-1">⚠️ Maybe</div>
+          </div>
+          <div className="bg-white/5 border border-white/10 rounded-lg p-4 text-center">
+            <div className="text-3xl font-bold text-light">
+              {allMembers.length - Object.keys(event.responses || {}).length}
+            </div>
+            <div className="text-sm text-light/60 mt-1">⏳ No Response</div>
           </div>
         </div>
       </div>
+
+      {/* Tracking Button */}
+      <div className="mb-6">
+        <button
+          onClick={() => setShowTracking(!showTracking)}
+          className="px-6 py-3 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
+        >
+          📊 {showTracking ? 'Hide' : 'View'} Attendance Tracking
+        </button>
+      </div>
+
+      {/* Tracking View */}
+      {showTracking && (
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-title text-xl text-light">Attendance Tracking</h3>
+            
+            <select
+              value={trackingFilter}
+              onChange={(e) => setTrackingFilter(e.target.value)}
+              className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+            >
+              <option value="all" className="bg-mid-dark">All ({allMembers.length})</option>
+              <option value="attending" className="bg-mid-dark">✅ Attending ({getResponseCount('attending')})</option>
+              <option value="declined" className="bg-mid-dark">❌ Not Attending ({getResponseCount('declined')})</option>
+              <option value="maybe" className="bg-mid-dark">⚠️ Maybe ({getResponseCount('maybe')})</option>
+              <option value="noresponse" className="bg-mid-dark">⏳ No Response ({allMembers.length - Object.keys(event.responses || {}).length})</option>
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            {filteredMembers.length === 0 ? (
+              <div className="text-center py-8 text-light/60">
+                No members in this filter
+              </div>
+            ) : (
+              filteredMembers.map(member => {
+                const response = event.responses?.[member.id];
+                return (
+                  <div
+                    key={member.id}
+                    className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-all"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold">
+                        {member.username?.charAt(0).toUpperCase() || '?'}
+                      </div>
+                      <div>
+                        <div className="font-medium text-light">{member.username || 'Unknown'}</div>
+                        <div className="text-sm text-light/60">{member.email}</div>
+                      </div>
+                    </div>
+                    <div>
+                      {response ? (
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                          response.status === 'attending' ? 'bg-green-500/20 text-green-300' :
+                          response.status === 'declined' ? 'bg-red-500/20 text-red-300' :
+                          'bg-yellow-500/20 text-yellow-300'
+                        }`}>
+                          {response.status === 'attending' && '✅ Attending'}
+                          {response.status === 'declined' && '❌ Not Attending'}
+                          {response.status === 'maybe' && '⚠️ Maybe'}
+                        </span>
+                      ) : (
+                        <span className="px-3 py-1 rounded-full text-sm font-medium bg-white/5 text-light/50">
+                          ⏳ No Response
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

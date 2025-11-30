@@ -1,14 +1,18 @@
 // src/pages/NewEvent.jsx
-import React, { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { addEvent } from '../api/localApi';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
+import { createEvent, getAllClubs } from '../firebase/firestore';
 
 export default function NewEvent() {
   const navigate = useNavigate();
-  const qc = useQueryClient();
   const { user } = useAuth();
+  const { showToast } = useToast();
+
+  const [loading, setLoading] = useState(false);
+  const [clubs, setClubs] = useState([]);
+  const [teams, setTeams] = useState([]);
 
   const [form, setForm] = useState({
     title: '',
@@ -21,34 +25,29 @@ export default function NewEvent() {
     visibilityLevel: 'personal',  // "personal" | "team" | "club"
     createdBy: '',
     description: '',
-    recurrence: '',    // none | daily | weekly | monthly
-    occurrences: '',   // integer (string in state)
-    endDate: '',       // optional ISO date string "YYYY-MM-DD"
+    responses: {} // Initialize empty responses object
   });
 
-  // Get teams from clubs instead of separate teams array
-  const { data: teams = [] } = useQuery({
-    queryKey: ['teams'],
-    queryFn: async () => {
-      // Get all clubs from localStorage
-      const clubs = JSON.parse(localStorage.getItem('clubs') || '[]');
-      
-      // Get current user to filter clubs
-      const currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
-      if (!currentUser) return [];
+  // Load clubs on mount
+  useEffect(() => {
+    loadClubs();
+  }, []);
 
-      // Collect all teams from clubs user has access to
+  async function loadClubs() {
+    try {
+      const allClubs = await getAllClubs();
+      setClubs(allClubs);
+
+      // Extract teams from clubs
       const allTeams = [];
-      
-      clubs.forEach(club => {
-        // Check if user is part of this club (trainer, assistant, or member)
-        const isTrainer = (club.trainers || []).includes(currentUser.id);
-        const isAssistant = (club.assistants || []).includes(currentUser.id);
-        const isMember = (club.members || []).includes(currentUser.id);
-        const isAdmin = currentUser.role === 'admin';
-        
+      allClubs.forEach(club => {
+        // Check if user is part of this club
+        const isTrainer = (club.trainers || []).includes(user?.id);
+        const isAssistant = (club.assistants || []).includes(user?.id);
+        const isMember = (club.members || []).includes(user?.id);
+        const isAdmin = user?.role === 'admin' || user?.isSuperAdmin;
+
         if (isTrainer || isAssistant || isMember || isAdmin) {
-          // Add all teams from this club with club info
           const clubTeams = club.teams || [];
           clubTeams.forEach(team => {
             allTeams.push({
@@ -60,28 +59,23 @@ export default function NewEvent() {
           });
         }
       });
-      
-      return allTeams;
-    },
-  });
+
+      setTeams(allTeams);
+    } catch (error) {
+      console.error('Error loading clubs:', error);
+      showToast('Failed to load clubs', 'error');
+    }
+  }
 
   // Get clubs that user owns (SuperTrainer only)
-  const { data: ownedClubs = [] } = useQuery({
-    queryKey: ['ownedClubs'],
-    queryFn: async () => {
-      if (!user) return [];
-      const clubs = JSON.parse(localStorage.getItem('clubs') || '[]');
-      return clubs.filter(c => c.superTrainer === user.id);
-    },
-    enabled: !!user
-  });
+  const ownedClubs = clubs.filter(c => c.createdBy === user?.id);
 
   // Determine user's role capabilities
   const canCreateTeamEvents = user && ['admin', 'trainer', 'assistant'].includes(user.role);
-  const canCreateClubEvents = user && user.isSuperTrainer && ownedClubs.length > 0;
+  const canCreateClubEvents = (user && user.isSuperAdmin && ownedClubs.length > 0) || user?.role === 'admin';
 
-  // Auto-set visibility and createdBy when user loads
-  React.useEffect(() => {
+  // Auto-set createdBy when user loads
+  useEffect(() => {
     if (!user) return;
     
     setForm(f => ({ ...f, createdBy: user.id }));
@@ -94,74 +88,30 @@ export default function NewEvent() {
     }
   }, [user, canCreateTeamEvents, canCreateClubEvents]);
 
-  const mutation = useMutation({
-    // create an id and save via addEvent
-    mutationFn: (payload) => {
-      const id = `loc-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      const eventToSave = { ...payload, id };
-      return addEvent(eventToSave);
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['events'] });
-      navigate('/calendar');
-    },
-  });
-
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     // Basic validation
     if (!form.title || !form.date) {
-      alert('Please fill Title and Date');
+      showToast('Please fill Title and Date', 'error');
       return;
     }
     
     // Visibility-specific validation
     if (form.visibilityLevel === 'team' && !form.teamId) {
-      alert('Please select a team for team events');
+      showToast('Please select a team for team events', 'error');
       return;
     }
     
     if (form.visibilityLevel === 'club' && !form.clubId) {
-      alert('Please select a club for club events');
+      showToast('Please select a club for club events', 'error');
       return;
     }
     
     // Permission check
     if (form.visibilityLevel === 'club' && !canCreateClubEvents) {
-      alert('Only club owners can create club-wide events');
+      showToast('Only club owners can create club-wide events', 'error');
       return;
-    }
-
-    // If recurrence chosen, validate either occurrences or endDate (or both)
-    if (form.recurrence) {
-      const occ = Number(form.occurrences || 0);
-      const hasOcc = Number.isInteger(occ) && occ > 0;
-      const hasEnd = Boolean(form.endDate);
-
-      if (!hasOcc && !hasEnd) {
-        alert('For recurring events, provide either Occurrences (number) or an End date (or both).');
-        return;
-      }
-
-      if (hasEnd) {
-        // basic date validity check
-        const start = new Date(form.date);
-        const end = new Date(form.endDate);
-        if (isNaN(end.getTime())) {
-          alert('End date is invalid.');
-          return;
-        }
-        if (end < start) {
-          alert('End date must be the same or after the start date.');
-          return;
-        }
-      }
-
-      if (hasOcc && (!Number.isInteger(occ) || occ < 1)) {
-        alert('Occurrences must be a whole number of 1 or more.');
-        return;
-      }
     }
 
     const eventData = {
@@ -169,12 +119,20 @@ export default function NewEvent() {
       teamId: form.teamId || undefined,
       clubId: form.clubId || undefined,
       createdBy: user.id,
-      // normalize occurrences to number when present
-      occurrences: form.recurrence ? (form.occurrences ? Number(form.occurrences) : undefined) : undefined,
-      endDate: form.endDate || undefined,
+      responses: {} // Initialize empty responses
     };
 
-    mutation.mutate(eventData);
+    try {
+      setLoading(true);
+      await createEvent(eventData);
+      showToast('Event created successfully!', 'success');
+      navigate('/calendar');
+    } catch (error) {
+      console.error('Error creating event:', error);
+      showToast('Failed to create event', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const update = (field) => (e) =>
@@ -352,47 +310,6 @@ export default function NewEvent() {
           </div>
         )}
 
-        {/* Recurrence controls */}
-        <div>
-          <label className="block font-medium">Recurrence</label>
-          <select
-            className="border rounded px-3 py-1 w-full"
-            value={form.recurrence}
-            onChange={update('recurrence')}
-          >
-            <option value="">None</option>
-            <option value="daily">Daily</option>
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
-          </select>
-        </div>
-
-        {form.recurrence && (
-          <div className="grid grid-cols-2 gap-4">
-            <label className="block">
-              <div className="text-sm font-medium mb-1">Occurrences</div>
-              <input
-                type="number"
-                min={1}
-                value={form.occurrences}
-                onChange={update('occurrences')}
-                className="w-full border p-2 rounded"
-                placeholder="How many times (e.g. 6)"
-              />
-            </label>
-
-            <label className="block">
-              <div className="text-sm font-medium mb-1">End Date</div>
-              <input
-                type="date"
-                value={form.endDate}
-                onChange={update('endDate')}
-                className="w-full border p-2 rounded"
-              />
-            </label>
-          </div>
-        )}
-
         <div>
           <label className="block font-medium">Description</label>
           <textarea
@@ -406,10 +323,10 @@ export default function NewEvent() {
         <div className="flex gap-2">
           <button
             type="submit"
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-medium"
-            disabled={mutation.isPending}
+            className="bg-primary text-white px-4 py-2 rounded hover:bg-primary/80 font-medium transition-all"
+            disabled={loading}
           >
-            {mutation.isPending ? 'Creating...' : 'Create Event'}
+            {loading ? 'Creating...' : 'Create Event'}
           </button>
           <button
             type="button"

@@ -1,585 +1,338 @@
 // src/pages/Calendar.jsx
-import { useQuery } from '@tanstack/react-query';
-import { getEvents, getTeams, getCurrentUser } from '../api/localApi';
-import { Link } from 'react-router-dom';
-import { useState, useMemo } from 'react';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useState, useEffect, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
+import { getUserEvents, getAllClubs } from '../firebase/firestore';
 
 export default function Calendar() {
-  const { t } = useLanguage();
-  
-  // Data hooks
-  const { data: events = [], isLoading: loadingEvents, error: eventsError } = useQuery({
-    queryKey: ['events'],
-    queryFn: getEvents,
-  });
+  const { user } = useAuth();
+  const { showToast } = useToast();
+  const navigate = useNavigate();
 
-  const { data: teams = [], isLoading: loadingTeams, error: teamsError } = useQuery({
-    queryKey: ['teams'],
-    queryFn: async () => {
-      const currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
-      if (!currentUser) return [];
-      
-      const clubs = JSON.parse(localStorage.getItem('clubs') || '[]');
-      const allTeams = [];
-      
-      clubs.forEach(club => {
-        const isTrainer = (club.trainers || []).includes(currentUser.id);
-        const isAssistant = (club.assistants || []).includes(currentUser.id);
-        const isSuperTrainer = club.superTrainer === currentUser.id;
-        const isAdmin = currentUser.role === 'admin';
-        
-        const clubTeams = club.teams || [];
-        
-        if (isTrainer || isAssistant || isSuperTrainer || isAdmin) {
-          clubTeams.forEach(team => {
-            allTeams.push({
-              ...team,
-              clubId: club.id,
-              clubName: club.name
-            });
-          });
-        } else {
-          clubTeams.forEach(team => {
-            const isTeamMember = (team.members || []).includes(currentUser.id);
-            if (isTeamMember) {
-              allTeams.push({
-                ...team,
-                clubId: club.id,
-                clubName: club.name
-              });
-            }
-          });
-        }
-      });
-      
-      return allTeams;
-    },
-  });
+  const [events, setEvents] = useState([]);
+  const [clubs, setClubs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [teamFilter, setTeamFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [viewMode, setViewMode] = useState('list'); // list | month
 
-  const { data: user } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: getCurrentUser,
-  });
-
-  // UI state
-  const [mode, setMode] = useState('month'); // "table" | "timeline" | "month"
-  const [teamFilter, setTeamFilter] = useState('');
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
-  const [selectedDay, setSelectedDay] = useState(null);
 
-  // Filter state
-  const [filterType, setFilterType] = useState('all');
-  const [filterValue, setFilterValue] = useState('');
-
-  // Recurrence helpers
-  const addDays = (date, days) => {
-    const d = new Date(date);
-    d.setDate(d.getDate() + days);
-    return d;
-  };
-
-  const addMonths = (date, months) => {
-    const d = new Date(date);
-    const day = d.getDate();
-    d.setMonth(d.getMonth() + months);
-    if (d.getDate() < day) d.setDate(0);
-    return d;
-  };
-
-  // Expand recurring events
-  const expandedEvents = useMemo(() => {
-    const expanded = [];
-    const endDate = new Date(viewYear + 2, 11, 31);
-    
-    for (const event of events) {
-      if (!event.recurrence || event.recurrence === 'none') {
-        expanded.push(event);
-      } else {
-        const start = new Date(event.date);
-        let current = new Date(start);
-        
-        while (current <= endDate) {
-          expanded.push({
-            ...event,
-            date: current.toISOString().split('T')[0],
-            id: `${event.id}-${current.toISOString().split('T')[0]}`
-          });
-          
-          if (event.recurrence === 'daily') current = addDays(current, 1);
-          else if (event.recurrence === 'weekly') current = addDays(current, 7);
-          else if (event.recurrence === 'monthly') current = addMonths(current, 1);
-          else break;
-        }
-      }
+  useEffect(() => {
+    if (user) {
+      loadCalendarData();
     }
-    
-    return expanded;
-  }, [events, viewYear]);
+  }, [user]);
 
-  // Filter visible events
-  const visibleEvents = useMemo(() => {
-    if (!user) return [];
-    
-    const clubs = JSON.parse(localStorage.getItem('clubs') || '[]');
-    
-    const filtered = expandedEvents.filter((event) => {
-      if (event.visibilityLevel === 'personal') {
-        return event.createdBy === user.id;
-      }
-      
-      if (event.visibilityLevel === 'club') {
-        const clubId = event.clubId;
-        const club = clubs.find(c => String(c.id) === String(clubId));
-        if (!club) return false;
-        
-        const canSee = (club.members || []).includes(user.id) ||
-                      (club.trainers || []).includes(user.id) ||
-                      (club.assistants || []).includes(user.id) ||
-                      club.superTrainer === user.id ||
-                      user.role === 'admin';
-        
-        return canSee;
-      }
-      
-      const tid = event.team ?? event.teamId ?? event.teamID;
-      if (!tid) return false;
-      
-      let teamClub = null;
-      let foundTeam = null;
-      
-      for (const club of clubs) {
-        const team = (club.teams || []).find(t => String(t.id) === String(tid));
-        if (team) {
-          teamClub = club;
-          foundTeam = team;
-          break;
-        }
-      }
-      
-      if (!teamClub || !foundTeam) return false;
-      
-      const isTrainer = (teamClub.trainers || []).includes(user.id);
-      const isAssistant = (teamClub.assistants || []).includes(user.id);
-      const isMember = (foundTeam.members || []).includes(user.id);
-      const isAdmin = user.role === 'admin';
-      
-      return isMember || isTrainer || isAssistant || isAdmin;
+  async function loadCalendarData() {
+    try {
+      setLoading(true);
+
+      // Load user's events
+      const userEvents = await getUserEvents(user.id);
+      setEvents(userEvents || []);
+
+      // Load clubs for filter
+      const allClubs = await getAllClubs();
+      const userClubs = allClubs.filter(club =>
+        (club.members || []).includes(user.id) ||
+        (club.trainers || []).includes(user.id) ||
+        (club.assistants || []).includes(user.id) ||
+        club.createdBy === user.id
+      );
+      setClubs(userClubs);
+
+    } catch (error) {
+      console.error('Error loading calendar:', error);
+      showToast('Failed to load calendar', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Get unique teams from clubs for filter
+  const teams = useMemo(() => {
+    const allTeams = [];
+    clubs.forEach(club => {
+      (club.teams || []).forEach(team => {
+        allTeams.push({
+          ...team,
+          clubId: club.id,
+          clubName: club.name,
+          displayName: `${team.name} (${club.name})`
+        });
+      });
     });
+    return allTeams;
+  }, [clubs]);
 
-    return filtered;
-  }, [expandedEvents, user]);
-
-  // Build filter options
-  const filterOptions = useMemo(() => {
-    if (!user) return { clubs: [], teams: [], athletes: [] };
-    
-    const clubsMap = {};
-    teams.forEach(t => {
-      if (t && t.clubId) {
-        clubsMap[t.clubId] = clubsMap[t.clubId] || { 
-          id: t.clubId, 
-          name: t.clubName || t.club || `Club ${t.clubId}` 
-        };
-      }
-    });
-
-    const clubsList = Object.values(clubsMap);
-    const availableTeams = teams;
-    const athletes = (user && user.athletes) ? user.athletes : [];
-
-    return {
-      clubs: clubsList,
-      teams: availableTeams,
-      athletes
-    };
-  }, [teams, user]);
-
-  // Apply filters
+  // Filter events
   const filteredEvents = useMemo(() => {
-    let filtered = visibleEvents;
+    let filtered = [...events];
 
-    if (filterType === 'club' && filterValue) {
-      filtered = filtered.filter(ev => String(ev.clubId) === String(filterValue));
-    } else if (filterType === 'team' && filterValue) {
-      filtered = filtered.filter(ev => {
-        const tid = ev.team ?? ev.teamId ?? ev.teamID;
-        return String(tid) === String(filterValue);
-      });
-    } else if (filterType === 'athlete' && filterValue) {
-      filtered = filtered.filter(ev => {
-        return ev.athleteId === filterValue || (ev.athletes || []).includes(filterValue);
-      });
+    // Filter by team
+    if (teamFilter !== 'all') {
+      filtered = filtered.filter(e => e.teamId === teamFilter);
     }
 
-    return filtered;
-  }, [visibleEvents, filterType, filterValue]);
+    // Filter by type
+    if (typeFilter !== 'all') {
+      filtered = filtered.filter(e => e.type === typeFilter);
+    }
 
-  // Month view helpers
-  const buildMonthGrid = (year, month) => {
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const startDay = firstDay.getDay();
+    // Sort by date (soonest first)
+    return filtered.sort((a, b) => new Date(a.date) - new Date(b.date));
+  }, [events, teamFilter, typeFilter]);
+
+  // Split into upcoming and past
+  const upcomingEvents = filteredEvents.filter(e => new Date(e.date) >= new Date().setHours(0, 0, 0, 0));
+  const pastEvents = filteredEvents.filter(e => new Date(e.date) < new Date().setHours(0, 0, 0, 0));
+
+  // Get events for month view
+  function getEventsForDay(year, month, day) {
+    return filteredEvents.filter(e => {
+      const eventDate = new Date(e.date);
+      return eventDate.getFullYear() === year &&
+             eventDate.getMonth() === month &&
+             eventDate.getDate() === day;
+    });
+  }
+
+  // Calendar grid generation
+  function generateCalendarDays() {
+    const firstDay = new Date(viewYear, viewMonth, 1);
+    const lastDay = new Date(viewYear, viewMonth + 1, 0);
     const daysInMonth = lastDay.getDate();
-    
-    const grid = [];
-    let week = [];
-    
-    const monday = startDay === 0 ? 6 : startDay - 1;
-    for (let i = 0; i < monday; i++) {
-      week.push(null);
+    const startDayOfWeek = firstDay.getDay();
+
+    const days = [];
+
+    // Empty cells before month starts
+    for (let i = 0; i < startDayOfWeek; i++) {
+      days.push(null);
     }
-    
+
+    // Days of the month
     for (let day = 1; day <= daysInMonth; day++) {
-      week.push(new Date(year, month, day));
-      if (week.length === 7) {
-        grid.push(week);
-        week = [];
-      }
+      days.push(day);
     }
-    
-    if (week.length > 0) {
-      while (week.length < 7) week.push(null);
-      grid.push(week);
-    }
-    
-    return grid;
-  };
 
-  const monthGrid = buildMonthGrid(viewYear, viewMonth);
+    return days;
+  }
 
-  const toKey = (date) => {
-    if (!date) return '';
-    return date.toISOString().split('T')[0];
-  };
-
-  const eventsByDate = useMemo(() => {
-    const map = {};
-    for (const ev of filteredEvents) {
-      const key = ev.date;
-      if (!map[key]) map[key] = [];
-      map[key].push(ev);
-    }
-    return map;
-  }, [filteredEvents]);
-
-  const prevMonth = () => {
+  function previousMonth() {
     if (viewMonth === 0) {
       setViewMonth(11);
       setViewYear(viewYear - 1);
     } else {
       setViewMonth(viewMonth - 1);
     }
-    setSelectedDay(null);
-  };
+  }
 
-  const nextMonth = () => {
+  function nextMonth() {
     if (viewMonth === 11) {
       setViewMonth(0);
       setViewYear(viewYear + 1);
     } else {
       setViewMonth(viewMonth + 1);
     }
-    setSelectedDay(null);
-  };
+  }
 
-  const typeColor = (type) => {
-    const colors = {
-      training: 'bg-blue-500/20 text-blue-400',
-      match: 'bg-red-500/20 text-red-400',
-      meeting: 'bg-purple-500/20 text-purple-400',
-      event: 'bg-green-500/20 text-green-400'
-    };
-    return colors[type] || 'bg-gray-500/20 text-gray-400';
-  };
+  function getEventIcon(type) {
+    switch(type) {
+      case 'training': return '🏋️';
+      case 'game':
+      case 'match': return '⚽';
+      case 'tournament': return '🏆';
+      case 'meeting': return '💼';
+      case 'social': return '🎉';
+      default: return '📅';
+    }
+  }
 
-  if (loadingEvents || loadingTeams) {
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-light/60">{t('common.loading')}...</div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-light/60">Loading calendar...</div>
       </div>
     );
   }
 
-  if (eventsError || teamsError) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-red-400">Error loading calendar</div>
-      </div>
-    );
-  }
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                      'July', 'August', 'September', 'October', 'November', 'December'];
 
   return (
-    <div className="min-h-screen">
+    <div className="p-6">
       {/* Header */}
-      <div className="mb-8 animate-fade-in">
-        <h1 className="font-display text-6xl md:text-7xl text-light mb-2 tracking-wider">
-          <span className="text-primary">CALENDAR</span>
-        </h1>
-        <p className="text-light/60 text-lg">
-          {filteredEvents.length} {filteredEvents.length === 1 ? 'event' : 'events'}
-        </p>
-      </div>
-
-      {/* Controls Bar */}
-      <div className="mb-6 space-y-4 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-        <div className="flex flex-wrap items-center gap-3">
-          {/* View Mode Buttons */}
-          <div className="flex gap-2 bg-white/5 rounded-lg p-1">
-            <button
-              onClick={() => setMode('table')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                mode === 'table'
-                  ? 'bg-primary text-white'
-                  : 'text-light/60 hover:text-light hover:bg-white/5'
-              }`}
-            >
-              Table
-            </button>
-            <button
-              onClick={() => setMode('timeline')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                mode === 'timeline'
-                  ? 'bg-primary text-white'
-                  : 'text-light/60 hover:text-light hover:bg-white/5'
-              }`}
-            >
-              Timeline
-            </button>
-            <button
-              onClick={() => setMode('month')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                mode === 'month'
-                  ? 'bg-primary text-white'
-                  : 'text-light/60 hover:text-light hover:bg-white/5'
-              }`}
-            >
-              Month View
-            </button>
-          </div>
-
-          {/* Filters */}
-          <select
-            value={filterType}
-            onChange={(e) => { setFilterType(e.target.value); setFilterValue(''); }}
-            className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-          >
-            <option value="all" className="bg-mid-dark">{t('common.all')}</option>
-            <option value="club" className="bg-mid-dark">Club</option>
-            <option value="team" className="bg-mid-dark">Team</option>
-            {user?.role === 'parent' && <option value="athlete" className="bg-mid-dark">Athlete</option>}
-          </select>
-
-          {filterType !== 'all' && (
-            <select
-              value={filterValue}
-              onChange={(e) => setFilterValue(e.target.value)}
-              className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-            >
-              <option value="" className="bg-mid-dark">
-                {filterType === 'club' ? 'Select club' : filterType === 'team' ? 'Select team' : 'Select athlete'}
-              </option>
-
-              {filterType === 'club' && filterOptions.clubs.map(c => (
-                <option key={c.id} value={c.id} className="bg-mid-dark">{c.name || c.id}</option>
-              ))}
-
-              {filterType === 'team' && filterOptions.teams.map(t => (
-                <option key={t.id} value={t.id} className="bg-mid-dark">{t.name || t.id}</option>
-              ))}
-
-              {filterType === 'athlete' && (filterOptions.athletes || []).map(a => (
-                <option key={a.id} value={a.id} className="bg-mid-dark">{a.name || a.id}</option>
-              ))}
-            </select>
-          )}
-
-          <div className="flex-1"></div>
-
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="font-title text-5xl text-light">📅 Calendar</h1>
           <Link
-            to="/events/new"
-            className="btn-primary flex items-center gap-2"
+            to="/new-event"
+            className="px-6 py-3 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
           >
-            <span>+</span>
-            <span>{t('calendar.createEvent') || 'Create Event'}</span>
+            + New Event
           </Link>
         </div>
       </div>
 
-      {/* Month View */}
-      {mode === 'month' && (
-        <div className="animate-fade-in" style={{ animationDelay: '0.2s' }}>
-          {/* Month Navigation */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
+      {/* Filters */}
+      <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 mb-6">
+        <div className="grid md:grid-cols-3 gap-4">
+          {/* View Mode */}
+          <div>
+            <label className="block text-sm font-medium text-light/80 mb-2">View</label>
+            <div className="flex gap-2">
               <button
-                onClick={prevMonth}
-                className="w-10 h-10 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-light transition-all"
+                onClick={() => setViewMode('list')}
+                className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${
+                  viewMode === 'list' 
+                    ? 'bg-primary text-white' 
+                    : 'bg-white/10 text-light hover:bg-white/15'
+                }`}
               >
-                ◀
+                📋 List
               </button>
-              <div className="font-title text-2xl text-light">
-                {new Date(viewYear, viewMonth, 1).toLocaleString(undefined, { month: 'long', year: 'numeric' })}
-              </div>
               <button
-                onClick={nextMonth}
-                className="w-10 h-10 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-light transition-all"
+                onClick={() => setViewMode('month')}
+                className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${
+                  viewMode === 'month' 
+                    ? 'bg-primary text-white' 
+                    : 'bg-white/10 text-light hover:bg-white/15'
+                }`}
               >
-                ▶
+                📅 Month
               </button>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <select
-                value={viewMonth}
-                onChange={(e) => { setViewMonth(Number(e.target.value)); setSelectedDay(null); }}
-                className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-light focus:border-primary focus:ring-2 focus:ring-primary/20"
-              >
-                {Array.from({ length: 12 }).map((_, i) => (
-                  <option key={i} value={i} className="bg-mid-dark">
-                    {new Date(0, i).toLocaleString(undefined, { month: 'long' })}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={viewYear}
-                onChange={(e) => { setViewYear(Number(e.target.value)); setSelectedDay(null); }}
-                className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-light focus:border-primary focus:ring-2 focus:ring-primary/20"
-              >
-                {Array.from({ length: 7 }).map((_, i) => {
-                  const y = today.getFullYear() - 3 + i;
-                  return <option key={y} value={y} className="bg-mid-dark">{y}</option>;
-                })}
-              </select>
             </div>
           </div>
 
-          {/* Calendar Grid */}
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4">
-            {/* Day Headers */}
-            <div className="grid grid-cols-7 gap-2 mb-2">
-              {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((d) => (
-                <div key={d} className="text-center font-semibold text-light/60 text-sm py-2">
-                  {d}
-                </div>
+          {/* Team Filter */}
+          <div>
+            <label className="block text-sm font-medium text-light/80 mb-2">Team</label>
+            <select
+              value={teamFilter}
+              onChange={(e) => setTeamFilter(e.target.value)}
+              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+            >
+              <option value="all" className="bg-mid-dark">All Teams</option>
+              {teams.map(t => (
+                <option key={t.id} value={t.id} className="bg-mid-dark">
+                  {t.displayName}
+                </option>
               ))}
-            </div>
+            </select>
+          </div>
 
-            {/* Calendar Days */}
-            <div className="grid grid-cols-7 gap-2">
-              {monthGrid.map((week, wi) =>
-                week.map((cell, ci) => {
-                  if (!cell) {
-                    return (
-                      <div
-                        key={`${wi}-${ci}`}
-                        className="aspect-square rounded-lg bg-white/5"
-                      />
-                    );
-                  }
-                  
-                  const key = toKey(cell);
-                  const evs = eventsByDate[key] || [];
-                  const isToday = key === toKey(new Date());
-                  const isSelected = key === selectedDay;
+          {/* Type Filter */}
+          <div>
+            <label className="block text-sm font-medium text-light/80 mb-2">Type</label>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+            >
+              <option value="all" className="bg-mid-dark">All Types</option>
+              <option value="training" className="bg-mid-dark">🏋️ Training</option>
+              <option value="game" className="bg-mid-dark">⚽ Game</option>
+              <option value="match" className="bg-mid-dark">⚽ Match</option>
+              <option value="tournament" className="bg-mid-dark">🏆 Tournament</option>
+              <option value="meeting" className="bg-mid-dark">💼 Meeting</option>
+              <option value="social" className="bg-mid-dark">🎉 Social</option>
+            </select>
+          </div>
+        </div>
+      </div>
 
-                  return (
-                    <div
-                      key={key}
-                      onClick={() => evs.length > 0 && setSelectedDay(key)}
-                      className={`aspect-square rounded-lg p-2 flex flex-col cursor-pointer transition-all ${
-                        isToday
-                          ? 'bg-primary/20 border-2 border-primary'
-                          : isSelected
-                          ? 'bg-accent/20 border-2 border-accent'
-                          : 'bg-white/5 hover:bg-white/10 border border-white/10'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between mb-1">
-                        <div className={`text-sm font-medium ${isToday ? 'text-primary' : 'text-light'}`}>
-                          {cell.getDate()}
+      {/* List View */}
+      {viewMode === 'list' && (
+        <div className="space-y-8">
+          {/* Upcoming Events */}
+          <div>
+            <h2 className="font-title text-2xl text-light mb-4 flex items-center gap-3">
+              <span className="w-1 h-6 bg-primary rounded"></span>
+              Upcoming Events ({upcomingEvents.length})
+            </h2>
+            
+            {upcomingEvents.length === 0 ? (
+              <div className="bg-white/5 border border-white/10 rounded-xl p-12 text-center">
+                <div className="text-6xl mb-4">📅</div>
+                <h3 className="font-title text-2xl text-light mb-2">No Upcoming Events</h3>
+                <p className="text-light/60">Create your first event to get started!</p>
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {upcomingEvents.map(event => (
+                  <Link
+                    key={event.id}
+                    to={`/event/${event.id}`}
+                    className="group bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5 hover:bg-white/10 hover:border-primary/50 transition-all"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-4 flex-1">
+                        <div className="text-4xl">{getEventIcon(event.type)}</div>
+                        <div className="flex-1">
+                          <h3 className="font-title text-xl text-light group-hover:text-primary transition-colors mb-1">
+                            {event.title}
+                          </h3>
+                          <p className="text-sm text-light/60 capitalize mb-2">
+                            {event.type || 'Event'}
+                            {event.visibilityLevel === 'team' && ' • Team Event'}
+                            {event.visibilityLevel === 'club' && ' • Club Event'}
+                          </p>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-light/70">
+                            <span>📅 {new Date(event.date).toLocaleDateString()}</span>
+                            {event.time && <span>🕐 {event.time}</span>}
+                            {event.location && <span>📍 {event.location}</span>}
+                          </div>
                         </div>
-                        {evs.length > 0 && (
-                          <div className="text-xs px-1.5 py-0.5 rounded-full bg-primary/30 text-primary font-semibold">
-                            {evs.length}
-                          </div>
-                        )}
                       </div>
-
-                      <div className="flex-1 overflow-hidden space-y-1">
-                        {evs.slice(0, 2).map((ev) => (
-                          <div
-                            key={ev.id}
-                            className="text-xs px-1.5 py-0.5 rounded bg-white/10 text-light/80 truncate hover:bg-white/20"
-                            title={ev.title}
-                          >
-                            {ev.title}
-                          </div>
-                        ))}
-                        {evs.length > 2 && (
-                          <div className="text-xs text-accent">
-                            +{evs.length - 2} more
+                      <div className="flex items-center gap-2">
+                        {event.responses && Object.keys(event.responses).length > 0 && (
+                          <div className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium">
+                            {Object.values(event.responses).filter(r => r.status === 'attending').length} attending
                           </div>
                         )}
+                        <span className="text-primary opacity-0 group-hover:opacity-100 transition-opacity">→</span>
                       </div>
                     </div>
-                  );
-                })
-              )}
-            </div>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Selected Day Details */}
-          {selectedDay && (
-            <div className="mt-6 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 animate-fade-in">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="font-title text-2xl text-light mb-1">
-                    {new Date(selectedDay).toDateString()}
-                  </h3>
-                  <div className="text-sm text-light/60">
-                    {(eventsByDate[selectedDay] || []).length} {t('team.events') || 'events'}
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSelectedDay(null)}
-                  className="text-light/60 hover:text-light transition-colors"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="space-y-3">
-                {(eventsByDate[selectedDay] || []).map((ev) => (
+          {/* Past Events */}
+          {pastEvents.length > 0 && (
+            <div>
+              <h2 className="font-title text-2xl text-light mb-4 flex items-center gap-3">
+                <span className="w-1 h-6 bg-light/30 rounded"></span>
+                Past Events ({pastEvents.length})
+              </h2>
+              
+              <div className="grid gap-4">
+                {pastEvents.slice(0, 10).map(event => (
                   <Link
-                    key={ev.id}
-                    to={`/events/${ev.id}`}
-                    className="block p-4 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-primary/50 transition-all group"
+                    key={event.id}
+                    to={`/event/${event.id}`}
+                    className="group bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5 hover:bg-white/10 transition-all opacity-60 hover:opacity-100"
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className={`text-xs px-2 py-1 rounded ${typeColor(ev.type)}`}>
-                            {(ev.type || '').toUpperCase()}
-                          </span>
-                          {ev.time && (
-                            <span className="text-sm text-light/60">{ev.time}</span>
-                          )}
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-4 flex-1">
+                        <div className="text-3xl">{getEventIcon(event.type)}</div>
+                        <div className="flex-1">
+                          <h3 className="font-medium text-light mb-1">{event.title}</h3>
+                          <div className="flex gap-3 text-xs text-light/60">
+                            <span>📅 {new Date(event.date).toLocaleDateString()}</span>
+                            {event.responses && (
+                              <span className="text-green-400">
+                                ✅ {Object.values(event.responses).filter(r => r.status === 'attending').length} attended
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <h4 className="font-medium text-light group-hover:text-primary transition-colors">
-                          {ev.title}
-                        </h4>
-                        {ev.description && (
-                          <p className="text-sm text-light/60 mt-1 line-clamp-2">
-                            {ev.description}
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-                        →
                       </div>
                     </div>
                   </Link>
@@ -590,106 +343,81 @@ export default function Calendar() {
         </div>
       )}
 
-      {/* Table View */}
-      {mode === 'table' && (
-        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl overflow-hidden animate-fade-in" style={{ animationDelay: '0.2s' }}>
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-white/10">
-                <th className="text-left p-4 text-light/60 font-semibold">Date</th>
-                <th className="text-left p-4 text-light/60 font-semibold">Time</th>
-                <th className="text-left p-4 text-light/60 font-semibold">Event</th>
-                <th className="text-left p-4 text-light/60 font-semibold">Type</th>
-                <th className="text-left p-4 text-light/60 font-semibold">Team</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredEvents.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="p-8 text-center text-light/40">
-                    No events found
-                  </td>
-                </tr>
-              ) : (
-                filteredEvents.map((ev) => (
-                  <tr
-                    key={ev.id}
-                    className="border-b border-white/5 hover:bg-white/5 transition-colors group"
-                  >
-                    <td className="p-4 text-light">
-                      {new Date(ev.date).toLocaleDateString()}
-                    </td>
-                    <td className="p-4 text-light/80">{ev.time || '-'}</td>
-                    <td className="p-4">
+      {/* Month View */}
+      {viewMode === 'month' && (
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+          {/* Month Navigation */}
+          <div className="flex items-center justify-between mb-6">
+            <button
+              onClick={previousMonth}
+              className="px-4 py-2 bg-white/10 hover:bg-white/15 text-light rounded-lg transition-all"
+            >
+              ← Previous
+            </button>
+            <h2 className="font-title text-2xl text-light">
+              {monthNames[viewMonth]} {viewYear}
+            </h2>
+            <button
+              onClick={nextMonth}
+              className="px-4 py-2 bg-white/10 hover:bg-white/15 text-light rounded-lg transition-all"
+            >
+              Next →
+            </button>
+          </div>
+
+          {/* Calendar Grid */}
+          <div className="grid grid-cols-7 gap-2">
+            {/* Day Headers */}
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+              <div key={day} className="text-center font-medium text-light/60 py-2">
+                {day}
+              </div>
+            ))}
+
+            {/* Calendar Days */}
+            {generateCalendarDays().map((day, idx) => {
+              if (!day) {
+                return <div key={`empty-${idx}`} className="aspect-square" />;
+              }
+
+              const dayEvents = getEventsForDay(viewYear, viewMonth, day);
+              const isToday = today.getDate() === day && 
+                             today.getMonth() === viewMonth && 
+                             today.getFullYear() === viewYear;
+
+              return (
+                <div
+                  key={day}
+                  className={`aspect-square border border-white/10 rounded-lg p-2 ${
+                    isToday ? 'bg-primary/20 border-primary' : 'bg-white/5'
+                  } hover:bg-white/10 transition-all cursor-pointer`}
+                >
+                  <div className={`text-sm font-medium mb-1 ${
+                    isToday ? 'text-primary' : 'text-light'
+                  }`}>
+                    {day}
+                  </div>
+                  <div className="space-y-1">
+                    {dayEvents.slice(0, 2).map(event => (
                       <Link
-                        to={`/events/${ev.id}`}
-                        className="text-light hover:text-primary transition-colors font-medium"
+                        key={event.id}
+                        to={`/event/${event.id}`}
+                        className="block text-xs px-1 py-0.5 bg-primary/30 text-light rounded truncate hover:bg-primary/50 transition-all"
+                        title={event.title}
                       >
-                        {ev.title}
+                        {getEventIcon(event.type)} {event.title}
                       </Link>
-                    </td>
-                    <td className="p-4">
-                      <span className={`text-xs px-2 py-1 rounded ${typeColor(ev.type)}`}>
-                        {(ev.type || '').toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="p-4 text-light/60">
-                      {teams.find(t => t.id === ev.team)?.name || '-'}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Timeline View */}
-      {mode === 'timeline' && (
-        <div className="space-y-4 animate-fade-in" style={{ animationDelay: '0.2s' }}>
-          {filteredEvents.length === 0 ? (
-            <div className="text-center p-8 text-light/40">No events found</div>
-          ) : (
-            filteredEvents.map((ev) => (
-              <Link
-                key={ev.id}
-                to={`/events/${ev.id}`}
-                className="block p-6 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-primary/50 backdrop-blur-sm transition-all group"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="text-center min-w-[80px]">
-                    <div className="text-2xl font-bold text-primary">
-                      {new Date(ev.date).getDate()}
-                    </div>
-                    <div className="text-sm text-light/60">
-                      {new Date(ev.date).toLocaleString(undefined, { month: 'short' })}
-                    </div>
-                    {ev.time && (
-                      <div className="text-xs text-light/40 mt-1">{ev.time}</div>
+                    ))}
+                    {dayEvents.length > 2 && (
+                      <div className="text-xs text-light/60 px-1">
+                        +{dayEvents.length - 2} more
+                      </div>
                     )}
-                  </div>
-                  
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className={`text-xs px-2 py-1 rounded ${typeColor(ev.type)}`}>
-                        {(ev.type || '').toUpperCase()}
-                      </span>
-                    </div>
-                    <h3 className="font-title text-xl text-light group-hover:text-primary transition-colors mb-1">
-                      {ev.title}
-                    </h3>
-                    {ev.description && (
-                      <p className="text-sm text-light/60 line-clamp-2">{ev.description}</p>
-                    )}
-                  </div>
-
-                  <div className="text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-                    →
                   </div>
                 </div>
-              </Link>
-            ))
-          )}
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

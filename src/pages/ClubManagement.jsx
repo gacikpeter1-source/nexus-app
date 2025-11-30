@@ -1,5 +1,6 @@
 // src/pages/ClubManagement.jsx
 import { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth, ROLES } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { getAllClubs, getClub, getAllUsers, updateClub, updateUser, getPendingRequests, updateRequest } from '../firebase/firestore';
@@ -15,6 +16,7 @@ import {
 export default function ClubManagement() {
   const { user, loading: authLoading, listClubsForUser } = useAuth();
   const { showToast } = useToast();
+  const navigate = useNavigate();
 
   const [clubs, setClubs] = useState([]);
   const [selectedClubId, setSelectedClubId] = useState('');
@@ -878,6 +880,50 @@ export default function ClubManagement() {
               <span>Create Team</span>
             </button>
           )}
+
+          {/* Club Info Bar */}
+          {selectedClubId && (() => {
+            const club = clubs.find(c => c.id === selectedClubId);
+            if (!club) return null;
+
+            const ownerUser = allUsers.find(u => u.id === club.createdBy);
+            const ownerEmail = ownerUser?.email || club.createdBy || 'Unknown';
+            const teamsCount = (club.teams || []).length;
+            const trainersCount = (club.trainers || []).length;
+            const assistantsCount = (club.assistants || []).length;
+            const usersCount = (club.members || []).length;
+
+            return (
+              <div className="mt-3 px-4 py-2 bg-white/5 border border-white/10 rounded-lg">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-light/70">
+                  <span className="flex items-center gap-1">
+                    <span className="text-light/50">Owner:</span>
+                    <span className="text-light font-medium">{ownerEmail}</span>
+                  </span>
+                  <span className="hidden sm:inline text-light/30">•</span>
+                  <span className="flex items-center gap-1">
+                    <span className="text-light/50">Teams:</span>
+                    <span className="text-accent font-medium">{teamsCount}</span>
+                  </span>
+                  <span className="hidden sm:inline text-light/30">•</span>
+                  <span className="flex items-center gap-1">
+                    <span className="text-light/50">Trainers:</span>
+                    <span className="text-success font-medium">{trainersCount}</span>
+                  </span>
+                  <span className="hidden sm:inline text-light/30">•</span>
+                  <span className="flex items-center gap-1">
+                    <span className="text-light/50">Assistants:</span>
+                    <span className="text-secondary font-medium">{assistantsCount}</span>
+                  </span>
+                  <span className="hidden sm:inline text-light/30">•</span>
+                  <span className="flex items-center gap-1">
+                    <span className="text-light/50">Users:</span>
+                    <span className="text-primary font-medium">{usersCount}</span>
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Tabs */}
@@ -1005,7 +1051,12 @@ export default function ClubManagement() {
                         <div key={t.id} className="bg-white/5 border border-white/10 rounded-lg p-4 hover:bg-white/10 transition-all">
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
-                              <h3 className="font-semibold text-light text-lg mb-2">{t.name}</h3>
+                              <h3 
+                                onClick={() => navigate(`/team/${selectedClubId}/${t.id}`)}
+                                className="font-semibold text-light text-lg mb-2 cursor-pointer hover:text-primary transition-colors"
+                              >
+                                {t.name}
+                              </h3>
                               <div className="flex gap-4 text-sm text-light/70">
                                 <div className="flex items-center gap-1">
                                   <span>👥</span>
@@ -1160,7 +1211,15 @@ export default function ClubManagement() {
                                   key={`${m.id}-t-${idx}`}
                                   className="inline-flex items-center gap-2 bg-white/5 px-2 py-1 rounded text-sm"
                                 >
-                                  {tn}
+                                  <span 
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      navigate(`/team/${selectedClubId}/${m.teamIds[idx]}`);
+                                    }}
+                                    className="cursor-pointer hover:text-primary transition-colors"
+                                  >
+                                    {tn}
+                                  </span>
                                   <button
                                     onClick={e => {
                                       e.stopPropagation();
