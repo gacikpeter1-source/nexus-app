@@ -17,7 +17,7 @@ function Modal({ open, title, children, onClose }) {
             onClick={onClose} 
             className="text-light/60 hover:text-light w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors"
           >
-            ✕
+            âœ•
           </button>
         </div>
         <div>{children}</div>
@@ -76,30 +76,29 @@ export default function ClubsDashboard() {
     }
   }
 
-  async function loadClubs() {
+  function loadClubs() {
     setLoading(true);
     try {
-      // Load all clubs from Firebase
-      const allClubs = await getAllClubs();
-      
-      // Filter clubs where user is a member
-      let userClubs = allClubs.filter(club => {
-        // SuperAdmin sees all clubs
-        if (user?.isSuperAdmin) return true;
-        
-        // Admin sees all clubs
-        if (user?.role === ROLES.ADMIN) return true;
-        
-        // Regular users see clubs they're part of
-        return club.createdBy === user?.id ||
-               (club.trainers || []).includes(user?.id) ||
-               (club.assistants || []).includes(user?.id) ||
-               (club.members || []).includes(user?.id);
-      });
+      let list = listClubsForUser ? listClubsForUser() : [];
+      if (!Array.isArray(list)) list = [];
 
-      setClubs(userClubs);
-    } catch (error) {
-      console.error('Error loading clubs:', error);
+      // Filter clubs where user is a member
+      if (user.role !== ROLES.ADMIN) {
+        list = list.filter(c =>
+          c.createdBy === user.id ||
+          (c.trainers || []).includes(user.id) ||
+          (c.assistants || []).includes(user.id) ||
+          (c.members || []).includes(user.id)
+        );
+      }
+
+      const deduped = list.reduce((acc, club) => {
+        if (!acc.find(c => c.id === club.id)) acc.push(club);
+        return acc;
+      }, []);
+
+      setClubs(deduped);
+    } catch {
       setClubs([]);
     } finally {
       setLoading(false);
@@ -194,7 +193,7 @@ export default function ClubsDashboard() {
               <div className="relative z-10">
                 {/* Club Icon */}
                 <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-3xl mb-4">
-                  🏛️
+                  ðŸ›ï¸
                 </div>
 
                 <h3 className="font-title text-2xl text-light group-hover:text-primary transition-colors mb-2">
@@ -223,7 +222,7 @@ export default function ClubsDashboard() {
 
                 {/* Arrow indicator */}
                 <div className="absolute bottom-6 right-6 text-primary opacity-0 group-hover:opacity-100 transform translate-x-2 group-hover:translate-x-0 transition-all">
-                  →
+                  â†’
                 </div>
               </div>
             </div>
@@ -245,7 +244,7 @@ export default function ClubsDashboard() {
             onClick={() => setSelectedClubId(null)}
             className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center text-light transition-all"
           >
-            ←
+            â†
           </button>
           <div>
             <h2 className="font-title text-3xl text-light">{selectedClub.name}</h2>
@@ -269,7 +268,7 @@ export default function ClubsDashboard() {
             {userTeamsInClub.map((team, idx) => (
               <div
                 key={team.id}
-                onClick={() => navigate(`/teams/${team.id}`)}
+                onClick={() => navigate(`/team/${selectedClubId}/${team.id}`)}
                 className="group relative cursor-pointer bg-white/5 backdrop-blur-sm border border-white/10 p-5 rounded-xl hover:bg-white/10 hover:border-primary/50 transition-all duration-300 card-hover overflow-hidden"
                 style={{ animationDelay: `${idx * 0.05}s` }}
               >
@@ -282,10 +281,10 @@ export default function ClubsDashboard() {
                   <div className="flex items-center gap-4">
                     {/* Team Icon */}
                     <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-2xl">
-                      {team.sport === 'Football' ? '⚽' : 
-                       team.sport === 'Basketball' ? '🏀' : 
-                       team.sport === 'Volleyball' ? '🏐' : 
-                       team.sport === 'Swimming' ? '🏊' : '🏆'}
+                      {team.sport === 'Football' ? 'âš½' : 
+                       team.sport === 'Basketball' ? 'ðŸ€' : 
+                       team.sport === 'Volleyball' ? 'ðŸ' : 
+                       team.sport === 'Swimming' ? 'ðŸŠ' : 'ðŸ†'}
                     </div>
 
                     <div>
@@ -309,7 +308,7 @@ export default function ClubsDashboard() {
 
                   {/* Arrow indicator */}
                   <div className="text-primary opacity-0 group-hover:opacity-100 transform translate-x-2 group-hover:translate-x-0 transition-all ml-4">
-                    →
+                    â†’
                   </div>
                 </div>
               </div>
@@ -411,7 +410,7 @@ export default function ClubsDashboard() {
               onClick={() => setOpenCreateModal(false)}
               className="absolute top-4 right-4 z-10 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-light transition-all"
             >
-              ✕
+              âœ•
             </button>
             <CreateClubWithSubscription />
           </div>

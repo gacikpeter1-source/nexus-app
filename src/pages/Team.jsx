@@ -185,11 +185,11 @@ export default function Team() {
       {/* Header */}
       <div className="mb-8">
         <button
-          onClick={() => navigate('/dashboard')}
+          onClick={() => navigate(-1)}
           className="mb-4 flex items-center gap-2 text-light/60 hover:text-light transition-colors"
         >
           <span>←</span>
-          <span>Back to Dashboard</span>
+          <span>Back</span>
         </button>
         
         <div className="flex items-start justify-between">
@@ -403,6 +403,12 @@ export default function Team() {
                               <span>📧</span>
                               <span>{trainer.email || 'No email'}</span>
                             </div>
+                            {trainer.phone && (
+                              <div className="flex items-center gap-2 text-light/70">
+                                <span>📱</span>
+                                <span>{trainer.phone}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium">

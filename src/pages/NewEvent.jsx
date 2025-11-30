@@ -70,9 +70,26 @@ export default function NewEvent() {
   // Get clubs that user owns (SuperTrainer only)
   const ownedClubs = clubs.filter(c => c.createdBy === user?.id);
 
+  // Get clubs where user is trainer or assistant
+  const clubsWhereTrainerOrAssistant = clubs.filter(c => 
+    (c.trainers || []).includes(user?.id) || 
+    (c.assistants || []).includes(user?.id)
+  );
+
   // Determine user's role capabilities
-  const canCreateTeamEvents = user && ['admin', 'trainer', 'assistant'].includes(user.role);
-  const canCreateClubEvents = (user && user.isSuperAdmin && ownedClubs.length > 0) || user?.role === 'admin';
+  const canCreateTeamEvents = user && (
+    user.role === 'admin' || 
+    user.isSuperAdmin ||
+    user.role === 'trainer' || 
+    user.role === 'assistant' ||
+    clubsWhereTrainerOrAssistant.length > 0
+  );
+  
+  const canCreateClubEvents = user && (
+    user.isSuperAdmin || 
+    user.role === 'admin' || 
+    ownedClubs.length > 0
+  );
 
   // Auto-set createdBy when user loads
   useEffect(() => {
@@ -80,12 +97,15 @@ export default function NewEvent() {
     
     setForm(f => ({ ...f, createdBy: user.id }));
     
-    // Set default visibility based on role
-    if (user.role === 'user' || user.role === 'parent') {
+    // Set default visibility based on capabilities
+    if (!canCreateTeamEvents && !canCreateClubEvents) {
+      // Regular users - only personal
       setForm(f => ({ ...f, visibilityLevel: 'personal' }));
     } else if (canCreateTeamEvents && !canCreateClubEvents) {
+      // Trainers/Assistants - default to team
       setForm(f => ({ ...f, visibilityLevel: 'team' }));
     }
+    // SuperAdmin/Club owners can choose - leave as is
   }, [user, canCreateTeamEvents, canCreateClubEvents]);
 
   const handleSubmit = async (e) => {
