@@ -1,5 +1,5 @@
 // src/pages/Event.jsx
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
@@ -23,7 +23,6 @@ export default function EventPage() {
   // Invite state
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteSearch, setInviteSearch] = useState('');
-  const [invitedUsers, setInvitedUsers] = useState([]);
 
   useEffect(() => {
     loadEventData();
@@ -231,17 +230,17 @@ export default function EventPage() {
   }
 
   // Invite existing user
-  async function inviteUser(user) {
-    if (invitedUsers.includes(user.email)) {
-      showToast('Already invited this user', 'info');
-      return;
-    }
-
+  async function inviteUser(invitedUser) {
     try {
-      // TODO: Create notification in Firebase or send email
-      setInvitedUsers([...invitedUsers, user.email]);
-      showToast(`Invitation sent to ${user.username}`, 'success');
+      // Add user to event responses as "maybe" 
+      // This makes the event visible in their calendar
+      await updateEventResponse(eventId, invitedUser.id, 'maybe');
+      
+      showToast(`${invitedUser.username} can now see this event`, 'success');
       setInviteSearch('');
+      
+      // Reload event to show updated list
+      await loadEventData();
     } catch (error) {
       console.error('Error inviting user:', error);
       showToast('Failed to send invitation', 'error');
@@ -289,7 +288,7 @@ export default function EventPage() {
 
       {/* Event Header */}
       <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 mb-6">
-        <div className="flex items-start justify-between mb-4">
+        <div className="flex items-start justify-between gap-6 mb-4">
           <div className="flex-1">
             <h1 className="font-title text-4xl text-light mb-2">{event.title}</h1>
             
@@ -361,11 +360,58 @@ export default function EventPage() {
               </div>
             )}
           </div>
+
+          {/* Right side - RSVP Buttons for non-personal events */}
+          {event.visibilityLevel !== 'personal' && user && (
+            <div className="flex flex-col gap-2 min-w-[140px]">
+              <button 
+                onClick={() => handleRsvp('attending')} 
+                className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
+                  userResponse?.status === 'attending' 
+                    ? 'bg-green-600 text-white ring-2 ring-green-400' 
+                    : 'bg-green-500 text-white hover:bg-green-600'
+                }`}
+                disabled={updatingRsvp}
+              >
+                {userResponse?.status === 'attending' ? '✓ Attending' : 'I will attend'}
+              </button>
+              <button 
+                onClick={() => handleRsvp('declined')} 
+                className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
+                  userResponse?.status === 'declined' 
+                    ? 'bg-red-600 text-white ring-2 ring-red-400' 
+                    : 'bg-red-500 text-white hover:bg-red-600'
+                }`}
+                disabled={updatingRsvp}
+              >
+                {userResponse?.status === 'declined' ? '✓ Declined' : 'Decline'}
+              </button>
+              <button 
+                onClick={() => handleRsvp('maybe')} 
+                className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
+                  userResponse?.status === 'maybe' 
+                    ? 'bg-yellow-600 text-white ring-2 ring-yellow-400' 
+                    : 'bg-yellow-500 text-white hover:bg-yellow-600'
+                }`}
+                disabled={updatingRsvp}
+              >
+                {userResponse?.status === 'maybe' ? '✓ Maybe' : 'Maybe'}
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Edit/Delete Buttons */}
+        {/* Edit/Delete/Invite Buttons */}
         {canEdit && (
           <div className="flex gap-2 pt-4 border-t border-white/10">
+            {event.visibilityLevel !== 'personal' && (
+              <button
+                onClick={() => setShowInviteModal(true)}
+                className="px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
+              >
+                ➕ Invite
+              </button>
+            )}
             <Link
               to={`/edit-event/${eventId}`}
               className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-all"
@@ -381,98 +427,6 @@ export default function EventPage() {
           </div>
         )}
       </div>
-
-      {/* RSVP Buttons (for non-personal events) */}
-      {event.visibilityLevel !== 'personal' && user && (
-        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 mb-6">
-          <h2 className="font-title text-2xl text-light mb-4">Your Response</h2>
-          
-          {userResponse && (
-            <div className="mb-4 p-3 bg-primary/10 border border-primary/30 rounded-lg">
-              <span className="text-light">
-                Current: <strong className="text-primary">
-                  {userResponse.status === 'attending' && '✅ Attending'}
-                  {userResponse.status === 'declined' && '❌ Not Attending'}
-                  {userResponse.status === 'maybe' && '⚠️ Maybe'}
-                </strong>
-              </span>
-            </div>
-          )}
-          
-          <div className="flex gap-3">
-            <button 
-              onClick={() => handleRsvp('attending')} 
-              className={`flex-1 px-6 py-3 rounded-lg font-medium transition-all ${
-                userResponse?.status === 'attending' 
-                  ? 'bg-green-600 text-white ring-2 ring-green-400' 
-                  : 'bg-green-500 text-white hover:bg-green-600'
-              }`}
-              disabled={updatingRsvp}
-            >
-              ✅ I will attend
-            </button>
-            <button 
-              onClick={() => handleRsvp('declined')} 
-              className={`flex-1 px-6 py-3 rounded-lg font-medium transition-all ${
-                userResponse?.status === 'declined' 
-                  ? 'bg-red-600 text-white ring-2 ring-red-400' 
-                  : 'bg-red-500 text-white hover:bg-red-600'
-              }`}
-              disabled={updatingRsvp}
-            >
-              ❌ Decline
-            </button>
-            <button 
-              onClick={() => handleRsvp('maybe')} 
-              className={`flex-1 px-6 py-3 rounded-lg font-medium transition-all ${
-                userResponse?.status === 'maybe' 
-                  ? 'bg-yellow-600 text-white ring-2 ring-yellow-400' 
-                  : 'bg-yellow-500 text-white hover:bg-yellow-600'
-              }`}
-              disabled={updatingRsvp}
-            >
-              ⚠️ Maybe
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Invite Section - Only for managers */}
-      {event.visibilityLevel !== 'personal' && canEdit && (
-        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-title text-2xl text-light">Invite Participants</h2>
-            <button
-              onClick={() => setShowInviteModal(true)}
-              className="px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all inline-flex items-center gap-2"
-            >
-              ➕ Invite
-            </button>
-          </div>
-          
-          {invitedUsers.length > 0 && (
-            <div>
-              <p className="text-sm text-light/60 mb-2">Invited ({invitedUsers.length}):</p>
-              <div className="flex flex-wrap gap-2">
-                {invitedUsers.map((email, idx) => (
-                  <span 
-                    key={idx}
-                    className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-sm font-medium"
-                  >
-                    ✉️ {email}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          {invitedUsers.length === 0 && (
-            <p className="text-light/60 text-sm">
-              Click "Invite" to send event invitations to users or email addresses.
-            </p>
-          )}
-        </div>
-      )}
 
       {/* Attendance Statistics */}
       <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 mb-6">
@@ -650,56 +604,6 @@ export default function EventPage() {
               </div>
             )}
 
-            {/* Email Invite Section */}
-            <div className="border-t border-white/10 pt-4">
-              <p className="text-sm text-light/60 mb-3">
-                Or invite by email address:
-              </p>
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  placeholder="email@example.com"
-                  value={inviteSearch}
-                  onChange={(e) => setInviteSearch(e.target.value)}
-                  className="flex-1 bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter' && inviteSearch.includes('@')) {
-                      sendEmailInvite();
-                    }
-                  }}
-                />
-                <button
-                  onClick={sendEmailInvite}
-                  disabled={!inviteSearch.includes('@')}
-                  className="px-4 py-2 bg-primary hover:bg-primary/80 disabled:bg-white/10 disabled:text-light/40 text-white rounded-lg font-medium transition-all"
-                >
-                  Send Invite
-                </button>
-              </div>
-              <p className="text-xs text-light/50 mt-2">
-                💡 Enter an email address to send an invitation
-              </p>
-            </div>
-
-            {/* Already Invited List */}
-            {invitedUsers.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-white/10">
-                <p className="text-xs text-light/60 mb-2 uppercase tracking-wide">
-                  Already Invited ({invitedUsers.length}):
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {invitedUsers.map((email, idx) => (
-                    <span 
-                      key={idx}
-                      className="px-2 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium"
-                    >
-                      ✓ {email}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Close Button */}
             <button
               onClick={() => {
@@ -716,6 +620,3 @@ export default function EventPage() {
     </div>
   );
 }
-
-
-
