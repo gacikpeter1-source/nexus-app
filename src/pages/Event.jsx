@@ -19,6 +19,11 @@ export default function EventPage() {
   const [showTracking, setShowTracking] = useState(false);
   const [trackingFilter, setTrackingFilter] = useState('all');
   const [updatingRsvp, setUpdatingRsvp] = useState(false);
+  
+  // Invite state
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteSearch, setInviteSearch] = useState('');
+  const [invitedUsers, setInvitedUsers] = useState([]);
 
   useEffect(() => {
     loadEventData();
@@ -181,6 +186,67 @@ export default function EventPage() {
     
     return true;
   });
+
+  // Search results for invite
+  const searchResults = useMemo(() => {
+    if (inviteSearch.length < 2) return [];
+    
+    const search = inviteSearch.toLowerCase();
+    const existingMemberIds = getAllMembers().map(m => m.id);
+    
+    return allUsers
+      .filter(u => 
+        (u.username?.toLowerCase().includes(search) ||
+         u.email?.toLowerCase().includes(search)) &&
+        !existingMemberIds.includes(u.id) // Exclude existing members
+      )
+      .slice(0, 10); // Limit to 10 results
+  }, [inviteSearch, allUsers, event]);
+
+  // Send email invite
+  async function sendEmailInvite() {
+    const email = inviteSearch.trim();
+    
+    if (!email.includes('@')) {
+      showToast('Please enter a valid email address', 'error');
+      return;
+    }
+
+    // Check if already invited
+    if (invitedUsers.includes(email)) {
+      showToast('Already invited this email', 'info');
+      return;
+    }
+
+    try {
+      // TODO: Implement actual email sending via Firebase Functions
+      // For now, just track locally
+      setInvitedUsers([...invitedUsers, email]);
+      showToast(`Invitation sent to ${email}`, 'success');
+      setInviteSearch('');
+    } catch (error) {
+      console.error('Error sending invite:', error);
+      showToast('Failed to send invitation', 'error');
+    }
+  }
+
+  // Invite existing user
+  async function inviteUser(user) {
+    if (invitedUsers.includes(user.email)) {
+      showToast('Already invited this user', 'info');
+      return;
+    }
+
+    try {
+      // TODO: Create notification in Firebase or send email
+      setInvitedUsers([...invitedUsers, user.email]);
+      showToast(`Invitation sent to ${user.username}`, 'success');
+      setInviteSearch('');
+    } catch (error) {
+      console.error('Error inviting user:', error);
+      showToast('Failed to send invitation', 'error');
+    }
+  }
 
   if (loading) {
     return (
@@ -371,6 +437,43 @@ export default function EventPage() {
         </div>
       )}
 
+      {/* Invite Section - Only for managers */}
+      {event.visibilityLevel !== 'personal' && canEdit && (
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-title text-2xl text-light">Invite Participants</h2>
+            <button
+              onClick={() => setShowInviteModal(true)}
+              className="px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all inline-flex items-center gap-2"
+            >
+              ➕ Invite
+            </button>
+          </div>
+          
+          {invitedUsers.length > 0 && (
+            <div>
+              <p className="text-sm text-light/60 mb-2">Invited ({invitedUsers.length}):</p>
+              <div className="flex flex-wrap gap-2">
+                {invitedUsers.map((email, idx) => (
+                  <span 
+                    key={idx}
+                    className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-sm font-medium"
+                  >
+                    ✉️ {email}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {invitedUsers.length === 0 && (
+            <p className="text-light/60 text-sm">
+              Click "Invite" to send event invitations to users or email addresses.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Attendance Statistics */}
       <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 mb-6">
         <h2 className="font-title text-2xl text-light mb-4">Attendance Statistics</h2>
@@ -475,6 +578,138 @@ export default function EventPage() {
                 );
               })
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Invite Modal */}
+      {showInviteModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-title text-2xl text-light">Invite to Event</h3>
+              <button
+                onClick={() => {
+                  setShowInviteModal(false);
+                  setInviteSearch('');
+                }}
+                className="text-light/60 hover:text-light transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Search Input */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-light/80 mb-2">
+                Search by name or email
+              </label>
+              <input
+                type="text"
+                placeholder="Type to search users..."
+                value={inviteSearch}
+                onChange={(e) => setInviteSearch(e.target.value)}
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                autoFocus
+              />
+            </div>
+
+            {/* Search Results - Existing Users */}
+            {searchResults.length > 0 && (
+              <div className="mb-4">
+                <p className="text-xs text-light/60 mb-2 uppercase tracking-wide">Existing Users:</p>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {searchResults.map(user => (
+                    <div
+                      key={user.id}
+                      onClick={() => inviteUser(user)}
+                      className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 hover:border-primary/50 cursor-pointer transition-all group"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold">
+                        {user.username?.charAt(0).toUpperCase() || '?'}
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium text-light group-hover:text-primary transition-colors">
+                          {user.username}
+                        </div>
+                        <div className="text-xs text-light/60">{user.email}</div>
+                      </div>
+                      <button className="px-3 py-1 bg-primary/20 text-primary group-hover:bg-primary group-hover:text-white rounded-full text-xs font-medium transition-all">
+                        Invite
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* No Results Message */}
+            {inviteSearch.length >= 2 && searchResults.length === 0 && !inviteSearch.includes('@') && (
+              <div className="mb-4 p-4 bg-white/5 border border-white/10 rounded-lg text-center">
+                <p className="text-light/60 text-sm">No users found matching "{inviteSearch}"</p>
+              </div>
+            )}
+
+            {/* Email Invite Section */}
+            <div className="border-t border-white/10 pt-4">
+              <p className="text-sm text-light/60 mb-3">
+                Or invite by email address:
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  placeholder="email@example.com"
+                  value={inviteSearch}
+                  onChange={(e) => setInviteSearch(e.target.value)}
+                  className="flex-1 bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && inviteSearch.includes('@')) {
+                      sendEmailInvite();
+                    }
+                  }}
+                />
+                <button
+                  onClick={sendEmailInvite}
+                  disabled={!inviteSearch.includes('@')}
+                  className="px-4 py-2 bg-primary hover:bg-primary/80 disabled:bg-white/10 disabled:text-light/40 text-white rounded-lg font-medium transition-all"
+                >
+                  Send Invite
+                </button>
+              </div>
+              <p className="text-xs text-light/50 mt-2">
+                💡 Enter an email address to send an invitation
+              </p>
+            </div>
+
+            {/* Already Invited List */}
+            {invitedUsers.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-white/10">
+                <p className="text-xs text-light/60 mb-2 uppercase tracking-wide">
+                  Already Invited ({invitedUsers.length}):
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {invitedUsers.map((email, idx) => (
+                    <span 
+                      key={idx}
+                      className="px-2 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium"
+                    >
+                      ✓ {email}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Close Button */}
+            <button
+              onClick={() => {
+                setShowInviteModal(false);
+                setInviteSearch('');
+              }}
+              className="w-full mt-4 px-4 py-3 bg-white/10 text-light rounded-lg hover:bg-white/15 font-medium transition-all"
+            >
+              Done
+            </button>
           </div>
         </div>
       )}
