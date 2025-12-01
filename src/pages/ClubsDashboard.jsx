@@ -238,7 +238,7 @@ export default function ClubsDashboard() {
 
                 {/* Arrow indicator */}
                 <div className="absolute bottom-6 right-6 text-primary opacity-0 group-hover:opacity-100 transform translate-x-2 group-hover:translate-x-0 transition-all">
-                  â†’
+                  →
                 </div>
               </div>
             </div>
@@ -300,11 +300,8 @@ export default function ClubsDashboard() {
                 <div className="relative z-10 flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     {/* Team Icon */}
-                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-2xl">
-                      {team.sport === 'Football' ? 'âš½' : 
-                       team.sport === 'Basketball' ? 'ðŸ€' : 
-                       team.sport === 'Volleyball' ? 'ðŸ' : 
-                       team.sport === 'Swimming' ? 'ðŸŠ' : 'ðŸ†'}
+                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-2xl font-bold text-white">
+                      {team.name.charAt(0).toUpperCase()}
                     </div>
 
                     <div>
@@ -328,7 +325,7 @@ export default function ClubsDashboard() {
 
                   {/* Arrow indicator */}
                   <div className="text-primary opacity-0 group-hover:opacity-100 transform translate-x-2 group-hover:translate-x-0 transition-all ml-4">
-                    â†’
+                    →
                   </div>
                 </div>
               </div>

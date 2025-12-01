@@ -20,6 +20,11 @@ export default function EventPage() {
   const [trackingFilter, setTrackingFilter] = useState('all');
   const [updatingRsvp, setUpdatingRsvp] = useState(false);
   
+  // Message modal state
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [messageType, setMessageType] = useState(''); // 'maybe' or 'declined'
+  const [responseMessage, setResponseMessage] = useState('');
+  
   // Invite state
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteSearch, setInviteSearch] = useState('');
@@ -70,12 +75,12 @@ export default function EventPage() {
     }
   }
 
-  async function handleRsvp(status) {
+  async function handleRsvp(status, message = '') {
     if (!user || !event) return;
 
     try {
       setUpdatingRsvp(true);
-      await updateEventResponse(eventId, user.id, status);
+      await updateEventResponse(eventId, user.id, status, message);
       
       // Reload event to get updated responses
       await loadEventData();
@@ -89,6 +94,22 @@ export default function EventPage() {
     } finally {
       setUpdatingRsvp(false);
     }
+  }
+
+  function openMessageModal(type) {
+    setMessageType(type);
+    setResponseMessage('');
+    setShowMessageModal(true);
+  }
+
+  async function handleSubmitWithMessage() {
+    if (!responseMessage.trim()) {
+      showToast('Please enter a message', 'error');
+      return;
+    }
+    
+    await handleRsvp(messageType, responseMessage);
+    setShowMessageModal(false);
   }
 
   async function handleDelete() {
@@ -426,28 +447,52 @@ export default function EventPage() {
               >
                 {userResponse?.status === 'attending' ? '✓ Attending' : 'I will attend'}
               </button>
-              <button 
-                onClick={() => handleRsvp('declined')} 
-                className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
-                  userResponse?.status === 'declined' 
-                    ? 'bg-red-600 text-white ring-2 ring-red-400' 
-                    : 'bg-red-500 text-white hover:bg-red-600'
-                }`}
-                disabled={updatingRsvp}
-              >
-                {userResponse?.status === 'declined' ? '✓ Declined' : 'Decline'}
-              </button>
-              <button 
-                onClick={() => handleRsvp('maybe')} 
-                className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
-                  userResponse?.status === 'maybe' 
-                    ? 'bg-yellow-600 text-white ring-2 ring-yellow-400' 
-                    : 'bg-yellow-500 text-white hover:bg-yellow-600'
-                }`}
-                disabled={updatingRsvp}
-              >
-                {userResponse?.status === 'maybe' ? '✓ Maybe' : 'Maybe'}
-              </button>
+
+              {/* Decline with dropdown */}
+              <div className="relative group">
+                <button 
+                  onClick={() => handleRsvp('declined')} 
+                  className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
+                    userResponse?.status === 'declined' 
+                      ? 'bg-red-600 text-white ring-2 ring-red-400' 
+                      : 'bg-red-500 text-white hover:bg-red-600'
+                  } group-hover:rounded-b-none`}
+                  disabled={updatingRsvp}
+                >
+                  {userResponse?.status === 'declined' ? '✓ Declined' : 'Decline'}
+                </button>
+                <div className="hidden group-hover:block absolute top-full left-0 w-full bg-red-600 rounded-b-lg overflow-hidden shadow-lg z-10">
+                  <button
+                    onClick={() => openMessageModal('declined')}
+                    className="w-full px-4 py-2 text-white hover:bg-red-700 text-sm text-left transition-colors"
+                  >
+                    Decline with message
+                  </button>
+                </div>
+              </div>
+
+              {/* Maybe with dropdown */}
+              <div className="relative group">
+                <button 
+                  onClick={() => handleRsvp('maybe')} 
+                  className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
+                    userResponse?.status === 'maybe' 
+                      ? 'bg-yellow-600 text-white ring-2 ring-yellow-400' 
+                      : 'bg-yellow-500 text-white hover:bg-yellow-600'
+                  } group-hover:rounded-b-none`}
+                  disabled={updatingRsvp}
+                >
+                  {userResponse?.status === 'maybe' ? '✓ Maybe' : 'Maybe'}
+                </button>
+                <div className="hidden group-hover:block absolute top-full left-0 w-full bg-yellow-600 rounded-b-lg overflow-hidden shadow-lg z-10">
+                  <button
+                    onClick={() => openMessageModal('maybe')}
+                    className="w-full px-4 py-2 text-white hover:bg-yellow-700 text-sm text-left transition-colors"
+                  >
+                    Maybe with message
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -546,46 +591,81 @@ export default function EventPage() {
                 No members in this filter
               </div>
             ) : (
-              filteredMembers.map(member => {
+              filteredMembers.map((member, idx) => {
                 const response = event.responses?.[member.id];
+                
+                // Calculate standby status if limit exists
+                const isStandby = event.participantLimit && response?.status === 'attending' ? 
+                  (() => {
+                    const attendingList = Object.entries(event.responses || {})
+                      .filter(([_, r]) => r.status === 'attending')
+                      .sort((a, b) => {
+                        const timeA = a[1].timestamp?.toMillis?.() || 0;
+                        const timeB = b[1].timestamp?.toMillis?.() || 0;
+                        return timeA - timeB;
+                      });
+                    const userIndex = attendingList.findIndex(([id]) => id === member.id);
+                    return userIndex >= event.participantLimit;
+                  })() : false;
+
+                const canSeeMessage = canManageEvent();
+
                 return (
                   <div
                     key={member.id}
-                    className="flex items-center justify-between p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-all"
+                    className={`p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-all ${
+                      isStandby ? 'opacity-50' : ''
+                    }`}
                   >
-                    <div className="flex items-center gap-3 flex-1">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold shrink-0">
-                        {member.username?.charAt(0).toUpperCase() || '?'}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 flex-1">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold shrink-0">
+                          {member.username?.charAt(0).toUpperCase() || '?'}
+                        </div>
+                        <div className="flex items-center gap-2 flex-1">
+                          <span className="font-medium text-light">{member.username || 'Unknown'}</span>
+                          {member.role && (
+                            <span className="text-xs text-light/50">• {member.role}</span>
+                          )}
+                          {member.memberType === 'External' && (
+                            <span className="px-2 py-1 bg-blue-500/20 text-blue-300 rounded text-xs font-medium">
+                              External
+                            </span>
+                          )}
+                          {isStandby && (
+                            <span className="px-2 py-1 bg-orange-500/20 text-orange-300 rounded text-xs font-medium">
+                              Standby
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-1">
-                        <span className="font-medium text-light">{member.username || 'Unknown'}</span>
-                        {member.role && (
-                          <span className="text-xs text-light/50">• {member.role}</span>
-                        )}
-                        {member.memberType === 'External' && (
-                          <span className="px-2 py-1 bg-blue-500/20 text-blue-300 rounded text-xs font-medium">
-                            External
+                      <div>
+                        {response ? (
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            response.status === 'attending' ? 'bg-green-500/20 text-green-300' :
+                            response.status === 'declined' ? 'bg-red-500/20 text-red-300' :
+                            'bg-yellow-500/20 text-yellow-300'
+                          }`}>
+                            {response.status === 'attending' && (isStandby ? '⏳ Standby' : '✅ Attending')}
+                            {response.status === 'declined' && '❌ Not Attending'}
+                            {response.status === 'maybe' && '⚠️ Maybe'}
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-white/5 text-light/50">
+                            ⏳ No Response
                           </span>
                         )}
                       </div>
                     </div>
-                    <div>
-                      {response ? (
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          response.status === 'attending' ? 'bg-green-500/20 text-green-300' :
-                          response.status === 'declined' ? 'bg-red-500/20 text-red-300' :
-                          'bg-yellow-500/20 text-yellow-300'
-                        }`}>
-                          {response.status === 'attending' && '✅ Attending'}
-                          {response.status === 'declined' && '❌ Not Attending'}
-                          {response.status === 'maybe' && '⚠️ Maybe'}
-                        </span>
-                      ) : (
-                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-white/5 text-light/50">
-                          ⏳ No Response
-                        </span>
-                      )}
-                    </div>
+
+                    {/* Show message if exists and user can see it */}
+                    {canSeeMessage && response?.message && (
+                      <div className="mt-2 pl-13 pr-3">
+                        <div className="text-xs text-light/60 bg-white/5 border border-white/10 rounded px-3 py-2">
+                          <span className="font-medium">Message:</span> {response.message}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })
@@ -672,6 +752,50 @@ export default function EventPage() {
             >
               Done
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Message Modal */}
+      {showMessageModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-mid-dark border border-white/10 rounded-xl p-6 max-w-md w-full">
+            <h3 className="font-title text-2xl text-light mb-4">
+              {messageType === 'maybe' ? 'Maybe - Add Message' : 'Decline - Add Message'}
+            </h3>
+            
+            <p className="text-light/70 text-sm mb-4">
+              Your message will be visible only to the event creator.
+            </p>
+
+            <textarea
+              value={responseMessage}
+              onChange={(e) => setResponseMessage(e.target.value)}
+              placeholder="e.g., Sickness, Away, Family event..."
+              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all min-h-[100px]"
+              maxLength={200}
+            />
+            <p className="text-xs text-light/50 mt-1">{responseMessage.length}/200 characters</p>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowMessageModal(false)}
+                className="flex-1 px-4 py-2 bg-white/10 hover:bg-white/15 text-light rounded-lg font-medium transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmitWithMessage}
+                disabled={!responseMessage.trim()}
+                className={`flex-1 px-4 py-2 text-white rounded-lg font-medium transition-all ${
+                  messageType === 'maybe' 
+                    ? 'bg-yellow-500 hover:bg-yellow-600' 
+                    : 'bg-red-500 hover:bg-red-600'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                Submit
+              </button>
+            </div>
           </div>
         </div>
       )}

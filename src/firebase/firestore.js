@@ -267,7 +267,7 @@ export const getTeamEvents = async (teamId) => {
 };
 
 // Add or update RSVP response for an event
-export const updateEventResponse = async (eventId, userId, status) => {
+export const updateEventResponse = async (eventId, userId, status, message = '') => {
   try {
     const eventRef = doc(db, 'events', eventId);
     const eventDoc = await getDoc(eventRef);
@@ -281,6 +281,7 @@ export const updateEventResponse = async (eventId, userId, status) => {
       ...currentResponses,
       [userId]: {
         status, // 'attending', 'declined', 'maybe'
+        message: message || undefined, // Only save if provided
         timestamp: serverTimestamp()
       }
     };
