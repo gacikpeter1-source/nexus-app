@@ -945,11 +945,15 @@ async function handleCreateOrder() {
       clubId: selectedClubId,
       createdBy: user.id,
       title: orderForm.title.trim(),
-      description: orderForm.description.trim(),
-      teams: orderForm.teams,
-      deadline: orderForm.deadline || null,
+      description: orderForm.description.trim() || '',
+      teams: orderForm.teams || [],
       fields: orderForm.fields
     };
+
+    // Only add deadline if it exists
+    if (orderForm.deadline) {
+      orderData.deadline = orderForm.deadline;
+    }
 
     await createOrderTemplate(orderData);
     showToast('Order created successfully!', 'success');
