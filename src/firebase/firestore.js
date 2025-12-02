@@ -728,5 +728,5 @@ export default {
   getOrderResponses,
   checkUserOrderResponse,
   getOrderStatistics
-
+  
 };

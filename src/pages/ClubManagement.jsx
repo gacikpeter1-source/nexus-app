@@ -16,7 +16,8 @@ import {
   getOrderTemplate,
   updateOrderTemplate,
   deleteOrderTemplate,
-  getClubOrderTemplates
+  getClubOrderTemplates,
+  getOrderResponses
 } from '../firebase/firestore';
 import {
   canPromoteToTrainer,
@@ -110,6 +111,8 @@ const [orders, setOrders] = useState([]);
 const [showCreateOrderModal, setShowCreateOrderModal] = useState(false);
 const [selectedOrder, setSelectedOrder] = useState(null);
 const [showOrderResponsesModal, setShowOrderResponsesModal] = useState(false);
+const [orderResponses, setOrderResponses] = useState([]);
+const [loadingResponses, setLoadingResponses] = useState(false);
 
   // Order form state
   const [orderForm, setOrderForm] = useState({
@@ -933,6 +936,45 @@ function removeFieldFromOrder(fieldId) {
   }));
 }
 
+function exportToExcel(order, responses) {
+  if (responses.length === 0) {
+    showToast('No responses to export', 'info');
+    return;
+  }
+
+  // Create CSV content
+  const headers = ['Name', 'Email', 'Status', ...order.fields.map(f => f.label)];
+  const csvRows = [headers.join(',')];
+
+  responses.forEach(response => {
+    const row = [
+      `"${response.userName}"`,
+      `"${response.userEmail}"`,
+      response.status,
+      ...order.fields.map(field => {
+        const value = response.responses?.[field.id] || '';
+        return `"${value}"`;
+      })
+    ];
+    csvRows.push(row.join(','));
+  });
+
+  const csvContent = csvRows.join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  
+  link.setAttribute('href', url);
+  link.setAttribute('download', `${order.title}_responses.csv`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  
+  showToast('Exported to Excel!', 'success');
+}
+
+
 async function handleCreateOrder() {
   if (!orderForm.title.trim()) {
     showToast('Order title is required', 'error');
@@ -999,8 +1041,34 @@ async function handleDeleteOrder(orderId) {
 async function handleViewOrderResponses(order) {
   setSelectedOrder(order);
   setShowOrderResponsesModal(true);
+  await loadOrderResponses(order);
 }
 
+async function loadOrderResponses(order) {
+  setLoadingResponses(true);
+  try {
+    const responses = await getOrderResponses(order.id);
+    
+    // Get user details for each response
+    const responsesWithUsers = await Promise.all(
+      responses.map(async (response) => {
+        const userData = allUsers.find(u => u.id === response.userId);
+        return {
+          ...response,
+          userName: userData?.username || userData?.email || 'Unknown',
+          userEmail: userData?.email || ''
+        };
+      })
+    );
+    
+    setOrderResponses(responsesWithUsers);
+  } catch (error) {
+    console.error('Error loading order responses:', error);
+    showToast('Failed to load responses', 'error');
+  } finally {
+    setLoadingResponses(false);
+  }
+}
 
 
   // Handle removing user from specific team (from Actions dropdown)
@@ -1915,7 +1983,7 @@ async function handleViewOrderResponses(order) {
         onClick={() => setShowCreateOrderModal(true)}
         className="px-4 py-2 text-sm bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
       >
-        ➕ Create Order
+        Create Order
       </button>
     </div>
 
@@ -1966,10 +2034,10 @@ async function handleViewOrderResponses(order) {
                     <p className="text-sm text-light/60 mb-2">{order.description}</p>
                   )}
                   <div className="flex flex-wrap gap-3 text-xs text-light/50">
-                    <span>👥 {teamNames}</span>
-                    <span>📋 {order.fields.length} fields</span>
+                    <span>{teamNames}</span>
+                    <span>{order.fields.length} fields</span>
                     {order.deadline && (
-                      <span>⏰ Deadline: {new Date(order.deadline).toLocaleDateString()}</span>
+                      <span>Deadline: {new Date(order.deadline).toLocaleDateString()}</span>
                     )}
                   </div>
                 </div>
@@ -1979,7 +2047,7 @@ async function handleViewOrderResponses(order) {
                     onClick={() => handleViewOrderResponses(order)}
                     className="px-3 py-1.5 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-all"
                   >
-                    📊 View Responses
+                    View Responses
                   </button>
                   {isActive && (
                     <button
@@ -2260,6 +2328,124 @@ async function handleViewOrderResponses(order) {
   </div>
 )}
       </div>
+
+{/* View Responses Modal */}
+{showOrderResponsesModal && selectedOrder && (
+  <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h3 className="font-title text-2xl text-light">{selectedOrder.title} - Responses</h3>
+          <p className="text-sm text-light/60 mt-1">
+            {orderResponses.filter(r => r.status === 'accepted').length} Accepted • 
+            {orderResponses.filter(r => r.status === 'declined').length} Declined
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => exportToExcel(selectedOrder, orderResponses)}
+            className="px-4 py-2 text-sm bg-green-500 hover:bg-green-600 text-white rounded-lg transition-all"
+            disabled={orderResponses.length === 0}
+          >
+            Export to Excel
+          </button>
+          <button
+            onClick={() => {
+              setShowOrderResponsesModal(false);
+              setSelectedOrder(null);
+              setOrderResponses([]);
+            }}
+            className="text-light/60 hover:text-light transition-colors"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+
+      {loadingResponses ? (
+        <div className="text-center py-12 text-light/60">Loading responses...</div>
+      ) : orderResponses.length === 0 ? (
+        <div className="text-center py-12">
+          <div className="text-4xl mb-3">📋</div>
+          <p className="text-light/60">No responses yet</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[600px]">
+            <thead>
+              <tr className="border-b border-white/10">
+                <th className="text-left text-sm font-medium text-light/80 pb-3 pr-4">Name</th>
+                <th className="text-left text-sm font-medium text-light/80 pb-3 pr-4">Status</th>
+                {selectedOrder.fields.map(field => (
+                  <th key={field.id} className="text-left text-sm font-medium text-light/80 pb-3 pr-4">
+                    {field.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {orderResponses.map((response, idx) => (
+                <tr
+                  key={response.id}
+                  className={`border-b border-white/5 ${
+                    response.status === 'declined' ? 'opacity-50' : ''
+                  }`}
+                >
+                  <td className="py-3 pr-4">
+                    <div>
+                      <div className="text-sm text-light font-medium">{response.userName}</div>
+                      <div className="text-xs text-light/50">{response.userEmail}</div>
+                    </div>
+                  </td>
+                  <td className="py-3 pr-4">
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      response.status === 'accepted'
+                        ? 'bg-green-500/20 text-green-300'
+                        : 'bg-red-500/20 text-red-300'
+                    }`}>
+                      {response.status === 'accepted' ? '✓ Accepted' : '✗ Declined'}
+                    </span>
+                  </td>
+                  {selectedOrder.fields.map(field => (
+                    <td key={field.id} className="py-3 pr-4 text-sm text-light/70">
+                      {response.responses?.[field.id] || '-'}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Statistics */}
+      {orderResponses.length > 0 && (
+        <div className="mt-6 pt-6 border-t border-white/10">
+          <h4 className="text-sm font-medium text-light/80 mb-3">Statistics</h4>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-white/5 rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold text-light">{orderResponses.length}</div>
+              <div className="text-xs text-light/50 mt-1">Total Responses</div>
+            </div>
+            <div className="bg-green-500/10 rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold text-green-400">
+                {orderResponses.filter(r => r.status === 'accepted').length}
+              </div>
+              <div className="text-xs text-green-300 mt-1">Accepted</div>
+            </div>
+            <div className="bg-red-500/10 rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold text-red-400">
+                {orderResponses.filter(r => r.status === 'declined').length}
+              </div>
+              <div className="text-xs text-red-300 mt-1">Declined</div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+)}
+
 
       {/* Team Assignment Modal */}
       {showTeamAssignModal && userToAssign && (
