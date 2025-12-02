@@ -317,7 +317,7 @@ export default function EventPage() {
         <p className="text-light/60 mb-6">This event doesn't exist or has been deleted.</p>
         <button
           onClick={() => navigate('/calendar')}
-          className="px-6 py-3 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
+          className="px-4 py-2 text-sm bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
         >
           Back to Calendar
         </button>
@@ -334,7 +334,7 @@ export default function EventPage() {
       {/* Back Button */}
       <button
         onClick={() => navigate('/calendar')}
-        className="mb-4 flex items-center gap-2 text-light/60 hover:text-light transition-colors"
+        className="mb-4 flex items-center gap-2 text-sm text-light/60 hover:text-light transition-colors"
       >
         <span>←</span>
         <span>Back to Calendar</span>
@@ -342,6 +342,46 @@ export default function EventPage() {
 
       {/* Event Header */}
       <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 mb-6">
+      {/* RSVP Buttons - Top Row */}
+      {event.visibilityLevel !== 'personal' && user && (
+        <div className="flex flex-wrap gap-2 mb-4 pb-4 border-b border-white/10">
+          <button 
+            onClick={() => handleRsvp('attending')} 
+            className={`flex-1 min-w-[100px] px-3 py-1.5 rounded-lg font-medium transition-all text-xs ${
+              userResponse?.status === 'attending' 
+                ? 'bg-green-600 text-white ring-2 ring-green-400' 
+                : 'bg-green-500 text-white hover:bg-green-600'
+            }`}
+            disabled={updatingRsvp}
+          >
+            {userResponse?.status === 'attending' ? '✓ Attending' : 'Attend'}
+          </button>
+
+          <button 
+            onClick={() => handleRsvp('declined')} 
+            className={`flex-1 min-w-[100px] px-3 py-1.5 rounded-lg font-medium transition-all text-xs ${
+              userResponse?.status === 'declined' 
+                ? 'bg-red-600 text-white ring-2 ring-red-400' 
+                : 'bg-red-500 text-white hover:bg-red-600'
+            }`}
+            disabled={updatingRsvp}
+          >
+            {userResponse?.status === 'declined' ? '✓ Declined' : 'Decline'}
+          </button>
+
+          <button 
+            onClick={() => handleRsvp('maybe')} 
+            className={`flex-1 min-w-[100px] px-3 py-1.5 rounded-lg font-medium transition-all text-xs ${
+              userResponse?.status === 'maybe' 
+                ? 'bg-yellow-600 text-white ring-2 ring-yellow-400' 
+                : 'bg-yellow-500 text-white hover:bg-yellow-600'
+            }`}
+            disabled={updatingRsvp}
+          >
+            {userResponse?.status === 'maybe' ? '✓ Maybe' : 'Maybe'}
+          </button>
+        </div>
+      )}
         <div className="flex items-start justify-between gap-6 mb-4">
           <div className="flex-1">
             {/* 1. Event Title */}
@@ -373,48 +413,54 @@ export default function EventPage() {
             </div>
 
             {/* 3. Club and Team */}
-            {(team || (club && event.visibilityLevel === 'club')) && (
-              <div className="space-y-2 text-light/70 mb-4">
-                {club && event.visibilityLevel === 'club' && (
-                  <div className="flex items-center gap-2">
-                    <span>🏛️</span>
-                    <span className="font-medium">{club.name}</span>
-                  </div>
-                )}
+            {(team || club) && (
+              <div className="space-y-1 text-sm text-light/70 mb-4">
                 {team && (
                   <div className="flex items-center gap-2">
-                    <span>👥</span>
+                    <span className="font-medium text-light/50">Team:</span>
                     <Link 
                       to={`/team/${team.clubId}/${team.id}`}
-                      className="text-primary hover:text-primary/80 font-medium"
+                      className="text-primary hover:text-primary/80 font-medium truncate"
                     >
                       {team.name}
                     </Link>
                   </div>
                 )}
+                {club && (
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-light/50">Club:</span>
+                    <span className="font-medium truncate">{club.name}</span>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Type badges */}
-            <div className="flex flex-wrap gap-2 mb-4">
-              <span className="inline-block px-3 py-1 text-sm rounded-full bg-primary/20 text-primary capitalize">
-                {event.type || 'event'}
-              </span>
-              {event.visibilityLevel === 'personal' && (
-                <span className="inline-block px-3 py-1 text-sm rounded-full bg-blue-500/20 text-blue-300">
-                  👤 Personal
+            {/* Event Type and Visibility */}
+            <div className="space-y-1 text-sm mb-4">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-light/50">Type:</span>
+                <span className="inline-block px-3 py-1 text-xs rounded-full bg-primary/20 text-primary capitalize">
+                  {event.type}
                 </span>
-              )}
-              {event.visibilityLevel === 'team' && (
-                <span className="inline-block px-3 py-1 text-sm rounded-full bg-green-500/20 text-green-300">
-                  👥 Team Event
-                </span>
-              )}
-              {event.visibilityLevel === 'club' && (
-                <span className="inline-block px-3 py-1 text-sm rounded-full bg-orange-500/20 text-orange-300">
-                  🏛️ Club Event
-                </span>
-              )}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-light/50">Visibility:</span>
+                {event.visibilityLevel === 'personal' && (
+                  <span className="inline-block px-3 py-1 text-xs rounded-full bg-purple-500/20 text-purple-300">
+                    👤 Personal
+                  </span>
+                )}
+                {event.visibilityLevel === 'team' && (
+                  <span className="inline-block px-3 py-1 text-xs rounded-full bg-blue-500/20 text-blue-300">
+                    👥 Team
+                  </span>
+                )}
+                {event.visibilityLevel === 'club' && (
+                  <span className="inline-block px-3 py-1 text-xs rounded-full bg-orange-500/20 text-orange-300">
+                    🏛️ Club
+                  </span>
+                )}
+              </div>
             </div>
 
             {event.description && (
@@ -422,103 +468,31 @@ export default function EventPage() {
                 {event.description}
               </div>
             )}
-          </div>
-
-          {/* Right side - RSVP Buttons for non-personal events */}
-          {event.visibilityLevel !== 'personal' && user && (
-            <div className="flex flex-col gap-2 min-w-[140px]">
-              {userResponse && (
-                <div className="text-xs text-light/60 mb-1 text-center">
-                  Status: <span className="font-medium text-primary">
-                    {userResponse.status === 'attending' && 'Attending'}
-                    {userResponse.status === 'declined' && 'Declined'}
-                    {userResponse.status === 'maybe' && 'Maybe'}
-                  </span>
-                </div>
-              )}
-              <button 
-                onClick={() => handleRsvp('attending')} 
-                className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
-                  userResponse?.status === 'attending' 
-                    ? 'bg-green-600 text-white ring-2 ring-green-400' 
-                    : 'bg-green-500 text-white hover:bg-green-600'
-                }`}
-                disabled={updatingRsvp}
-              >
-                {userResponse?.status === 'attending' ? '✓ Attending' : 'I will attend'}
-              </button>
-
-              {/* Decline with dropdown */}
-              <div className="relative group">
-                <button 
-                  onClick={() => handleRsvp('declined')} 
-                  className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
-                    userResponse?.status === 'declined' 
-                      ? 'bg-red-600 text-white ring-2 ring-red-400' 
-                      : 'bg-red-500 text-white hover:bg-red-600'
-                  } group-hover:rounded-b-none`}
-                  disabled={updatingRsvp}
-                >
-                  {userResponse?.status === 'declined' ? '✓ Declined' : 'Decline'}
-                </button>
-                <div className="hidden group-hover:block absolute top-full left-0 w-full bg-red-600 rounded-b-lg overflow-hidden shadow-lg z-10">
-                  <button
-                    onClick={() => openMessageModal('declined')}
-                    className="w-full px-4 py-2 text-white hover:bg-red-700 text-sm text-left transition-colors"
-                  >
-                    Decline with message
-                  </button>
-                </div>
-              </div>
-
-              {/* Maybe with dropdown */}
-              <div className="relative group">
-                <button 
-                  onClick={() => handleRsvp('maybe')} 
-                  className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
-                    userResponse?.status === 'maybe' 
-                      ? 'bg-yellow-600 text-white ring-2 ring-yellow-400' 
-                      : 'bg-yellow-500 text-white hover:bg-yellow-600'
-                  } group-hover:rounded-b-none`}
-                  disabled={updatingRsvp}
-                >
-                  {userResponse?.status === 'maybe' ? '✓ Maybe' : 'Maybe'}
-                </button>
-                <div className="hidden group-hover:block absolute top-full left-0 w-full bg-yellow-600 rounded-b-lg overflow-hidden shadow-lg z-10">
-                  <button
-                    onClick={() => openMessageModal('maybe')}
-                    className="w-full px-4 py-2 text-white hover:bg-yellow-700 text-sm text-left transition-colors"
-                  >
-                    Maybe with message
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          </div>     
         </div>
 
         {/* Edit/Delete/Invite Buttons */}
         {canEdit && (
-          <div className="flex gap-2 pt-4 border-t border-white/10">
+          <div className="flex flex-wrap gap-2 pt-4 border-t border-white/10">
             {event.visibilityLevel !== 'personal' && (
               <button
                 onClick={() => setShowInviteModal(true)}
-                className="px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
+                className="px-3 py-1.5 text-xs bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
               >
-                ➕ Invite
+                Invite
               </button>
             )}
             <Link
               to={`/edit-event/${eventId}`}
-              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-all"
+              className="px-3 py-1.5 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-all"
             >
-              ✏️ Edit Event
+              Edit
             </Link>
             <button
               onClick={handleDelete}
-              className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-all"
+              className="px-3 py-1.5 text-xs bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-all"
             >
-              🗑️ Delete Event
+              Delete
             </button>
           </div>
         )}
@@ -560,7 +534,7 @@ export default function EventPage() {
       <div className="mb-6">
         <button
           onClick={() => setShowTracking(!showTracking)}
-          className="px-6 py-3 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
+          className="px-4 py-2 text-sm bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
         >
           📊 {showTracking ? 'Hide' : 'View'} Attendance Tracking
         </button>
@@ -568,8 +542,8 @@ export default function EventPage() {
 
       {/* Tracking View */}
       {showTracking && (
-        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-          <div className="flex justify-between items-center mb-4">
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 md:p-6 overflow-hidden">
+          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4">
             <h3 className="font-title text-xl text-light">Attendance Tracking</h3>
             
             <select
@@ -613,17 +587,17 @@ export default function EventPage() {
                 return (
                   <div
                     key={member.id}
-                    className={`p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-all ${
+                    className={`p-2 md:p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-all ${
                       isStandby ? 'opacity-50' : ''
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3 flex-1">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold shrink-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0">
+                        <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold shrink-0">
                           {member.username?.charAt(0).toUpperCase() || '?'}
                         </div>
                         <div className="flex items-center gap-2 flex-1">
-                          <span className="font-medium text-light">{member.username || 'Unknown'}</span>
+                          <span className="font-medium text-light text-sm md:text-base truncate">{member.username || 'Unknown'}</span>
                           {member.role && (
                             <span className="text-xs text-light/50">• {member.role}</span>
                           )}
