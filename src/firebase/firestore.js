@@ -562,12 +562,42 @@ export const getUserPendingOrders = async (userId) => {
     const snapshot = await getDocs(q);
     const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     
-    // Filter orders user hasn't responded to
+    // Get user's team memberships
+    const userTeamIds = [];
+    for (const club of userClubs) {
+      // Get all teams from this club
+      const allClubs = await getAllClubs();
+      const fullClub = allClubs.find(c => c.id === club.id);
+      if (fullClub && fullClub.teams) {
+        for (const team of fullClub.teams) {
+          if ((team.members || []).includes(userId) ||
+              (team.trainers || []).includes(userId) ||
+              (team.assistants || []).includes(userId)) {
+            userTeamIds.push(team.id);
+          }
+        }
+      }
+    }
+    
+    // Filter orders user hasn't responded to AND is eligible for
     const pendingOrders = [];
     for (const order of orders) {
+      // Check if user already responded
       const responseExists = await checkUserOrderResponse(order.id, userId);
-      if (!responseExists) {
+      if (responseExists) continue;
+      
+      // Check if user is eligible for this order
+      // If order.teams is empty or length === 0 → show to all club members
+      // If order.teams has specific teams → only show if user is in those teams
+      if (!order.teams || order.teams.length === 0) {
+        // All teams - show to all club members
         pendingOrders.push(order);
+      } else {
+        // Specific teams - check if user is in any of them
+        const isInTeam = order.teams.some(teamId => userTeamIds.includes(teamId));
+        if (isInTeam) {
+          pendingOrders.push(order);
+        }
       }
     }
     
