@@ -904,9 +904,13 @@ function addFieldToOrder() {
     id: `field_${Date.now()}`,
     label: newField.label.trim(),
     type: newField.type,
-    required: newField.required,
-    options: newField.type === 'dropdown' ? newField.options : undefined
+    required: newField.required
   };
+
+  // Only add options if dropdown
+  if (newField.type === 'dropdown' && newField.options.length > 0) {
+    field.options = newField.options;
+  }
 
   setOrderForm(f => ({
     ...f,
