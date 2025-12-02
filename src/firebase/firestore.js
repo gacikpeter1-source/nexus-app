@@ -469,6 +469,208 @@ export const generateUniqueCode = async () => {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
 };
 
+/* ===========================
+   ORDERS COLLECTION - ADD TO firestore.js
+   =========================== */
+
+// Create order template
+export const createOrderTemplate = async (orderData) => {
+  try {
+    const docRef = await addDoc(collection(db, 'orderTemplates'), {
+      ...orderData,
+      status: 'active',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    return { id: docRef.id, ...orderData };
+  } catch (error) {
+    console.error('Error creating order template:', error);
+    throw error;
+  }
+};
+
+// Get order template
+export const getOrderTemplate = async (orderId) => {
+  try {
+    const orderDoc = await getDoc(doc(db, 'orderTemplates', orderId));
+    if (orderDoc.exists()) {
+      return { id: orderDoc.id, ...orderDoc.data() };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting order template:', error);
+    throw error;
+  }
+};
+
+// Update order template
+export const updateOrderTemplate = async (orderId, updates) => {
+  try {
+    await updateDoc(doc(db, 'orderTemplates', orderId), {
+      ...updates,
+      updatedAt: serverTimestamp()
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating order template:', error);
+    throw error;
+  }
+};
+
+// Delete order template
+export const deleteOrderTemplate = async (orderId) => {
+  try {
+    await deleteDoc(doc(db, 'orderTemplates', orderId));
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting order template:', error);
+    throw error;
+  }
+};
+
+// Get all order templates for a club
+export const getClubOrderTemplates = async (clubId) => {
+  try {
+    const q = query(
+      collection(db, 'orderTemplates'),
+      where('clubId', '==', clubId),
+      orderBy('createdAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.error('Error getting club order templates:', error);
+    throw error;
+  }
+};
+
+// Get user's pending orders (orders they need to respond to)
+export const getUserPendingOrders = async (userId) => {
+  try {
+    // Get all user's clubs
+    const userClubs = await getUserClubs(userId);
+    const clubIds = userClubs.map(c => c.id);
+    
+    if (clubIds.length === 0) return [];
+    
+    // Get all active orders from user's clubs
+    const q = query(
+      collection(db, 'orderTemplates'),
+      where('clubId', 'in', clubIds.slice(0, 10)), // Firestore 'in' limit is 10
+      where('status', '==', 'active')
+    );
+    const snapshot = await getDocs(q);
+    const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    // Filter orders user hasn't responded to
+    const pendingOrders = [];
+    for (const order of orders) {
+      const responseExists = await checkUserOrderResponse(order.id, userId);
+      if (!responseExists) {
+        pendingOrders.push(order);
+      }
+    }
+    
+    return pendingOrders;
+  } catch (error) {
+    console.error('Error getting user pending orders:', error);
+    throw error;
+  }
+};
+
+// Create order response
+export const createOrderResponse = async (responseData) => {
+  try {
+    const docRef = await addDoc(collection(db, 'orderResponses'), {
+      ...responseData,
+      submittedAt: serverTimestamp()
+    });
+    return { id: docRef.id, ...responseData };
+  } catch (error) {
+    console.error('Error creating order response:', error);
+    throw error;
+  }
+};
+
+// Get order response
+export const getOrderResponse = async (responseId) => {
+  try {
+    const responseDoc = await getDoc(doc(db, 'orderResponses', responseId));
+    if (responseDoc.exists()) {
+      return { id: responseDoc.id, ...responseDoc.data() };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting order response:', error);
+    throw error;
+  }
+};
+
+// Update order response
+export const updateOrderResponse = async (responseId, updates) => {
+  try {
+    await updateDoc(doc(db, 'orderResponses', responseId), {
+      ...updates,
+      updatedAt: serverTimestamp()
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating order response:', error);
+    throw error;
+  }
+};
+
+// Get all responses for an order
+export const getOrderResponses = async (orderId) => {
+  try {
+    const q = query(
+      collection(db, 'orderResponses'),
+      where('orderId', '==', orderId),
+      orderBy('submittedAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.error('Error getting order responses:', error);
+    throw error;
+  }
+};
+
+// Check if user has responded to an order
+export const checkUserOrderResponse = async (orderId, userId) => {
+  try {
+    const q = query(
+      collection(db, 'orderResponses'),
+      where('orderId', '==', orderId),
+      where('userId', '==', userId)
+    );
+    const snapshot = await getDocs(q);
+    return !snapshot.empty;
+  } catch (error) {
+    console.error('Error checking user order response:', error);
+    return false;
+  }
+};
+
+// Get order statistics
+export const getOrderStatistics = async (orderId) => {
+  try {
+    const responses = await getOrderResponses(orderId);
+    
+    const stats = {
+      total: responses.length,
+      accepted: responses.filter(r => r.status === 'accepted').length,
+      declined: responses.filter(r => r.status === 'declined').length,
+      pending: 0 // Will be calculated based on eligible users
+    };
+    
+    return stats;
+  } catch (error) {
+    console.error('Error getting order statistics:', error);
+    throw error;
+  }
+};
+
 export default {
   // Users
   createUser,
@@ -511,5 +713,20 @@ export default {
   subscribeToRequests,
   
   // Utilities
-  generateUniqueCode
+  generateUniqueCode,
+
+    // Orders
+  createOrderTemplate,
+  getOrderTemplate,
+  updateOrderTemplate,
+  deleteOrderTemplate,
+  getClubOrderTemplates,
+  getUserPendingOrders,
+  createOrderResponse,
+  getOrderResponse,
+  updateOrderResponse,
+  getOrderResponses,
+  checkUserOrderResponse,
+  getOrderStatistics
+
 };

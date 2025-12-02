@@ -3,7 +3,21 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, ROLES } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { getAllClubs, getClub, getAllUsers, updateClub, updateUser, getPendingRequests, updateRequest } from '../firebase/firestore';
+
+import { 
+  getAllClubs, 
+  getClub, 
+  getAllUsers, 
+  updateClub, 
+  updateUser, 
+  getPendingRequests, 
+  updateRequest,
+  createOrderTemplate,
+  getOrderTemplate,
+  updateOrderTemplate,
+  deleteOrderTemplate,
+  getClubOrderTemplates
+} from '../firebase/firestore';
 import {
   canPromoteToTrainer,
   canPromoteToAssistant,
@@ -89,7 +103,30 @@ export default function ClubManagement() {
   const [teamTrainerFilter, setTeamTrainerFilter] = useState('');
 
   // Tab state
-  const [activeTab, setActiveTab] = useState('management'); // management, requests, statistics
+  const [activeTab, setActiveTab] = useState('management'); // management, requests, statistics, orders
+
+  // Orders tab state
+const [orders, setOrders] = useState([]);
+const [showCreateOrderModal, setShowCreateOrderModal] = useState(false);
+const [selectedOrder, setSelectedOrder] = useState(null);
+const [showOrderResponsesModal, setShowOrderResponsesModal] = useState(false);
+
+  // Order form state
+  const [orderForm, setOrderForm] = useState({
+    title: '',
+    description: '',
+    teams: [],
+    deadline: '',
+    fields: []
+  });
+
+  // Field builder state
+  const [newField, setNewField] = useState({
+    label: '',
+    type: 'text',
+    required: false,
+    options: []
+  });
 
   // Statistics tab state
   const [selectedTrainer, setSelectedTrainer] = useState(null);
@@ -296,6 +333,13 @@ export default function ClubManagement() {
       loadPendingRequests(selectedClubId);
     }
   }, [activeTab, selectedClubId]);
+
+  // Load orders when tab changes to orders
+useEffect(() => {
+  if (activeTab === 'orders' && selectedClubId) {
+    loadOrders();
+  }
+}, [activeTab, selectedClubId]);
 
   useEffect(() => {
     const q = (searchQuery || '').trim().toLowerCase();
@@ -820,6 +864,137 @@ export default function ClubManagement() {
     }
   };
 
+/* ===========================
+   ORDERS TAB - ADD THESE FUNCTIONS (after handlePromoteToAssistant)
+   =========================== */
+
+async function loadOrders() {
+  try {
+    const ordersList = await getClubOrderTemplates(selectedClubId);
+    setOrders(ordersList);
+  } catch (error) {
+    console.error('Error loading orders:', error);
+    showToast('Failed to load orders', 'error');
+  }
+}
+
+function resetOrderForm() {
+  setOrderForm({
+    title: '',
+    description: '',
+    teams: [],
+    deadline: '',
+    fields: []
+  });
+  setNewField({
+    label: '',
+    type: 'text',
+    required: false,
+    options: []
+  });
+}
+
+function addFieldToOrder() {
+  if (!newField.label.trim()) {
+    showToast('Field label is required', 'error');
+    return;
+  }
+
+  const field = {
+    id: `field_${Date.now()}`,
+    label: newField.label.trim(),
+    type: newField.type,
+    required: newField.required,
+    options: newField.type === 'dropdown' ? newField.options : undefined
+  };
+
+  setOrderForm(f => ({
+    ...f,
+    fields: [...f.fields, field]
+  }));
+
+  // Reset new field form
+  setNewField({
+    label: '',
+    type: 'text',
+    required: false,
+    options: []
+  });
+}
+
+function removeFieldFromOrder(fieldId) {
+  setOrderForm(f => ({
+    ...f,
+    fields: f.fields.filter(field => field.id !== fieldId)
+  }));
+}
+
+async function handleCreateOrder() {
+  if (!orderForm.title.trim()) {
+    showToast('Order title is required', 'error');
+    return;
+  }
+
+  if (orderForm.fields.length === 0) {
+    showToast('Add at least one custom field', 'error');
+    return;
+  }
+
+  try {
+    const orderData = {
+      clubId: selectedClubId,
+      createdBy: user.id,
+      title: orderForm.title.trim(),
+      description: orderForm.description.trim(),
+      teams: orderForm.teams,
+      deadline: orderForm.deadline || null,
+      fields: orderForm.fields
+    };
+
+    await createOrderTemplate(orderData);
+    showToast('Order created successfully!', 'success');
+    setShowCreateOrderModal(false);
+    resetOrderForm();
+    await loadOrders();
+  } catch (error) {
+    console.error('Error creating order:', error);
+    showToast('Failed to create order', 'error');
+  }
+}
+
+async function handleCloseOrder(orderId) {
+  if (!confirm('Close this order? No more responses will be accepted.')) return;
+
+  try {
+    await updateOrderTemplate(orderId, { status: 'closed' });
+    showToast('Order closed', 'success');
+    await loadOrders();
+  } catch (error) {
+    console.error('Error closing order:', error);
+    showToast('Failed to close order', 'error');
+  }
+}
+
+async function handleDeleteOrder(orderId) {
+  if (!confirm('Delete this order? All responses will be lost.')) return;
+
+  try {
+    await deleteOrderTemplate(orderId);
+    showToast('Order deleted', 'success');
+    await loadOrders();
+  } catch (error) {
+    console.error('Error deleting order:', error);
+    showToast('Failed to delete order', 'error');
+  }
+}
+
+async function handleViewOrderResponses(order) {
+  setSelectedOrder(order);
+  setShowOrderResponsesModal(true);
+}
+
+
+
   // Handle removing user from specific team (from Actions dropdown)
   const handleRemoveUserFromTeam = async (userId) => {
     if (!selectedClubId || !teamForUserRemoval || !userId) return;
@@ -1060,11 +1235,11 @@ export default function ClubManagement() {
 
         {/* Tabs */}
         {selectedClubId && (
-          <div className="mb-6">
-            <div className="flex gap-2 border-b border-white/10">
+  <div className="mb-6">
+    <div className="flex gap-2 border-b border-white/10 overflow-x-auto pb-px">
               <button
                 onClick={() => setActiveTab('management')}
-                className={`px-6 py-3 font-medium transition-all ${
+                className={`px-3 py-2 text-xs font-medium transition-all whitespace-nowrap ${
                   activeTab === 'management'
                     ? 'text-primary border-b-2 border-primary'
                     : 'text-light/60 hover:text-light'
@@ -1074,7 +1249,7 @@ export default function ClubManagement() {
               </button>
               <button
                 onClick={() => setActiveTab('requests')}
-                className={`px-6 py-3 font-medium transition-all ${
+                className={`px-3 py-2 text-xs font-medium transition-all whitespace-nowrap ${
                   activeTab === 'requests'
                     ? 'text-primary border-b-2 border-primary'
                     : 'text-light/60 hover:text-light'
@@ -1084,13 +1259,24 @@ export default function ClubManagement() {
               </button>
               <button
                 onClick={() => setActiveTab('statistics')}
-                className={`px-6 py-3 font-medium transition-all ${
+                className={`px-3 py-2 text-xs font-medium transition-all whitespace-nowrap ${
                   activeTab === 'statistics'
                     ? 'text-primary border-b-2 border-primary'
                     : 'text-light/60 hover:text-light'
                 }`}
               >
                 Statistics
+              </button>
+
+              <button
+                onClick={() => setActiveTab('orders')}
+                className={`px-3 py-2 text-xs font-medium transition-all whitespace-nowrap ${
+                  activeTab === 'orders'
+                    ? 'text-primary border-b-2 border-primary'
+                    : 'text-light/60 hover:text-light'
+                }`}
+              >
+                Orders
               </button>
             </div>
           </div>
@@ -1710,6 +1896,361 @@ export default function ClubManagement() {
             )}
           </div>
         )}
+
+        {/* Orders Tab */}
+{selectedClubId && activeTab === 'orders' && (
+  <div className="space-y-6">
+    {/* Header */}
+    <div className="flex items-center justify-between">
+      <h2 className="font-title text-2xl text-light">Order Management</h2>
+      <button
+        onClick={() => setShowCreateOrderModal(true)}
+        className="px-4 py-2 text-sm bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
+      >
+        ➕ Create Order
+      </button>
+    </div>
+
+    {/* Orders List */}
+    {orders.length === 0 ? (
+      <div className="text-center py-12 bg-white/5 border border-white/10 rounded-xl">
+        <div className="text-4xl mb-3">📋</div>
+        <h3 className="font-title text-xl text-light/80 mb-2">No Orders Yet</h3>
+        <p className="text-light/50 text-sm mb-4">
+          Create your first order template to collect information from members.
+        </p>
+        <button
+          onClick={() => setShowCreateOrderModal(true)}
+          className="px-4 py-2 text-sm bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
+        >
+          Create First Order
+        </button>
+      </div>
+    ) : (
+      <div className="grid gap-4">
+        {orders.map(order => {
+          const isActive = order.status === 'active';
+          const teamNames = order.teams && order.teams.length > 0
+            ? order.teams.map(tid => {
+                const team = clubTeams.find(t => t.id === tid);
+                return team ? team.name : tid;
+              }).join(', ')
+            : 'All Teams';
+
+          return (
+            <div
+              key={order.id}
+              className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 hover:bg-white/10 transition-all"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h3 className="font-title text-xl text-light">{order.title}</h3>
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      isActive 
+                        ? 'bg-green-500/20 text-green-300'
+                        : 'bg-gray-500/20 text-gray-300'
+                    }`}>
+                      {isActive ? '🟢 Active' : '⚫ Closed'}
+                    </span>
+                  </div>
+                  {order.description && (
+                    <p className="text-sm text-light/60 mb-2">{order.description}</p>
+                  )}
+                  <div className="flex flex-wrap gap-3 text-xs text-light/50">
+                    <span>👥 {teamNames}</span>
+                    <span>📋 {order.fields.length} fields</span>
+                    {order.deadline && (
+                      <span>⏰ Deadline: {new Date(order.deadline).toLocaleDateString()}</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleViewOrderResponses(order)}
+                    className="px-3 py-1.5 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-all"
+                  >
+                    📊 View Responses
+                  </button>
+                  {isActive && (
+                    <button
+                      onClick={() => handleCloseOrder(order.id)}
+                      className="px-3 py-1.5 text-xs bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-all"
+                    >
+                      Close
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleDeleteOrder(order.id)}
+                    className="px-3 py-1.5 text-xs bg-red-500 hover:bg-red-600 text-white rounded-lg transition-all"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </div>
+
+              {/* Order Fields Preview */}
+              <div className="mt-4 pt-4 border-t border-white/10">
+                <p className="text-xs text-light/50 mb-2">Required Fields:</p>
+                <div className="flex flex-wrap gap-2">
+                  {order.fields.slice(0, 5).map(field => (
+                    <span
+                      key={field.id}
+                      className="px-2 py-1 text-xs bg-white/5 text-light/70 rounded"
+                    >
+                      {field.label} ({field.type})
+                    </span>
+                  ))}
+                  {order.fields.length > 5 && (
+                    <span className="px-2 py-1 text-xs text-light/50">
+                      +{order.fields.length - 5} more
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    )}
+
+    {/* Create Order Modal */}
+    {showCreateOrderModal && (
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="font-title text-2xl text-light">Create Order Template</h3>
+            <button
+              onClick={() => {
+                setShowCreateOrderModal(false);
+                resetOrderForm();
+              }}
+              className="text-light/60 hover:text-light transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {/* Title */}
+            <div>
+              <label className="block font-medium text-light/80 mb-1">Order Title *</label>
+              <input
+                type="text"
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                value={orderForm.title}
+                onChange={(e) => setOrderForm(f => ({ ...f, title: e.target.value }))}
+                placeholder="e.g., Jersey Order 2025"
+              />
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="block font-medium text-light/80 mb-1">Description</label>
+              <textarea
+                rows={2}
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                value={orderForm.description}
+                onChange={(e) => setOrderForm(f => ({ ...f, description: e.target.value }))}
+                placeholder="Order details..."
+              />
+            </div>
+
+            {/* Teams Selection - Visual Circles */}
+            <div>
+              <label className="block font-medium text-light/80 mb-2">Select Teams</label>
+              
+              <div className="flex flex-wrap gap-2">
+                {/* All Teams Option */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (orderForm.teams.length === clubTeams.length) {
+                      setOrderForm(f => ({ ...f, teams: [] }));
+                    } else {
+                      setOrderForm(f => ({ ...f, teams: clubTeams.map(t => t.id) }));
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                    orderForm.teams.length === clubTeams.length || orderForm.teams.length === 0
+                      ? 'bg-primary text-white ring-2 ring-primary'
+                      : 'bg-white/10 text-light/70 hover:bg-white/15'
+                  }`}
+                >
+                  All Teams
+                </button>
+
+                {/* Individual Teams */}
+                {clubTeams.map(team => {
+                  const isSelected = orderForm.teams.includes(team.id);
+                  return (
+                    <button
+                      key={team.id}
+                      type="button"
+                      onClick={() => {
+                        if (isSelected) {
+                          setOrderForm(f => ({ 
+                            ...f, 
+                            teams: f.teams.filter(id => id !== team.id) 
+                          }));
+                        } else {
+                          setOrderForm(f => ({ 
+                            ...f, 
+                            teams: [...f.teams, team.id] 
+                          }));
+                        }
+                      }}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                        isSelected
+                          ? 'bg-primary text-white ring-2 ring-primary'
+                          : 'bg-white/10 text-light/70 hover:bg-white/15'
+                      }`}
+                    >
+                      {team.name}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <p className="text-xs text-light/50 mt-2">
+                {orderForm.teams.length === 0 || orderForm.teams.length === clubTeams.length
+                  ? 'All teams selected'
+                  : `${orderForm.teams.length} team${orderForm.teams.length !== 1 ? 's' : ''} selected`}
+              </p>
+            </div>
+
+            {/* Deadline */}
+            <div>
+              <label className="block font-medium text-light/80 mb-1">Deadline (Optional)</label>
+              <input
+                type="date"
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                value={orderForm.deadline}
+                onChange={(e) => setOrderForm(f => ({ ...f, deadline: e.target.value }))}
+              />
+            </div>
+
+            {/* Custom Fields */}
+            <div className="border-t border-white/10 pt-4">
+              <h4 className="font-medium text-light mb-3">Custom Fields</h4>
+              
+              {/* Existing Fields */}
+              {orderForm.fields.length > 0 && (
+                <div className="space-y-2 mb-4">
+                  {orderForm.fields.map(field => (
+                    <div
+                      key={field.id}
+                      className="flex items-center justify-between bg-white/5 border border-white/10 rounded-lg p-3"
+                    >
+                      <div>
+                        <span className="text-light font-medium">{field.label}</span>
+                        <span className="text-xs text-light/50 ml-2">
+                          ({field.type})
+                          {field.required && ' *'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeFieldFromOrder(field.id)}
+                        className="text-red-400 hover:text-red-300 text-sm"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add New Field */}
+              <div className="bg-white/5 border border-white/10 rounded-lg p-4 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-light/80 mb-1">Field Label</label>
+                    <input
+                      type="text"
+                      className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-light placeholder-light/40"
+                      value={newField.label}
+                      onChange={(e) => setNewField(f => ({ ...f, label: e.target.value }))}
+                      placeholder="e.g., Size, Color"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-light/80 mb-1">Field Type</label>
+                    <select
+                      className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-light"
+                      value={newField.type}
+                      onChange={(e) => setNewField(f => ({ ...f, type: e.target.value }))}
+                    >
+                      <option value="text" className="bg-mid-dark">Text</option>
+                      <option value="number" className="bg-mid-dark">Number</option>
+                      <option value="dropdown" className="bg-mid-dark">Dropdown</option>
+                      <option value="textarea" className="bg-mid-dark">Long Text</option>
+                    </select>
+                  </div>
+                </div>
+
+                {newField.type === 'dropdown' && (
+                  <div>
+                    <label className="block text-sm font-medium text-light/80 mb-1">Options (comma separated)</label>
+                    <input
+                      type="text"
+                      className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-light placeholder-light/40"
+                      placeholder="e.g., S, M, L, XL"
+                      onChange={(e) => {
+                        const opts = e.target.value.split(',').map(o => o.trim()).filter(o => o);
+                        setNewField(f => ({ ...f, options: opts }));
+                      }}
+                    />
+                  </div>
+                )}
+
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={newField.required}
+                    onChange={(e) => setNewField(f => ({ ...f, required: e.target.checked }))}
+                  />
+                  <span className="text-sm text-light/80">Required field</span>
+                </label>
+
+                <button
+                  type="button"
+                  onClick={addFieldToOrder}
+                  className="w-full px-4 py-2 text-sm bg-primary/20 hover:bg-primary/30 text-primary rounded-lg transition-all"
+                >
+                  Add Field
+                </button>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-4">
+              <button
+                type="button"
+                onClick={handleCreateOrder}
+                className="flex-1 px-4 py-2 text-sm bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
+                disabled={orderForm.fields.length === 0}
+              >
+                Create Order
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateOrderModal(false);
+                  resetOrderForm();
+                }}
+                className="px-4 py-2 text-sm bg-white/10 hover:bg-white/15 text-light rounded-lg font-medium transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+)}
       </div>
 
       {/* Team Assignment Modal */}
