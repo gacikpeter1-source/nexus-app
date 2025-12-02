@@ -164,15 +164,27 @@ export default function NewEvent() {
     }
 
     const eventData = {
-      ...form,
-      type: form.type === 'custom' ? form.customType.trim() : form.type,
-      customType: undefined, // Don't save this field
-      teamId: form.teamId || undefined,
-      clubId: form.clubId || undefined,
-      createdBy: user.id,
-      participantLimit: form.participantLimit || null,
-      responses: {} // Initialize empty responses
-    };
+  title: form.title,
+  type: form.type === 'custom' ? form.customType.trim() : form.type,
+  date: form.date,
+  time: form.time,
+  occurrence: form.occurrence,
+  recurrenceConfig: form.recurrenceConfig,
+  location: form.location,
+  visibilityLevel: form.visibilityLevel,
+  description: form.description,
+  participantLimit: form.participantLimit || null,
+  createdBy: user.id,
+  responses: {}
+};
+
+// Add optional fields only if they exist
+if (form.teamId) eventData.teamId = form.teamId;
+if (form.clubId) eventData.clubId = form.clubId;
+if (form.attachmentUrl) {
+  eventData.attachmentUrl = form.attachmentUrl;
+  eventData.attachmentName = form.attachmentName;
+}
 
     try {
       setLoading(true);
@@ -271,24 +283,25 @@ return (
         <div className="grid grid-cols-3 gap-4">
           <div>
             <label className="block font-medium text-light/80 mb-1">Type</label>
-            <select
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+            <input
+              type="text"
+              list="type-suggestions"
+              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
               value={form.type}
               onChange={(e) => {
                 setForm(f => ({ ...f, type: e.target.value }));
-                if (e.target.value !== 'custom') {
-                  setForm(f => ({ ...f, customType: '' }));
-                }
               }}
-            >
-              <option value="training" className="bg-mid-dark text-light">Training</option>
-              <option value="game" className="bg-mid-dark text-light">Game</option>
-              <option value="match" className="bg-mid-dark text-light">Match</option>
-              <option value="meeting" className="bg-mid-dark text-light">Meeting</option>
-              <option value="social" className="bg-mid-dark text-light">Social</option>
-              <option value="tournament" className="bg-mid-dark text-light">Tournament</option>
-              <option value="custom" className="bg-mid-dark text-light">Custom</option>
-            </select>
+              placeholder="Type or select..."
+              autoComplete="off"
+            />
+            <datalist id="type-suggestions">
+              <option value="Training" />
+              <option value="Game" />
+              <option value="Match" />
+              <option value="Meeting" />
+              <option value="Social" />
+              <option value="Tournament" />
+            </datalist>
           </div>
 
           <div className="col-span-2">

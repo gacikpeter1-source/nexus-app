@@ -3,13 +3,11 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  publicDir: 'public',
+  publicDir: 'public', // ✅ Explicitly define public folder for PWA assets
   optimizeDeps: {
     include: ['firebase/app', 'firebase/auth', 'firebase/firestore']
   },
   build: {
-    outDir: 'dist',
-    chunkSizeWarningLimit: 1000, // Increase limit to 1MB to suppress warning
     commonjsOptions: {
       include: [/firebase/, /node_modules/]
     }
