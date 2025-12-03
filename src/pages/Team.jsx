@@ -2,7 +2,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getClub, updateClub, getAllUsers, getClubEvents, getTeamEvents } from '../firebase/firestore';
 import { useToast } from '../contexts/ToastContext';
 import { 
   getClub, 
