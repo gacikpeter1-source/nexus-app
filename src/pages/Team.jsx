@@ -33,6 +33,7 @@ export default function Team() {
   const [showOrderResponseModal, setShowOrderResponseModal] = useState(false);
   const [orderResponseForm, setOrderResponseForm] = useState({});
   const [respondingToOrder, setRespondingToOrder] = useState(false);  
+  const [showOrdersDropdown, setShowOrdersDropdown] = useState(false);
 
   // Load club and team from Firebase
   useEffect(() => {
@@ -155,6 +156,17 @@ async function handleSubmitOrderResponse(status) {
     }
   }
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (showOrdersDropdown && !event.target.closest('.relative')) {
+        setShowOrdersDropdown(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showOrdersDropdown]);
 
   const team = useMemo(() => {
     if (!club || !club.teams) return null;
@@ -204,6 +216,28 @@ async function handleSubmitOrderResponse(status) {
 
     return stats;
   }, [team, events]);
+
+  // Count pending orders for current user
+    const pendingOrdersCount = useMemo(() => {
+      if (!user || !orders.length) return 0;
+      
+      return orders.filter(order => {
+        if (order.status !== 'active') return false;
+        const userResponse = orderResponses[order.id]?.find(r => r.userId === user?.id);
+        return !userResponse; // Pending if no response
+      }).length;
+    }, [orders, orderResponses, user]);
+
+    const pendingOrders = useMemo(() => {
+      if (!user || !orders.length) return [];
+      
+      return orders.filter(order => {
+        if (order.status !== 'active') return false;
+        const userResponse = orderResponses[order.id]?.find(r => r.userId === user?.id);
+        return !userResponse;
+      });
+    }, [orders, orderResponses, user]);
+
 
   // Get team members with user details
   const members = useMemo(() => {
@@ -272,11 +306,75 @@ async function handleSubmitOrderResponse(status) {
         </button>
         
         <div className="flex items-start justify-between">
-          <div>
-            <h1 className="font-display text-5xl md:text-6xl text-light mb-2">
-              {team.name}
-            </h1>
-            <p className="text-light/60 text-lg">{team.clubName}</p>
+          <div className="flex items-center gap-3">
+            <div>
+              <h1 className="font-display text-5xl md:text-6xl text-light mb-2">
+                {team.name}
+              </h1>
+              <p className="text-light/60 text-lg">{team.clubName}</p>
+            </div>
+            
+            {/* Compact Orders Badge */}
+            {pendingOrdersCount > 0 && (
+              <div className="relative">
+                <button
+                  onClick={() => {
+                    if (pendingOrdersCount === 1) {
+                      // If only one order, open it directly
+                      setSelectedOrder(pendingOrders[0]);
+                      setShowOrderResponseModal(true);
+                      setOrderResponseForm({});
+                    } else {
+                      // If multiple, show dropdown
+                      setShowOrdersDropdown(!showOrdersDropdown);
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/50 rounded-lg transition-all"
+                >
+                  <span className="text-base">📋</span>
+                  <span className="text-xs font-medium text-orange-300">{pendingOrdersCount}</span>
+                </button>
+
+                {/* Dropdown for multiple orders */}
+                {showOrdersDropdown && pendingOrdersCount > 1 && (
+                  <div className="absolute top-full left-0 mt-2 bg-mid-dark border border-white/20 rounded-lg shadow-2xl overflow-hidden z-50 min-w-[280px]">
+                    <div className="p-3 border-b border-white/10">
+                      <p className="text-xs text-light/60 font-medium">Pending Orders</p>
+                    </div>
+                    <div className="max-h-[300px] overflow-y-auto">
+                      {pendingOrders.map((order) => (
+                        <button
+                          key={order.id}
+                          onClick={() => {
+                            setSelectedOrder(order);
+                            setShowOrderResponseModal(true);
+                            setOrderResponseForm({});
+                            setShowOrdersDropdown(false);
+                          }}
+                          className="w-full text-left px-3 py-2.5 hover:bg-white/5 transition-all border-b border-white/5 last:border-b-0"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-light truncate">{order.title}</p>
+                              {order.description && (
+                                <p className="text-xs text-light/50 truncate mt-0.5">{order.description}</p>
+                              )}
+                              <div className="flex gap-2 mt-1 text-xs text-light/40">
+                                <span>📋 {order.fields.length} fields</span>
+                                {order.deadline && (
+                                  <span>⏰ {new Date(order.deadline).toLocaleDateString()}</span>
+                                )}
+                              </div>
+                            </div>
+                            <span className="text-primary text-xs shrink-0">→</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           
           {/* Leave Team Button */}
@@ -393,7 +491,7 @@ async function handleSubmitOrderResponse(status) {
             </div>
 
             {/* Quick Stats - Enhanced with Orders */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 text-center">
                 <div className="text-2xl mb-1">🏋️</div>
                 <div className="text-xl font-bold text-light">{statistics.trainings}</div>

@@ -113,6 +113,8 @@ const [selectedOrder, setSelectedOrder] = useState(null);
 const [showOrderResponsesModal, setShowOrderResponsesModal] = useState(false);
 const [orderResponses, setOrderResponses] = useState([]);
 const [loadingResponses, setLoadingResponses] = useState(false);
+const [orderStatusFilter, setOrderStatusFilter] = useState('all'); // 'all', 'accepted', 'declined', 'pending'
+const [orderSearchQuery, setOrderSearchQuery] = useState('');
 
   // Order form state
   const [orderForm, setOrderForm] = useState({
@@ -938,11 +940,11 @@ function removeFieldFromOrder(fieldId) {
 
 function exportToExcel(order, responses) {
   if (responses.length === 0) {
-    showToast('No responses to export', 'info');
+    showToast('No users to export', 'info');
     return;
   }
 
-  // Create CSV content
+  // Create CSV content - NOW INCLUDES ALL USERS (responded + pending)
   const headers = ['Name', 'Email', 'Status', ...order.fields.map(f => f.label)];
   const csvRows = [headers.join(',')];
 
@@ -950,9 +952,9 @@ function exportToExcel(order, responses) {
     const row = [
       `"${response.userName}"`,
       `"${response.userEmail}"`,
-      response.status,
+      response.status === 'pending' ? 'Not Responded' : response.status,
       ...order.fields.map(field => {
-        const value = response.responses?.[field.id] || '';
+        const value = response.responses?.[field.id] || '-';
         return `"${value}"`;
       })
     ];
@@ -965,15 +967,14 @@ function exportToExcel(order, responses) {
   const url = URL.createObjectURL(blob);
   
   link.setAttribute('href', url);
-  link.setAttribute('download', `${order.title}_responses.csv`);
+  link.setAttribute('download', `${order.title}_responses_${new Date().toISOString().split('T')[0]}.csv`);
   link.style.visibility = 'hidden';
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   
-  showToast('Exported to Excel!', 'success');
+  showToast(`Exported ${responses.length} users to Excel!`, 'success');
 }
-
 
 async function handleCreateOrder() {
   if (!orderForm.title.trim()) {
@@ -1121,6 +1122,27 @@ async function loadOrderResponses(order) {
     setLoadingResponses(false);
   }
 }
+
+// Filter order responses based on status and search
+const filteredOrderResponses = useMemo(() => {
+  let filtered = orderResponses;
+
+  // Filter by status
+  if (orderStatusFilter !== 'all') {
+    filtered = filtered.filter(r => r.status === orderStatusFilter);
+  }
+
+  // Filter by search query
+  if (orderSearchQuery.trim()) {
+    const query = orderSearchQuery.toLowerCase();
+    filtered = filtered.filter(r =>
+      r.userName.toLowerCase().includes(query) ||
+      r.userEmail.toLowerCase().includes(query)
+    );
+  }
+
+  return filtered;
+}, [orderResponses, orderStatusFilter, orderSearchQuery]);
 
   // Handle removing user from specific team (from Actions dropdown)
   const handleRemoveUserFromTeam = async (userId) => {
@@ -2384,34 +2406,112 @@ async function loadOrderResponses(order) {
 {showOrderResponsesModal && selectedOrder && (
   <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
     <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h3 className="font-title text-2xl text-light">{selectedOrder.title} - Responses</h3>
-          <p className="text-sm text-light/60 mt-1">
-            {orderResponses.filter(r => r.status === 'accepted').length} Accepted • 
-            {orderResponses.filter(r => r.status === 'declined').length} Declined • 
-            {orderResponses.filter(r => r.status === 'pending').length} Pending
-          </p>
+      <div className="mb-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-title text-2xl text-light">{selectedOrder.title} - Responses</h3>
+            <p className="text-sm text-light/60 mt-1">
+              {orderResponses.filter(r => r.status === 'accepted').length} Accepted • 
+              {orderResponses.filter(r => r.status === 'declined').length} Declined • 
+              {orderResponses.filter(r => r.status === 'pending').length} Pending
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => exportToExcel(selectedOrder, orderResponses)}
+              className="px-4 py-2 text-sm bg-green-500 hover:bg-green-600 text-white rounded-lg transition-all"
+              disabled={orderResponses.length === 0}
+            >
+              📊 Export All
+            </button>
+            <button
+              onClick={() => {
+                setShowOrderResponsesModal(false);
+                setSelectedOrder(null);
+                setOrderResponses([]);
+                setOrderStatusFilter('all');
+                setOrderSearchQuery('');
+              }}
+              className="text-light/60 hover:text-light transition-colors"
+            >
+              ✕
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => exportToExcel(selectedOrder, orderResponses.filter(r => r.hasResponded))}
-            className="px-4 py-2 text-sm bg-green-500 hover:bg-green-600 text-white rounded-lg transition-all"
-            disabled={orderResponses.filter(r => r.hasResponded).length === 0}
-          >
-            📊 Export to Excel
-          </button>
-          <button
-            onClick={() => {
-              setShowOrderResponsesModal(false);
-              setSelectedOrder(null);
-              setOrderResponses([]);
-            }}
-            className="text-light/60 hover:text-light transition-colors"
-          >
-            ✕
-          </button>
-        </div>
+
+        {/* Filters - NEW SECTION */}
+        {!loadingResponses && orderResponses.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-4 p-4 bg-white/5 rounded-lg border border-white/10">
+            {/* Status Filters */}
+            <div className="flex gap-1">
+              <button
+                onClick={() => setOrderStatusFilter('all')}
+                className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
+                  orderStatusFilter === 'all'
+                    ? 'bg-primary text-white'
+                    : 'bg-white/5 text-light/70 hover:bg-white/10'
+                }`}
+              >
+                All ({orderResponses.length})
+              </button>
+              <button
+                onClick={() => setOrderStatusFilter('accepted')}
+                className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
+                  orderStatusFilter === 'accepted'
+                    ? 'bg-green-500 text-white'
+                    : 'bg-white/5 text-light/70 hover:bg-white/10'
+                }`}
+              >
+                ✓ Accepted ({orderResponses.filter(r => r.status === 'accepted').length})
+              </button>
+              <button
+                onClick={() => setOrderStatusFilter('declined')}
+                className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
+                  orderStatusFilter === 'declined'
+                    ? 'bg-red-500 text-white'
+                    : 'bg-white/5 text-light/70 hover:bg-white/10'
+                }`}
+              >
+                ✗ Declined ({orderResponses.filter(r => r.status === 'declined').length})
+              </button>
+              <button
+                onClick={() => setOrderStatusFilter('pending')}
+                className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
+                  orderStatusFilter === 'pending'
+                    ? 'bg-yellow-500 text-white'
+                    : 'bg-white/5 text-light/70 hover:bg-white/10'
+                }`}
+              >
+                ⏳ Pending ({orderResponses.filter(r => r.status === 'pending').length})
+              </button>
+            </div>
+
+            {/* Search */}
+            <div className="flex-1 min-w-[200px]">
+              <input
+                type="text"
+                placeholder="🔍 Search by name or email..."
+                value={orderSearchQuery}
+                onChange={(e) => setOrderSearchQuery(e.target.value)}
+                className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-1.5 text-sm text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+              />
+            </div>
+
+            {/* Clear Filters */}
+            {(orderStatusFilter !== 'all' || orderSearchQuery) && (
+              <button
+                onClick={() => {
+                  setOrderStatusFilter('all');
+                  setOrderSearchQuery('');
+                }}
+                className="px-3 py-1.5 text-xs bg-white/5 text-light/70 hover:bg-white/10 rounded-lg transition-all"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {loadingResponses ? (
@@ -2436,50 +2536,60 @@ async function loadOrderResponses(order) {
               </tr>
             </thead>
             <tbody>
-              {orderResponses.map((response, idx) => (
-                <tr
-                  key={response.userId || idx}
-                  className={`border-b border-white/5 ${
-                    !response.hasResponded ? 'opacity-40' : 
-                    response.status === 'declined' ? 'opacity-60' : ''
-                  }`}
-                >
-                  <td className="py-3 pr-4">
-                    <div>
-                      <div className={`text-sm font-medium ${
-                        !response.hasResponded ? 'text-light/50' : 'text-light'
-                      }`}>
-                        {response.userName}
-                      </div>
-                      <div className="text-xs text-light/50">{response.userEmail}</div>
-                    </div>
+              {filteredOrderResponses.length === 0 ? (
+                <tr>
+                  <td colSpan={selectedOrder.fields.length + 2} className="text-center py-8 text-light/60">
+                    No users match your filters
                   </td>
-                  <td className="py-3 pr-4">
-                    {response.status === 'accepted' && (
-                      <span className="px-2 py-1 text-xs rounded-full bg-green-500/20 text-green-300 ring-1 ring-green-400">
-                        ✓ Accepted
-                      </span>
-                    )}
-                    {response.status === 'declined' && (
-                      <span className="px-2 py-1 text-xs rounded-full bg-red-500/20 text-red-300">
-                        ✗ Declined
-                      </span>
-                    )}
-                    {response.status === 'pending' && (
-                      <span className="px-2 py-1 text-xs rounded-full bg-yellow-500/20 text-yellow-300">
-                        ⏳ Pending
-                      </span>
-                    )}
-                  </td>
-                  {selectedOrder.fields.map(field => (
-                    <td key={field.id} className={`py-3 pr-4 text-sm ${
-                      response.hasResponded ? 'text-light/70' : 'text-light/30'
-                    }`}>
-                      {response.responses?.[field.id] || '-'}
-                    </td>
-                  ))}
                 </tr>
-              ))}
+              ) : (
+                <>
+                  {filteredOrderResponses.map((response, idx) => (
+                    <tr
+                      key={response.userId || idx}
+                      className={`border-b border-white/5 ${
+                        !response.hasResponded ? 'opacity-40' : 
+                        response.status === 'declined' ? 'opacity-60' : ''
+                      }`}
+                    >
+                      <td className="py-3 pr-4">
+                        <div>
+                          <div className={`text-sm font-medium ${
+                            !response.hasResponded ? 'text-light/50' : 'text-light'
+                          }`}>
+                            {response.userName}
+                          </div>
+                          <div className="text-xs text-light/50">{response.userEmail}</div>
+                        </div>
+                      </td>
+                      <td className="py-3 pr-4">
+                        {response.status === 'accepted' && (
+                          <span className="px-2 py-1 text-xs rounded-full bg-green-500/20 text-green-300 ring-1 ring-green-400">
+                            ✓ Accepted
+                          </span>
+                        )}
+                        {response.status === 'declined' && (
+                          <span className="px-2 py-1 text-xs rounded-full bg-red-500/20 text-red-300">
+                            ✗ Declined
+                          </span>
+                        )}
+                        {response.status === 'pending' && (
+                          <span className="px-2 py-1 text-xs rounded-full bg-yellow-500/20 text-yellow-300">
+                            ⏳ Pending
+                          </span>
+                        )}
+                      </td>
+                      {selectedOrder.fields.map(field => (
+                        <td key={field.id} className={`py-3 pr-4 text-sm ${
+                          response.hasResponded ? 'text-light/70' : 'text-light/30'
+                        }`}>
+                          {response.responses?.[field.id] || '-'}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </>
+              )}
             </tbody>
           </table>
         </div>
