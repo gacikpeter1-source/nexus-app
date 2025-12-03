@@ -248,52 +248,55 @@ async function handleSubmitOrderResponse(status) {
       );
     }
 
-{/* Pending Orders Section */}
-{pendingOrders.length > 0 && (
-  <div className="mb-8">
-    <h2 className="font-title text-2xl text-light mb-4">📋 Pending Orders</h2>
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {pendingOrders.map(order => (
-        <div
-          key={order.id}
-          className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 hover:bg-white/10 transition-all"
-        >
-          <div className="flex items-start justify-between mb-3">
-            <h3 className="font-title text-lg text-light">{order.title}</h3>
-            <span className="px-2 py-1 text-xs bg-orange-500/20 text-orange-300 rounded-full">
-              Action Required
-            </span>
-          </div>
-          
-          {order.description && (
-            <p className="text-sm text-light/60 mb-3">{order.description}</p>
-          )}
-          
-          <div className="flex flex-wrap gap-2 mb-4 text-xs text-light/50">
-            <span>📋 {order.fields.length} fields</span>
-            {order.deadline && (
-              <span>⏰ {new Date(order.deadline).toLocaleDateString()}</span>
-            )}
-          </div>
-
-          <button
-            onClick={() => {
-              setSelectedOrder(order);
-              setShowOrderResponseModal(true);
-              setOrderResponseForm({});
-            }}
-            className="w-full px-4 py-2 text-sm bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
-          >
-            Respond to Order
-          </button>
-        </div>
-      ))}
-    </div>
-  </div>
-)}
-
-
+    
     return (
+    <>
+       {/* Pending Orders Section */}
+       {pendingOrders.length > 0 && (
+         <div className="mb-8">
+           <h2 className="font-title text-2xl text-light mb-4">📋 Pending Orders</h2>
+           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+             {pendingOrders.map(order => (
+              <div
+                  key={order.id}
+                  className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 hover:bg-white/10 transition-all"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <h3 className="font-title text-lg text-light">{order.title}</h3>
+                    <span className="px-2 py-1 text-xs bg-orange-500/20 text-orange-300 rounded-full">
+                      Action Required
+                    </span>
+                  </div>
+                  
+                  {order.description && (
+                    <p className="text-sm text-light/60 mb-3">{order.description}</p>
+                  )}
+                  
+                  <div className="flex flex-wrap gap-2 mb-4 text-xs text-light/50">
+                    <span>📋 {order.fields.length} fields</span>
+                    {order.deadline && (
+                      <span>⏰ {new Date(order.deadline).toLocaleDateString()}</span>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setSelectedOrder(order);
+                      setShowOrderResponseModal(true);
+                      setOrderResponseForm({});
+                    }}
+                    className="w-full px-4 py-2 text-sm bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
+                  >
+                    Respond to Order
+                  </button>
+                </div>
+              
+             ))}
+           </div>
+         </div>
+       )}
+
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {clubs.map((club, idx) => {
           const clubTeams = Array.isArray(club.teams) ? club.teams : [];
@@ -361,6 +364,7 @@ async function handleSubmitOrderResponse(status) {
           );
         })}
       </div>
+    </>
     );
   };
 
