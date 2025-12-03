@@ -3,6 +3,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/Navbar';
+import PWAUpdatePrompt from './components/PWAUpdatePrompt';
 import Register from './pages/Register';
 import Login from './pages/Login';
 import VerifyEmail from './pages/VerifyEmail';
@@ -189,6 +190,8 @@ function App() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>
+          {/* PWA Update Notification */}
+          <PWAUpdatePrompt />
         </div>
       </LanguageProvider>
     </AuthProvider>
