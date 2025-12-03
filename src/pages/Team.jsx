@@ -5,12 +5,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { getClub, updateClub, getAllUsers, getClubEvents, getTeamEvents } from '../firebase/firestore';
 import { useToast } from '../contexts/ToastContext';
 
+
 export default function Team() {
   const { clubId, teamId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { showToast } = useToast();
-  
+   
   const [activeTab, setActiveTab] = useState('overview');
   const [club, setClub] = useState(null);
   const [loading, setLoading] = useState(true);

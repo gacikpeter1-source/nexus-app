@@ -1047,21 +1047,73 @@ async function handleViewOrderResponses(order) {
 async function loadOrderResponses(order) {
   setLoadingResponses(true);
   try {
+    // Get all responses for this order
     const responses = await getOrderResponses(order.id);
     
-    // Get user details for each response
-    const responsesWithUsers = await Promise.all(
-      responses.map(async (response) => {
-        const userData = allUsers.find(u => u.id === response.userId);
-        return {
-          ...response,
-          userName: userData?.username || userData?.email || 'Unknown',
-          userEmail: userData?.email || ''
-        };
-      })
-    );
+    // Get all eligible users for this order
+    let eligibleUsers = [];
     
-    setOrderResponses(responsesWithUsers);
+    if (!order.teams || order.teams.length === 0) {
+      // All teams = all club members
+      const club = clubs.find(c => c.id === order.clubId);
+      if (club) {
+        const memberIds = [
+          ...(club.trainers || []),
+          ...(club.assistants || []),
+          ...(club.members || [])
+        ];
+        eligibleUsers = allUsers.filter(u => memberIds.includes(u.id));
+      }
+    } else {
+      // Specific teams = members of those teams only
+      const club = clubs.find(c => c.id === order.clubId);
+      if (club && club.teams) {
+        const teamMemberIds = new Set();
+        order.teams.forEach(teamId => {
+          const team = club.teams.find(t => t.id === teamId);
+          if (team) {
+            (team.members || []).forEach(id => teamMemberIds.add(id));
+            (team.trainers || []).forEach(id => teamMemberIds.add(id));
+            (team.assistants || []).forEach(id => teamMemberIds.add(id));
+          }
+        });
+        eligibleUsers = allUsers.filter(u => teamMemberIds.has(u.id));
+      }
+    }
+    
+    // Create response objects for all eligible users
+    const allUserResponses = eligibleUsers.map(user => {
+      const existingResponse = responses.find(r => r.userId === user.id);
+      
+      if (existingResponse) {
+        // User has responded
+        return {
+          ...existingResponse,
+          userName: user.username || user.email,
+          userEmail: user.email,
+          hasResponded: true
+        };
+      } else {
+        // User hasn't responded yet
+        return {
+          userId: user.id,
+          userName: user.username || user.email,
+          userEmail: user.email,
+          status: 'pending',
+          hasResponded: false,
+          responses: {}
+        };
+      }
+    });
+    
+    // Sort: Responded first, then pending
+    allUserResponses.sort((a, b) => {
+      if (a.hasResponded && !b.hasResponded) return -1;
+      if (!a.hasResponded && b.hasResponded) return 1;
+      return 0;
+    });
+    
+    setOrderResponses(allUserResponses);
   } catch (error) {
     console.error('Error loading order responses:', error);
     showToast('Failed to load responses', 'error');
@@ -1069,7 +1121,6 @@ async function loadOrderResponses(order) {
     setLoadingResponses(false);
   }
 }
-
 
   // Handle removing user from specific team (from Actions dropdown)
   const handleRemoveUserFromTeam = async (userId) => {
@@ -2338,16 +2389,17 @@ async function loadOrderResponses(order) {
           <h3 className="font-title text-2xl text-light">{selectedOrder.title} - Responses</h3>
           <p className="text-sm text-light/60 mt-1">
             {orderResponses.filter(r => r.status === 'accepted').length} Accepted • 
-            {orderResponses.filter(r => r.status === 'declined').length} Declined
+            {orderResponses.filter(r => r.status === 'declined').length} Declined • 
+            {orderResponses.filter(r => r.status === 'pending').length} Pending
           </p>
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => exportToExcel(selectedOrder, orderResponses)}
+            onClick={() => exportToExcel(selectedOrder, orderResponses.filter(r => r.hasResponded))}
             className="px-4 py-2 text-sm bg-green-500 hover:bg-green-600 text-white rounded-lg transition-all"
-            disabled={orderResponses.length === 0}
+            disabled={orderResponses.filter(r => r.hasResponded).length === 0}
           >
-            Export to Excel
+            📊 Export to Excel
           </button>
           <button
             onClick={() => {
@@ -2367,7 +2419,7 @@ async function loadOrderResponses(order) {
       ) : orderResponses.length === 0 ? (
         <div className="text-center py-12">
           <div className="text-4xl mb-3">📋</div>
-          <p className="text-light/60">No responses yet</p>
+          <p className="text-light/60">No eligible users found</p>
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -2386,28 +2438,43 @@ async function loadOrderResponses(order) {
             <tbody>
               {orderResponses.map((response, idx) => (
                 <tr
-                  key={response.id}
+                  key={response.userId || idx}
                   className={`border-b border-white/5 ${
-                    response.status === 'declined' ? 'opacity-50' : ''
+                    !response.hasResponded ? 'opacity-40' : 
+                    response.status === 'declined' ? 'opacity-60' : ''
                   }`}
                 >
                   <td className="py-3 pr-4">
                     <div>
-                      <div className="text-sm text-light font-medium">{response.userName}</div>
+                      <div className={`text-sm font-medium ${
+                        !response.hasResponded ? 'text-light/50' : 'text-light'
+                      }`}>
+                        {response.userName}
+                      </div>
                       <div className="text-xs text-light/50">{response.userEmail}</div>
                     </div>
                   </td>
                   <td className="py-3 pr-4">
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      response.status === 'accepted'
-                        ? 'bg-green-500/20 text-green-300'
-                        : 'bg-red-500/20 text-red-300'
-                    }`}>
-                      {response.status === 'accepted' ? '✓ Accepted' : '✗ Declined'}
-                    </span>
+                    {response.status === 'accepted' && (
+                      <span className="px-2 py-1 text-xs rounded-full bg-green-500/20 text-green-300 ring-1 ring-green-400">
+                        ✓ Accepted
+                      </span>
+                    )}
+                    {response.status === 'declined' && (
+                      <span className="px-2 py-1 text-xs rounded-full bg-red-500/20 text-red-300">
+                        ✗ Declined
+                      </span>
+                    )}
+                    {response.status === 'pending' && (
+                      <span className="px-2 py-1 text-xs rounded-full bg-yellow-500/20 text-yellow-300">
+                        ⏳ Pending
+                      </span>
+                    )}
                   </td>
                   {selectedOrder.fields.map(field => (
-                    <td key={field.id} className="py-3 pr-4 text-sm text-light/70">
+                    <td key={field.id} className={`py-3 pr-4 text-sm ${
+                      response.hasResponded ? 'text-light/70' : 'text-light/30'
+                    }`}>
                       {response.responses?.[field.id] || '-'}
                     </td>
                   ))}
@@ -2422,10 +2489,10 @@ async function loadOrderResponses(order) {
       {orderResponses.length > 0 && (
         <div className="mt-6 pt-6 border-t border-white/10">
           <h4 className="text-sm font-medium text-light/80 mb-3">Statistics</h4>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             <div className="bg-white/5 rounded-lg p-4 text-center">
               <div className="text-2xl font-bold text-light">{orderResponses.length}</div>
-              <div className="text-xs text-light/50 mt-1">Total Responses</div>
+              <div className="text-xs text-light/50 mt-1">Total Eligible</div>
             </div>
             <div className="bg-green-500/10 rounded-lg p-4 text-center">
               <div className="text-2xl font-bold text-green-400">
@@ -2439,13 +2506,18 @@ async function loadOrderResponses(order) {
               </div>
               <div className="text-xs text-red-300 mt-1">Declined</div>
             </div>
+            <div className="bg-yellow-500/10 rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold text-yellow-400">
+                {orderResponses.filter(r => r.status === 'pending').length}
+              </div>
+              <div className="text-xs text-yellow-300 mt-1">Pending</div>
+            </div>
           </div>
         </div>
       )}
     </div>
   </div>
 )}
-
 
       {/* Team Assignment Modal */}
       {showTeamAssignModal && userToAssign && (

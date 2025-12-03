@@ -1,10 +1,12 @@
 // src/pages/Teams.jsx
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getTeams } from '../api/localApi';
 import { Link } from 'react-router-dom';
 import { useAuth, ROLES } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { getUserPendingOrders, createOrderResponse } from '../firebase/firestore';
+import { useToast } from '../contexts/ToastContext';
 
 /**
  * Teams page with enhanced filtering:
@@ -16,11 +18,17 @@ import { useLanguage } from '../contexts/LanguageContext';
 export default function Teams() {
   const { user } = useAuth();
   const { t } = useLanguage();
+  const { showToast } = useToast();
   
   // Filter state
   const [filterType, setFilterType] = useState('all'); // "all" | "club" | "team" | "athlete"
   const [filterValue, setFilterValue] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [pendingOrders, setPendingOrders] = useState([]);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [showOrderResponseModal, setShowOrderResponseModal] = useState(false);
+  const [orderResponseForm, setOrderResponseForm] = useState({});
+  const [respondingToOrder, setRespondingToOrder] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['teams'],
@@ -155,6 +163,66 @@ export default function Teams() {
     return filtered;
   }, [userTeams, filterType, filterValue, searchQuery]);
 
+  // Load pending orders
+  useEffect(() => {
+    if (user) {
+      loadPendingOrders();
+    }
+  }, [user]);
+
+  async function loadPendingOrders() {
+    if (!user) return;
+    
+    try {
+      const orders = await getUserPendingOrders(user.id);
+      setPendingOrders(orders);
+    } catch (error) {
+      console.error('Error loading pending orders:', error);
+    }
+  }
+
+  async function handleSubmitOrderResponse(status) {
+    if (status === 'accepted') {
+      // Validate required fields
+      const missingFields = selectedOrder.fields
+        .filter(field => field.required && !orderResponseForm[field.id]?.trim())
+        .map(field => field.label);
+      
+      if (missingFields.length > 0) {
+        showToast(`Please fill required fields: ${missingFields.join(', ')}`, 'error');
+        return;
+      }
+    }
+
+    try {
+      setRespondingToOrder(true);
+      
+      const responseData = {
+        orderId: selectedOrder.id,
+        userId: user.id,
+        clubId: selectedOrder.clubId,
+        teamId: selectedOrder.teams[0] || null,
+        status: status,
+        responses: status === 'accepted' ? orderResponseForm : {}
+      };
+
+      await createOrderResponse(responseData);
+      showToast(status === 'accepted' ? 'Order accepted!' : 'Order declined', 'success');
+      
+      setShowOrderResponseModal(false);
+      setSelectedOrder(null);
+      setOrderResponseForm({});
+      
+      // Reload pending orders
+      await loadPendingOrders();
+    } catch (error) {
+      console.error('Error submitting order response:', error);
+      showToast('Failed to submit response', 'error');
+    } finally {
+      setRespondingToOrder(false);
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -191,6 +259,61 @@ export default function Teams() {
           {filteredTeams.length} {filteredTeams.length === 1 ? 'team' : 'teams'}
         </p>
       </div>
+
+            {/* Pending Orders Section */}
+      {pendingOrders.length > 0 && (
+        <div className="mb-8 animate-fade-in" style={{ animationDelay: '0.05s' }}>
+          <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-6 mb-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="text-3xl">📋</div>
+              <div>
+                <h2 className="font-title text-2xl text-light">Pending Orders</h2>
+                <p className="text-sm text-light/60">
+                  You have {pendingOrders.length} order{pendingOrders.length !== 1 ? 's' : ''} waiting for response
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {pendingOrders.map(order => (
+                <div
+                  key={order.id}
+                  className="bg-mid-dark border border-white/10 rounded-xl p-6 hover:border-orange-500/50 transition-all"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <h3 className="font-title text-lg text-light">{order.title}</h3>
+                    <span className="px-2 py-1 text-xs bg-orange-500/20 text-orange-300 rounded-full whitespace-nowrap">
+                      Action Required
+                    </span>
+                  </div>
+                  
+                  {order.description && (
+                    <p className="text-sm text-light/60 mb-3 line-clamp-2">{order.description}</p>
+                  )}
+                  
+                  <div className="flex flex-wrap gap-2 mb-4 text-xs text-light/50">
+                    <span>📋 {order.fields.length} fields</span>
+                    {order.deadline && (
+                      <span>⏰ {new Date(order.deadline).toLocaleDateString()}</span>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setSelectedOrder(order);
+                      setShowOrderResponseModal(true);
+                      setOrderResponseForm({});
+                    }}
+                    className="w-full px-4 py-2 text-sm bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
+                  >
+                    Respond Now →
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="mb-6 space-y-4 animate-fade-in" style={{ animationDelay: '0.1s' }}>
@@ -371,6 +494,118 @@ export default function Teams() {
           </div>
         )}
       </section>
+            {/* Order Response Modal */}
+      {showOrderResponseModal && selectedOrder && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-title text-2xl text-light">{selectedOrder.title}</h3>
+              <button
+                onClick={() => {
+                  setShowOrderResponseModal(false);
+                  setSelectedOrder(null);
+                  setOrderResponseForm({});
+                }}
+                className="text-light/60 hover:text-light transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {selectedOrder.description && (
+              <p className="text-sm text-light/70 mb-6 pb-6 border-b border-white/10">
+                {selectedOrder.description}
+              </p>
+            )}
+
+            <div className="space-y-4 mb-6">
+              {selectedOrder.fields.map(field => (
+                <div key={field.id}>
+                  <label className="block text-sm font-medium text-light/80 mb-2">
+                    {field.label}
+                    {field.required && <span className="text-red-400 ml-1">*</span>}
+                  </label>
+                  
+                  {field.type === 'text' && (
+                    <input
+                      type="text"
+                      className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                      value={orderResponseForm[field.id] || ''}
+                      onChange={(e) => setOrderResponseForm(f => ({ 
+                        ...f, 
+                        [field.id]: e.target.value 
+                      }))}
+                      required={field.required}
+                    />
+                  )}
+
+                  {field.type === 'number' && (
+                    <input
+                      type="number"
+                      className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                      value={orderResponseForm[field.id] || ''}
+                      onChange={(e) => setOrderResponseForm(f => ({ 
+                        ...f, 
+                        [field.id]: e.target.value 
+                      }))}
+                      required={field.required}
+                    />
+                  )}
+
+                  {field.type === 'dropdown' && (
+                    <select
+                      className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                      value={orderResponseForm[field.id] || ''}
+                      onChange={(e) => setOrderResponseForm(f => ({ 
+                        ...f, 
+                        [field.id]: e.target.value 
+                      }))}
+                      required={field.required}
+                    >
+                      <option value="" className="bg-mid-dark">Select...</option>
+                      {field.options?.map((opt, idx) => (
+                        <option key={idx} value={opt} className="bg-mid-dark">
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
+                  {field.type === 'textarea' && (
+                    <textarea
+                      rows={3}
+                      className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none"
+                      value={orderResponseForm[field.id] || ''}
+                      onChange={(e) => setOrderResponseForm(f => ({ 
+                        ...f, 
+                        [field.id]: e.target.value 
+                      }))}
+                      required={field.required}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => handleSubmitOrderResponse('accepted')}
+                className="flex-1 px-4 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-all disabled:opacity-50"
+                disabled={respondingToOrder}
+              >
+                {respondingToOrder ? 'Submitting...' : '✓ Accept & Submit'}
+              </button>
+              <button
+                onClick={() => handleSubmitOrderResponse('declined')}
+                className="px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-all disabled:opacity-50"
+                disabled={respondingToOrder}
+              >
+                ✗ Decline
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
