@@ -146,8 +146,11 @@ export const AuthProvider = ({ children }) => {
       // Create Firebase Auth user
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
-      // Send verification email
-      await sendEmailVerification(userCredential.user);
+      // Send verification email with custom redirect
+      await sendEmailVerification(userCredential.user, {
+        url: 'https://nexus-app-tau.vercel.app/complete-registration?verified=true',
+        handleCodeInApp: false
+      });
       
       // Create Firestore user document
       await createUser(userCredential.user.uid, {
