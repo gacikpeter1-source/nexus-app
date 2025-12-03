@@ -1284,12 +1284,12 @@ const filteredOrderResponses = useMemo(() => {
         </div>
 
         {/* Club selector */}
-        <div className="mb-6 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-          <label className="block mb-2 text-light/80 font-medium">Select Club</label>
+        <div className="mb-2 animate-fade-in" style={{ animationDelay: '0.1s' }}>
+          <label className="block mb-1 text-light/80 font-medium">Select Club</label>
           <select
             value={selectedClubId}
             onChange={e => setSelectedClubId(e.target.value)}
-            className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+            className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
           >
             <option value="" className="bg-mid-dark">-- Select club --</option>
             {clubs.map(c => (
@@ -1306,7 +1306,6 @@ const filteredOrderResponses = useMemo(() => {
                 onClick={() => setShowCreateTeamModal(true)}
                 className="px-4 py-2 bg-primary/80 hover:bg-primary text-white rounded-lg text-sm font-medium transition-all inline-flex items-center gap-2"
               >
-                <span>+</span>
                 <span>Create Team</span>
               </button>
               
@@ -1320,7 +1319,6 @@ const filteredOrderResponses = useMemo(() => {
                 }}
                 className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-all inline-flex items-center gap-2"
               >
-                <span>✏️</span>
                 <span>Edit Club</span>
               </button>
               
@@ -1331,8 +1329,7 @@ const filteredOrderResponses = useMemo(() => {
                 }}
                 className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg text-sm font-medium transition-all inline-flex items-center gap-2"
               >
-                <span>🖼️</span>
-                <span>Change Logo</span>
+                 <span>Change Logo</span>
               </button>
             </div>
           )}
@@ -1396,16 +1393,7 @@ const filteredOrderResponses = useMemo(() => {
               >
                 Management
               </button>
-              <button
-                onClick={() => setActiveTab('requests')}
-                className={`px-3 py-2 text-xs font-medium transition-all whitespace-nowrap ${
-                  activeTab === 'requests'
-                    ? 'text-primary border-b-2 border-primary'
-                    : 'text-light/60 hover:text-light'
-                }`}
-              >
-                Pending Requests
-              </button>
+
               <button
                 onClick={() => setActiveTab('statistics')}
                 className={`px-3 py-2 text-xs font-medium transition-all whitespace-nowrap ${
@@ -1415,6 +1403,17 @@ const filteredOrderResponses = useMemo(() => {
                 }`}
               >
                 Statistics
+              </button>
+
+              <button
+                onClick={() => setActiveTab('requests')}
+                className={`px-3 py-2 text-xs font-medium transition-all whitespace-nowrap ${
+                  activeTab === 'requests'
+                    ? 'text-primary border-b-2 border-primary'
+                    : 'text-light/60 hover:text-light'
+                }`}
+              >
+                Pending Requests
               </button>
 
               <button

@@ -144,7 +144,7 @@ export default function Navbar() {
                   : 'text-light/80 hover:text-light'
               }`}
             >
-              🏠 Dashboard
+              Dashboard
             </Link>
             {isManager() && (
               <Link
@@ -155,7 +155,7 @@ export default function Navbar() {
                     : 'text-light/80 hover:text-light'
                 }`}
               >
-                🏢 CLUB MGMT
+                CLUB MGMT
               </Link>
             )}
             <Link
@@ -166,7 +166,7 @@ export default function Navbar() {
                   : 'text-light/80 hover:text-light'
               }`}
             >
-              📅 Calendar
+              Calendar
             </Link>
             <Link
               to="/teams"
@@ -176,7 +176,7 @@ export default function Navbar() {
                   : 'text-light/80 hover:text-light'
               }`}
             >
-              ⚽ Teams
+              Teams
             </Link>
             {isSuperAdminOrAdmin() && (
               <Link
@@ -296,7 +296,7 @@ export default function Navbar() {
                     : 'text-light hover:bg-white/10'
                 }`}
               >
-                🏠 Dashboard
+                Dashboard
               </Link>
               
               {isManager() && (
@@ -309,7 +309,7 @@ export default function Navbar() {
                       : 'text-light hover:bg-white/10'
                   }`}
                 >
-                  🏢 Club Management
+                  Club Management
                 </Link>
               )}
               
@@ -322,7 +322,7 @@ export default function Navbar() {
                     : 'text-light hover:bg-white/10'
                 }`}
               >
-                📅 Calendar
+                Calendar
               </Link>
               
               <Link
@@ -334,7 +334,7 @@ export default function Navbar() {
                     : 'text-light hover:bg-white/10'
                 }`}
               >
-                ⚽ Teams
+                Teams
               </Link>
               
               {isSuperAdminOrAdmin() && (
@@ -347,7 +347,7 @@ export default function Navbar() {
                       : 'text-light hover:bg-white/10'
                   }`}
                 >
-                  👑 Admin
+                  Admin
                 </Link>
               )}
             </div>

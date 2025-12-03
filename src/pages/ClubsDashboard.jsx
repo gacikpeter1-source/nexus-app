@@ -22,7 +22,7 @@ function Modal({ open, title, children, onClose }) {
             onClick={onClose} 
             className="text-light/60 hover:text-light w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors"
           >
-            âœ•
+            ✖
           </button>
         </div>
         <div>{children}</div>
@@ -482,7 +482,7 @@ async function handleSubmitOrderResponse(status) {
               onClick={() => setOpenCreateModal(false)}
               className="absolute top-4 right-4 z-10 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-light transition-all"
             >
-              âœ•
+              ✖
             </button>
             <CreateClubWithSubscription />
           </div>
