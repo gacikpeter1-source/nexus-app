@@ -4,6 +4,16 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getClub, updateClub, getAllUsers, getClubEvents, getTeamEvents } from '../firebase/firestore';
 import { useToast } from '../contexts/ToastContext';
+import { 
+  getClub, 
+  updateClub, 
+  getAllUsers, 
+  getClubEvents, 
+  getTeamEvents,
+  getClubOrderTemplates,
+  getOrderResponses,
+  createOrderResponse
+} from '../firebase/firestore';
 
 
 export default function Team() {
@@ -17,6 +27,13 @@ export default function Team() {
   const [loading, setLoading] = useState(true);
   const [allUsers, setAllUsers] = useState([]);
   const [events, setEvents] = useState([]);
+
+  const [orders, setOrders] = useState([]);
+  const [orderResponses, setOrderResponses] = useState([]);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [showOrderResponseModal, setShowOrderResponseModal] = useState(false);
+  const [orderResponseForm, setOrderResponseForm] = useState({});
+  const [respondingToOrder, setRespondingToOrder] = useState(false);  
 
   // Load club and team from Firebase
   useEffect(() => {
@@ -40,6 +57,26 @@ export default function Team() {
       // Load events for this team
       const teamEvents = await getTeamEvents(teamId);
       setEvents(teamEvents || []);
+
+            // Load orders for this team (ADD THIS)
+      if (clubData) {
+        const clubOrders = await getClubOrderTemplates(clubData.id);
+        // Filter orders for this team
+        const teamOrders = clubOrders.filter(order => 
+          !order.teams || 
+          order.teams.length === 0 || 
+          order.teams.includes(teamId)
+        );
+        setOrders(teamOrders);
+
+        // Load responses for each order
+        const allResponses = {};
+        for (const order of teamOrders) {
+          const responses = await getOrderResponses(order.id);
+          allResponses[order.id] = responses;
+        }
+        setOrderResponses(allResponses);
+      }
 
     } catch (error) {
       console.error('Error loading team:', error);
@@ -77,6 +114,48 @@ export default function Team() {
       showToast('Failed to leave team', 'error');
     }
   };
+async function handleSubmitOrderResponse(status) {
+    if (status === 'accepted') {
+      // Validate required fields
+      const missingFields = selectedOrder.fields
+        .filter(field => field.required && !orderResponseForm[field.id]?.trim())
+        .map(field => field.label);
+      
+      if (missingFields.length > 0) {
+        showToast(`Please fill required fields: ${missingFields.join(', ')}`, 'error');
+        return;
+      }
+    }
+
+    try {
+      setRespondingToOrder(true);
+      
+      const responseData = {
+        orderId: selectedOrder.id,
+        userId: user.id,
+        clubId: clubId,
+        teamId: teamId,
+        status: status,
+        responses: status === 'accepted' ? orderResponseForm : {}
+      };
+
+      await createOrderResponse(responseData);
+      showToast(status === 'accepted' ? 'Order accepted!' : 'Order declined', 'success');
+      
+      setShowOrderResponseModal(false);
+      setSelectedOrder(null);
+      setOrderResponseForm({});
+      
+      // Reload team data
+      await loadTeamData();
+    } catch (error) {
+      console.error('Error submitting order response:', error);
+      showToast('Failed to submit response', 'error');
+    } finally {
+      setRespondingToOrder(false);
+    }
+  }
+
 
   const team = useMemo(() => {
     if (!club || !club.teams) return null;
@@ -314,29 +393,143 @@ export default function Team() {
               )}
             </div>
 
-            {/* Quick Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-                <div className="text-3xl mb-2">🏋️</div>
-                <div className="text-2xl font-bold text-light">{statistics.trainings}</div>
-                <div className="text-sm text-light/60">Trainings</div>
+            {/* Quick Stats - Enhanced with Orders */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 text-center">
+                <div className="text-2xl mb-1">🏋️</div>
+                <div className="text-xl font-bold text-light">{statistics.trainings}</div>
+                <div className="text-xs text-light/60">Trainings</div>
               </div>
-              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-                <div className="text-3xl mb-2">⚽</div>
-                <div className="text-2xl font-bold text-light">{statistics.matches}</div>
-                <div className="text-sm text-light/60">Matches</div>
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 text-center">
+                <div className="text-2xl mb-1">⚽</div>
+                <div className="text-xl font-bold text-light">{statistics.matches}</div>
+                <div className="text-xs text-light/60">Matches</div>
               </div>
-              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-                <div className="text-3xl mb-2">🏆</div>
-                <div className="text-2xl font-bold text-light">{statistics.tournaments}</div>
-                <div className="text-sm text-light/60">Tournaments</div>
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 text-center">
+                <div className="text-2xl mb-1">🏆</div>
+                <div className="text-xl font-bold text-light">{statistics.tournaments}</div>
+                <div className="text-xs text-light/60">Tournaments</div>
               </div>
-              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-                <div className="text-3xl mb-2">💼</div>
-                <div className="text-2xl font-bold text-light">{statistics.meetings}</div>
-                <div className="text-sm text-light/60">Meetings</div>
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 text-center">
+                <div className="text-2xl mb-1">💼</div>
+                <div className="text-xl font-bold text-light">{statistics.meetings}</div>
+                <div className="text-xs text-light/60">Meetings</div>
+              </div>
+              <div 
+                className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 text-center cursor-pointer hover:bg-white/10 hover:border-primary/50 transition-all relative"
+                onClick={() => {
+                  const ordersSection = document.getElementById('orders-section');
+                  if (ordersSection) {
+                    ordersSection.scrollIntoView({ behavior: 'smooth' });
+                  }
+                }}
+              >
+                {orders.filter(order => {
+                  const userResponse = orderResponses[order.id]?.find(r => r.userId === user?.id);
+                  return !userResponse;
+                }).length > 0 && (
+                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 rounded-full flex items-center justify-center">
+                    <span className="text-white text-[10px] font-bold">
+                      {orders.filter(order => {
+                        const userResponse = orderResponses[order.id]?.find(r => r.userId === user?.id);
+                        return !userResponse;
+                      }).length}
+                    </span>
+                  </div>
+                )}
+                <div className="text-2xl mb-1">📋</div>
+                <div className="text-xl font-bold text-light">{orders.length}</div>
+                <div className="text-xs text-light/60">Orders</div>
               </div>
             </div>
+            
+            {/* Orders Section */}
+            <div id="orders-section" className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+              <h2 className="font-title text-2xl text-light mb-4">Team Orders</h2>
+              
+              {orders.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="text-4xl mb-2">📋</div>
+                  <p className="text-light/60">No orders yet</p>
+                  <p className="text-light/40 text-sm mt-1">Orders will appear here</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {orders.map((order) => {
+                    const userResponse = orderResponses[order.id]?.find(r => r.userId === user?.id);
+                    const isPending = !userResponse;
+                    const isActive = order.status === 'active';
+
+                    return (
+                      <div
+                        key={order.id}
+                        className={`bg-white/5 border rounded-lg p-4 transition-all ${
+                          isPending && isActive
+                            ? 'border-orange-500/50 hover:border-orange-500 cursor-pointer'
+                            : 'border-white/10 opacity-60'
+                        }`}
+                        onClick={() => {
+                          if (isPending && isActive) {
+                            setSelectedOrder(order);
+                            setShowOrderResponseModal(true);
+                            setOrderResponseForm({});
+                          }
+                        }}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-semibold text-light">
+                                {order.title}
+                              </h3>
+                              {isPending && isActive && (
+                                <span className="px-2 py-0.5 text-xs bg-orange-500/20 text-orange-300 rounded-full">
+                                  Action Required
+                                </span>
+                              )}
+                              {!isActive && (
+                                <span className="px-2 py-0.5 text-xs bg-gray-500/20 text-gray-400 rounded-full">
+                                  Closed
+                                </span>
+                              )}
+                            </div>
+                            {order.description && (
+                              <p className="text-sm text-light/60 mb-2 line-clamp-1">
+                                {order.description}
+                              </p>
+                            )}
+                            <div className="flex flex-wrap gap-3 text-xs text-light/50">
+                              <span>📋 {order.fields.length} fields</span>
+                              {order.deadline && (
+                                <span>⏰ Deadline: {new Date(order.deadline).toLocaleDateString()}</span>
+                              )}
+                              {userResponse && (
+                                <>
+                                  <span>
+                                    {userResponse.status === 'accepted' ? '✓ Responded' : '✗ Declined'}
+                                  </span>
+                                  {userResponse.submittedAt && (
+                                    <span>
+                                      📅 {new Date(userResponse.submittedAt.seconds * 1000).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          {isPending && isActive && (
+                            <div className="text-primary text-sm font-medium whitespace-nowrap">
+                              Respond →
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
           </div>
         )}
 
@@ -559,6 +752,118 @@ export default function Team() {
           </div>
         )}
       </div>
+        {/* Order Response Modal */}
+      {showOrderResponseModal && selectedOrder && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-title text-2xl text-light">{selectedOrder.title}</h3>
+              <button
+                onClick={() => {
+                  setShowOrderResponseModal(false);
+                  setSelectedOrder(null);
+                  setOrderResponseForm({});
+                }}
+                className="text-light/60 hover:text-light transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {selectedOrder.description && (
+              <p className="text-sm text-light/70 mb-6 pb-6 border-b border-white/10">
+                {selectedOrder.description}
+              </p>
+            )}
+
+            <div className="space-y-4 mb-6">
+              {selectedOrder.fields.map(field => (
+                <div key={field.id}>
+                  <label className="block text-sm font-medium text-light/80 mb-2">
+                    {field.label}
+                    {field.required && <span className="text-red-400 ml-1">*</span>}
+                  </label>
+                  
+                  {field.type === 'text' && (
+                    <input
+                      type="text"
+                      className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                      value={orderResponseForm[field.id] || ''}
+                      onChange={(e) => setOrderResponseForm(f => ({ 
+                        ...f, 
+                        [field.id]: e.target.value 
+                      }))}
+                      required={field.required}
+                    />
+                  )}
+
+                  {field.type === 'number' && (
+                    <input
+                      type="number"
+                      className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                      value={orderResponseForm[field.id] || ''}
+                      onChange={(e) => setOrderResponseForm(f => ({ 
+                        ...f, 
+                        [field.id]: e.target.value 
+                      }))}
+                      required={field.required}
+                    />
+                  )}
+
+                  {field.type === 'dropdown' && (
+                    <select
+                      className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                      value={orderResponseForm[field.id] || ''}
+                      onChange={(e) => setOrderResponseForm(f => ({ 
+                        ...f, 
+                        [field.id]: e.target.value 
+                      }))}
+                      required={field.required}
+                    >
+                      <option value="" className="bg-mid-dark">Select...</option>
+                      {field.options?.map((opt, idx) => (
+                        <option key={idx} value={opt} className="bg-mid-dark">
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
+                  {field.type === 'textarea' && (
+                    <textarea
+                      rows={3}
+                      className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none"
+                      value={orderResponseForm[field.id] || ''}
+                      onChange={(e) => setOrderResponseForm(f => ({ 
+                        ...f, 
+                        [field.id]: e.target.value 
+                      }))}
+                      required={field.required}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => handleSubmitOrderResponse('accepted')}
+                className="flex-1 px-4 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-all disabled:opacity-50"
+                disabled={respondingToOrder}
+              >
+                {respondingToOrder ? 'Submitting...' : '✓ Accept & Submit'}
+              </button>
+              <button
+                onClick={() => handleSubmitOrderResponse('declined')}
+                className="px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-all disabled:opacity-50"
+                disabled={respondingToOrder}
+              >
+                ✗ Decline
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
