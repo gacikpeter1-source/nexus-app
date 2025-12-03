@@ -24,7 +24,9 @@ export default function EventPage() {
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageType, setMessageType] = useState(''); // 'maybe' or 'declined'
   const [responseMessage, setResponseMessage] = useState('');
-  
+  const [showDeclineMenu, setShowDeclineMenu] = useState(false);
+  const [showMaybeMenu, setShowMaybeMenu] = useState(false);
+
   // Invite state
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteSearch, setInviteSearch] = useState('');
@@ -75,7 +77,7 @@ export default function EventPage() {
     }
   }
 
-  async function handleRsvp(status, message = '') {
+    async function handleRsvp(status, message = null) {
     if (!user || !event) return;
 
     try {
@@ -111,6 +113,21 @@ export default function EventPage() {
     await handleRsvp(messageType, responseMessage);
     setShowMessageModal(false);
   }
+
+// Close dropdowns when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (!event.target.closest('.relative')) {
+        setShowDeclineMenu(false);
+        setShowMaybeMenu(false);
+      }
+    }
+
+    if (showDeclineMenu || showMaybeMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showDeclineMenu, showMaybeMenu]);
 
   async function handleDelete() {
     if (!window.confirm(`Are you sure you want to delete "${event.title}"?`)) {
@@ -288,7 +305,7 @@ export default function EventPage() {
     try {
       // Add user to event responses as "maybe" 
       // This makes the event visible in their calendar
-      await updateEventResponse(eventId, invitedUser.id, 'maybe');
+      await updateEventResponse(eventId, invitedUser.id, 'maybe', null);
       
       showToast(`${invitedUser.username} can now see this event`, 'success');
       setInviteSearch('');
@@ -356,30 +373,84 @@ export default function EventPage() {
           >
             {userResponse?.status === 'attending' ? '✓ Attending' : 'Attend'}
           </button>
+          
+          {/* Decline Button with Dropdown */}
+          <div className="relative flex-1 min-w-[100px]">
+            <button 
+              onClick={() => setShowDeclineMenu(!showDeclineMenu)}
+              className={`w-full px-3 py-1.5 rounded-lg font-medium transition-all text-xs ${
+                userResponse?.status === 'declined' 
+                  ? 'bg-red-600 text-white ring-2 ring-red-400' 
+                  : 'bg-red-500 text-white hover:bg-red-600'
+              }`}
+              disabled={updatingRsvp}
+            >
+              {userResponse?.status === 'declined' ? '✓ Declined' : 'Decline ▼'}
+            </button>
 
-          <button 
-            onClick={() => handleRsvp('declined')} 
-            className={`flex-1 min-w-[100px] px-3 py-1.5 rounded-lg font-medium transition-all text-xs ${
-              userResponse?.status === 'declined' 
-                ? 'bg-red-600 text-white ring-2 ring-red-400' 
-                : 'bg-red-500 text-white hover:bg-red-600'
-            }`}
-            disabled={updatingRsvp}
-          >
-            {userResponse?.status === 'declined' ? '✓ Declined' : 'Decline'}
-          </button>
+            {/* Dropdown Menu */}
+            {showDeclineMenu && (
+              <div className="absolute top-full left-0 mt-1 bg-mid-dark border border-white/20 rounded-lg shadow-2xl overflow-hidden z-50 min-w-full">
+                <button
+                  onClick={() => {
+                    handleRsvp('declined', null);
+                    setShowDeclineMenu(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-light hover:bg-white/10 transition-all"
+                >
+                  Decline
+                </button>
+                <button
+                  onClick={() => {
+                    openMessageModal('declined');
+                    setShowDeclineMenu(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-light hover:bg-white/10 transition-all border-t border-white/10"
+                >
+                  Decline with message
+                </button>
+              </div>
+            )}
+          </div>
 
-          <button 
-            onClick={() => handleRsvp('maybe')} 
-            className={`flex-1 min-w-[100px] px-3 py-1.5 rounded-lg font-medium transition-all text-xs ${
-              userResponse?.status === 'maybe' 
-                ? 'bg-yellow-600 text-white ring-2 ring-yellow-400' 
-                : 'bg-yellow-500 text-white hover:bg-yellow-600'
-            }`}
-            disabled={updatingRsvp}
-          >
-            {userResponse?.status === 'maybe' ? '✓ Maybe' : 'Maybe'}
-          </button>
+{/* Maybe Button with Dropdown */}
+          <div className="relative flex-1 min-w-[100px]">
+            <button 
+              onClick={() => setShowMaybeMenu(!showMaybeMenu)}
+              className={`w-full px-3 py-1.5 rounded-lg font-medium transition-all text-xs ${
+                userResponse?.status === 'maybe' 
+                  ? 'bg-yellow-600 text-white ring-2 ring-yellow-400' 
+                  : 'bg-yellow-500 text-white hover:bg-yellow-600'
+              }`}
+              disabled={updatingRsvp}
+            >
+              {userResponse?.status === 'maybe' ? '✓ Maybe' : 'Maybe ▼'}
+            </button>
+
+            {/* Dropdown Menu */}
+            {showMaybeMenu && (
+              <div className="absolute top-full left-0 mt-1 bg-mid-dark border border-white/20 rounded-lg shadow-2xl overflow-hidden z-50 min-w-full">
+                <button
+                  onClick={() => {
+                    handleRsvp('maybe', null);
+                    setShowMaybeMenu(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-light hover:bg-white/10 transition-all"
+                >
+                  Maybe
+                </button>
+                <button
+                  onClick={() => {
+                    openMessageModal('maybe');
+                    setShowMaybeMenu(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-light hover:bg-white/10 transition-all border-t border-white/10"
+                >
+                  Maybe with message
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
         <div className="flex items-start justify-between gap-6 mb-4">

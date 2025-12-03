@@ -267,7 +267,7 @@ export const getTeamEvents = async (teamId) => {
 };
 
 // Add or update RSVP response for an event
-export const updateEventResponse = async (eventId, userId, status, message = '') => {
+export const updateEventResponse = async (eventId, userId, status, message = null) => {
   try {
     const eventRef = doc(db, 'events', eventId);
     const eventDoc = await getDoc(eventRef);
@@ -277,13 +277,21 @@ export const updateEventResponse = async (eventId, userId, status, message = '')
     }
 
     const currentResponses = eventDoc.data().responses || {};
+    
+    // Build response object
+    const responseData = {
+      status, // 'attending', 'declined', 'maybe'
+      timestamp: serverTimestamp()
+    };
+    
+    // Only add message field if it exists (not null, not undefined, not empty)
+    if (message && message.trim()) {
+      responseData.message = message.trim();
+    }
+    
     const updatedResponses = {
       ...currentResponses,
-      [userId]: {
-        status, // 'attending', 'declined', 'maybe'
-        message: message || undefined, // Only save if provided
-        timestamp: serverTimestamp()
-      }
+      [userId]: responseData
     };
 
     await updateDoc(eventRef, {
