@@ -18,6 +18,15 @@ import {
   deleteUser as deleteUserFromFirestore,
 } from '../firebase/firestore';
 
+// Role constants
+export const ROLES = {
+  ADMIN: 'admin',
+  TRAINER: 'trainer',
+  ASSISTANT: 'assistant',
+  USER: 'user',
+  PARENT: 'parent'
+};
+
 const AuthContext = createContext(null);
 
 export const useAuth = () => {
