@@ -1,4 +1,4 @@
-// src/contexts/AuthContext.jsx
+// src/contexts/AuthContext.jsx - WITH DEBUGGING
 import { createContext, useContext, useState, useEffect } from 'react';
 import {
   createUserWithEmailAndPassword,
@@ -80,11 +80,20 @@ export const AuthProvider = ({ children }) => {
 
   // Login user
   const login = async (email, password) => {
+    console.log('🔐 LOGIN ATTEMPT STARTED');
+    console.log('📧 Email:', email);
+    
     try {
+      console.log('1️⃣ Calling signInWithEmailAndPassword...');
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      console.log('✅ Firebase auth successful, UID:', userCredential.user.uid);
       
+      console.log('2️⃣ Fetching user document from Firestore...');
       const userDoc = await getUser(userCredential.user.uid);
+      console.log('📄 User doc received:', userDoc ? 'YES' : 'NO');
+      
       if (!userDoc) {
+        console.error('❌ No user document found in Firestore!');
         throw new Error('User data not found');
       }
 
@@ -95,13 +104,25 @@ export const AuthProvider = ({ children }) => {
         emailVerified: userCredential.user.emailVerified 
       };
       
+      console.log('3️⃣ Setting user state...');
       setUser(userData);
-      localStorage.setItem('currentUser', JSON.stringify(userData)); // ✅ FIXED: Save to localStorage
-      console.log('✅ User logged in and saved to localStorage:', userData.email);
+      
+      console.log('4️⃣ Saving to localStorage...');
+      localStorage.setItem('currentUser', JSON.stringify(userData));
+      
+      console.log('5️⃣ Verifying localStorage save...');
+      const savedUser = localStorage.getItem('currentUser');
+      console.log('✅ localStorage verification:', savedUser ? 'SAVED' : 'FAILED');
+      
+      if (!savedUser) {
+        console.error('❌ CRITICAL: localStorage.setItem failed!');
+      } else {
+        console.log('✅ User logged in successfully:', userData.email);
+      }
 
       return { ok: true, user: userData };
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('❌ Login error:', error);
       let message = 'Login failed';
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
         message = 'Invalid email or password';
@@ -128,11 +149,16 @@ export const AuthProvider = ({ children }) => {
 
   // Listen for auth state changes
   useEffect(() => {
+    console.log('🎧 Auth state listener initialized');
+    
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         console.log('🔥 Firebase user detected:', firebaseUser.email);
+        console.log('🔥 UID:', firebaseUser.uid);
+        
         try {
           const userDoc = await getUser(firebaseUser.uid);
+          
           if (userDoc) {
             const userData = { 
               ...userDoc, 
@@ -140,16 +166,22 @@ export const AuthProvider = ({ children }) => {
               uid: firebaseUser.uid,
               emailVerified: firebaseUser.emailVerified 
             };
+            
+            console.log('📦 Setting user in state...');
             setUser(userData);
-            localStorage.setItem('currentUser', JSON.stringify(userData)); // ✅ FIXED: Sync to localStorage
-            console.log('✅ User data loaded and saved to localStorage');
+            
+            console.log('💾 Saving to localStorage...');
+            localStorage.setItem('currentUser', JSON.stringify(userData));
+            
+            console.log('✅ User data loaded and saved');
+            console.log('🔍 Verify:', localStorage.getItem('currentUser') ? 'EXISTS' : 'MISSING');
           } else {
             console.warn('⚠️ Firebase user exists but no Firestore document');
             setUser(null);
             localStorage.removeItem('currentUser');
           }
         } catch (error) {
-          console.error('Error loading user data:', error);
+          console.error('❌ Error loading user data:', error);
           setUser(null);
           localStorage.removeItem('currentUser');
         }
@@ -170,7 +202,7 @@ export const AuthProvider = ({ children }) => {
       await updateUser(userId, updates);
       const updatedUser = { ...user, ...updates };
       setUser(updatedUser);
-      localStorage.setItem('currentUser', JSON.stringify(updatedUser)); // ✅ FIXED: Update localStorage
+      localStorage.setItem('currentUser', JSON.stringify(updatedUser));
       console.log('✅ User profile updated');
       return { ok: true };
     } catch (error) {
