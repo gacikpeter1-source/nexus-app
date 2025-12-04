@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 
 export default function Navbar() {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
@@ -45,12 +45,13 @@ export default function Navbar() {
   // Check if user is manager (SuperAdmin, admin, trainer, or assistant)
   const isManager = () => {
     if (!user) return false;
-    return ['admin', 'trainer', 'assistant'].includes(user.role);
+    return user.isSuperAdmin === true || ['admin', 'trainer', 'assistant'].includes(user.role);
   };
 
   // Check if user is SuperAdmin or Admin
   const isSuperAdminOrAdmin = () => {
-    return user && (user.isSuperAdmin || isAdmin());
+    if (!user) return false;
+    return user.isSuperAdmin === true || user.role === 'admin';
   };
 
   // Don't show navbar on public pages
