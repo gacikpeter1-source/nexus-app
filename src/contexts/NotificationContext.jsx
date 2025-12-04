@@ -1,4 +1,4 @@
-// src/contexts/NotificationContext.jsx
+// src/contexts/NotificationContext.jsx - FIXED
 import { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { requestNotificationPermission, onForegroundMessage } from '../firebase/messaging';
@@ -24,23 +24,18 @@ export const NotificationProvider = ({ children }) => {
   useEffect(() => {
     if ('Notification' in window) {
       setNotificationPermission(Notification.permission);
+      console.log('🔔 Initial notification permission:', Notification.permission);
     }
   }, []);
-
-  // Request permission when user logs in
-  useEffect(() => {
-    if (user && notificationPermission === 'default') {
-      // Don't auto-request, wait for user action
-      // requestPermission will be called manually
-    }
-  }, [user, notificationPermission]);
 
   // Listen for foreground messages
   useEffect(() => {
     if (!user) return;
 
+    console.log('🎧 Setting up foreground message listener');
+    
     const unsubscribe = onForegroundMessage((payload) => {
-      console.log('Foreground notification:', payload);
+      console.log('📨 Foreground notification received:', payload);
       
       // Show toast notification when app is open
       const title = payload.notification?.title || 'New Notification';
@@ -49,7 +44,7 @@ export const NotificationProvider = ({ children }) => {
       showToast(`${title}: ${body}`, 'info', 5000);
       
       // Also show browser notification if supported
-      if (notificationPermission === 'granted' && 'Notification' in window) {
+      if (Notification.permission === 'granted' && 'Notification' in window) {
         new Notification(title, {
           body: body,
           icon: '/icon-192.png',
@@ -58,30 +53,38 @@ export const NotificationProvider = ({ children }) => {
       }
     });
 
-    return () => unsubscribe && unsubscribe();
-  }, [user, notificationPermission, showToast]);
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [user, showToast]); // ✅ Removed notificationPermission from deps
 
   // Request notification permission
   const requestPermission = async () => {
+    console.log('🔔 requestPermission called');
+    console.log('👤 User:', user ? user.email : 'null');
+    
     if (!user) {
       showToast('Please log in to enable notifications', 'error');
       return false;
     }
 
     try {
+      console.log('📲 Requesting FCM token...');
       const token = await requestNotificationPermission(user.id);
       
       if (token) {
+        console.log('✅ FCM token received:', token.substring(0, 20) + '...');
         setFcmToken(token);
         setNotificationPermission('granted');
         showToast('✅ Notifications enabled!', 'success');
         return true;
       } else {
+        console.warn('❌ No token received');
         showToast('Failed to enable notifications', 'error');
         return false;
       }
     } catch (error) {
-      console.error('Error requesting permission:', error);
+      console.error('❌ Error requesting permission:', error);
       showToast('Failed to enable notifications', 'error');
       return false;
     }
@@ -91,7 +94,7 @@ export const NotificationProvider = ({ children }) => {
     notificationPermission,
     fcmToken,
     requestPermission,
-    isNotificationsEnabled: notificationPermission === 'granted'
+    isNotificationsEnabled: notificationPermission === 'granted' && fcmToken !== null
   };
 
   return (
@@ -100,3 +103,4 @@ export const NotificationProvider = ({ children }) => {
     </NotificationContext.Provider>
   );
 };
+
