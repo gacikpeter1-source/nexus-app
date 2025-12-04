@@ -51,6 +51,7 @@ export const getUser = async (userId) => {
 
 export const getUserByEmail = async (email) => {
   try {
+    if (!email) return null;
     const q = query(collection(db, 'users'), where('email', '==', email.toLowerCase()));
     const snapshot = await getDocs(q);
     if (!snapshot.empty) {
