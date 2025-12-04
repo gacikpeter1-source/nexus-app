@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { createEvent, getAllClubs } from '../firebase/firestore';
+import { notifyEventCreated, getNotificationRecipients } from '../utils/notifications';
 
 export default function NewEvent() {
   const navigate = useNavigate();
@@ -186,11 +187,18 @@ if (form.attachmentUrl) {
   eventData.attachmentName = form.attachmentName;
 }
 
-    try {
-      setLoading(true);
-      await createEvent(eventData);
-      showToast('Event created successfully!', 'success');
-      navigate('/calendar');
+      try {
+        setLoading(true);
+        const newEvent = await createEvent(eventData); // ✅ Store returned event
+        showToast('Event created successfully!', 'success');
+        
+        // ✅ Send notification - use form.clubId and form.teamId
+        if (form.visibilityLevel !== 'personal') {
+          const recipients = await getNotificationRecipients(form.clubId, form.teamId);
+          await notifyEventCreated(newEvent, recipients, recipients);
+        }
+        
+        navigate('/calendar');
     } catch (error) {
       console.error('Error creating event:', error);
       showToast('Failed to create event', 'error');
@@ -199,6 +207,8 @@ if (form.attachmentUrl) {
     }
   };
 
+
+  
   const update = (field) => (e) =>
     setForm((f) => ({ ...f, [field]: e.target.value }));
 

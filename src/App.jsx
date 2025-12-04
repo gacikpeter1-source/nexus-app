@@ -1,9 +1,10 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { ToastProvider } from './contexts/ToastContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/Navbar';
-import PWAUpdatePrompt from './components/PWAUpdatePrompt';
 import Register from './pages/Register';
 import Login from './pages/Login';
 import VerifyEmail from './pages/VerifyEmail';
@@ -30,169 +31,171 @@ function App() {
   return (
     <AuthProvider>
       <LanguageProvider>
-        <div className="min-h-screen bg-gradient-to-br from-dark via-mid-dark to-dark">
-          <Navbar />
-          <main className="relative z-10 container mx-auto px-4 py-8">
-            <Routes>
-              {/* Public Routes */}
-              <Route path="/register" element={<Register />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/verify-email" element={<VerifyEmail />} />
-              <Route path="/complete-registration" element={<CompleteRegistration />} />
+        <ToastProvider>  {/* ✅ ADD THIS - Wrap with ToastProvider if not already */}
+          <NotificationProvider>  {/* ✅ ADD THIS - New wrapper for notifications */}
+            <div className="min-h-screen bg-gradient-to-br from-dark via-mid-dark to-dark">
+              <Navbar />
+              <main className="relative z-10 container mx-auto px-4 py-8">
+                <Routes>
+                  {/* Public Routes */}
+                  <Route path="/register" element={<Register />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/verify-email" element={<VerifyEmail />} />
+                  <Route path="/complete-registration" element={<CompleteRegistration />} />
 
-              {/* Protected Routes */}
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <ClubsDashboard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/club/:clubId"
-                element={
-                  <ProtectedRoute>
-                    <ClubManagement />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/club-management"
-                element={
-                  <ProtectedRoute>
-                    <ClubManagement />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/calendar"
-                element={
-                  <ProtectedRoute>
-                    <Calendar />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/new-event"
-                element={
-                  <ProtectedRoute>
-                    <NewEvent />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/edit-event/:eventId"
-                element={
-                  <ProtectedRoute>
-                    <EditEvent />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/event/:eventId"
-                element={
-                  <ProtectedRoute>
-                    <Event />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/teams"
-                element={
-                  <ProtectedRoute>
-                    <Teams />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/team/:clubId/:teamId"
-                element={
-                  <ProtectedRoute>
-                    <Team />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/team/:clubId/:teamId/statistics"
-                element={
-                  <ProtectedRoute>
-                    <TeamStatistics />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/profile"
-                element={
-                  <ProtectedRoute>
-                    <Profile />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/change-password"
-                element={
-                  <ProtectedRoute>
-                    <ChangePassword />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/language"
-                element={
-                  <ProtectedRoute>
-                    <Language />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/support"
-                element={
-                  <ProtectedRoute>
-                    <Support />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/feedback"
-                element={
-                  <ProtectedRoute>
-                    <Feedback />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/pending-requests"
-                element={
-                  <ProtectedRoute>
-                    <PendingRequests />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin"
-                element={
-                  <ProtectedRoute>
-                    <AdminDashboard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/diagnostic"
-                element={
-                  <ProtectedRoute>
-                    <FirebaseDiagnostic />
-                  </ProtectedRoute>
-                }
-              />
+                  {/* Protected Routes */}
+                  <Route
+                    path="/"
+                    element={
+                      <ProtectedRoute>
+                        <ClubsDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/club/:clubId"
+                    element={
+                      <ProtectedRoute>
+                        <ClubManagement />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/club-management"
+                    element={
+                      <ProtectedRoute>
+                        <ClubManagement />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/calendar"
+                    element={
+                      <ProtectedRoute>
+                        <Calendar />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/new-event"
+                    element={
+                      <ProtectedRoute>
+                        <NewEvent />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/edit-event/:eventId"
+                    element={
+                      <ProtectedRoute>
+                        <EditEvent />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/event/:eventId"
+                    element={
+                      <ProtectedRoute>
+                        <Event />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/teams"
+                    element={
+                      <ProtectedRoute>
+                        <Teams />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/team/:clubId/:teamId"
+                    element={
+                      <ProtectedRoute>
+                        <Team />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/team/:clubId/:teamId/statistics"
+                    element={
+                      <ProtectedRoute>
+                        <TeamStatistics />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/profile"
+                    element={
+                      <ProtectedRoute>
+                        <Profile />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/change-password"
+                    element={
+                      <ProtectedRoute>
+                        <ChangePassword />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/language"
+                    element={
+                      <ProtectedRoute>
+                        <Language />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/support"
+                    element={
+                      <ProtectedRoute>
+                        <Support />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/feedback"
+                    element={
+                      <ProtectedRoute>
+                        <Feedback />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/pending-requests"
+                    element={
+                      <ProtectedRoute>
+                        <PendingRequests />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin"
+                    element={
+                      <ProtectedRoute>
+                        <AdminDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/diagnostic"
+                    element={
+                      <ProtectedRoute>
+                        <FirebaseDiagnostic />
+                      </ProtectedRoute>
+                    }
+                  />
 
-              {/* Catch all - redirect to home */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </main>
-          {/* PWA Update Notification */}
-          <PWAUpdatePrompt />
-        </div>
+                  {/* Catch all - redirect to home */}
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </main>
+            </div>
+          </NotificationProvider>  {/* ✅ CLOSE NotificationProvider */}
+        </ToastProvider>  {/* ✅ CLOSE ToastProvider */}
       </LanguageProvider>
     </AuthProvider>
   );

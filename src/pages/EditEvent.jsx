@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { getEvent, updateEvent } from '../firebase/firestore';
+import { notifyEventModified } from '../utils/notifications';
 
 export default function EditEvent() {
   const { eventId } = useParams();
@@ -142,6 +143,14 @@ export default function EditEvent() {
 
       await updateEvent(eventId, updateData);
       showToast('Event updated successfully', 'success');
+
+      // ✅ Send notification about the update
+      if (event.visibilityLevel !== 'personal') {
+        const updatedEvent = { ...event, ...updateData, id: eventId };
+        const affectedUsers = Object.keys(event.responses || {});
+        await notifyEventModified(updatedEvent, affectedUsers);
+      }
+
       navigate(`/event/${eventId}`);
     } catch (error) {
       console.error('Error updating event:', error);

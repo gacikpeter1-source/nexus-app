@@ -3,6 +3,10 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
+import NotificationSettings from '../components/NotificationSettings';
+
+
+
 
 export default function Profile() {
   const { user } = useAuth();
@@ -107,6 +111,9 @@ export default function Profile() {
             {t('userMenu.profileDesc')}
           </p>
         </div>
+
+        {/* ✅ ADD NOTIFICATION SETTINGS HERE */}
+        <NotificationSettings />
 
         {/* Profile Form */}
         <form onSubmit={handleSubmit} className="space-y-6 animate-fade-in" style={{ animationDelay: '0.1s' }}>
@@ -274,6 +281,3 @@ export default function Profile() {
     </div>
   );
 }
-
-
-
