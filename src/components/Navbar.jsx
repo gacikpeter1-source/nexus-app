@@ -44,7 +44,8 @@ export default function Navbar() {
 
   // Check if user is manager (SuperAdmin, admin, trainer, or assistant)
   const isManager = () => {
-    return user && (user.isSuperAdmin || isAdmin() || user.role === 'trainer' || user.role === 'assistant');
+    if (!user) return false;
+    return ['admin', 'trainer', 'assistant'].includes(user.role);
   };
 
   // Check if user is SuperAdmin or Admin
