@@ -11,6 +11,7 @@ import {
   query,
   where,
   getDocs,
+  addDoc,
   serverTimestamp
 } from 'firebase/firestore';
 

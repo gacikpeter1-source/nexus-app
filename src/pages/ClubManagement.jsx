@@ -1382,39 +1382,42 @@ const filteredOrderResponses = useMemo(() => {
 
         {/* Tabs */}
         {selectedClubId && (
-  <div className="mb-6">
-    <div className="flex gap-2 border-b border-white/10 overflow-x-auto pb-px">
+          <div className="mb-6">
+            <div className="flex gap-2 flex-wrap">
               <button
                 onClick={() => setActiveTab('management')}
-                className={`px-3 py-2 text-xs font-medium transition-all whitespace-nowrap ${
-                  activeTab === 'management'
-                    ? 'text-primary border-b-2 border-primary'
-                    : 'text-light/60 hover:text-light'
-                }`}
+                className={`
+                  px-6 py-2 rounded-lg transition-all duration-200 font-medium
+                  ${activeTab === 'management'
+                    ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg'
+                    : 'bg-white/5 text-light/70 hover:bg-white/10 hover:text-light'}
+                `}
               >
-                Management
+                👥 Management
               </button>
 
               <button
                 onClick={() => setActiveTab('statistics')}
-                className={`px-3 py-2 text-xs font-medium transition-all whitespace-nowrap ${
-                  activeTab === 'statistics'
-                    ? 'text-primary border-b-2 border-primary'
-                    : 'text-light/60 hover:text-light'
-                }`}
+                className={`
+                  px-6 py-2 rounded-lg transition-all duration-200 font-medium
+                  ${activeTab === 'statistics'
+                    ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg'
+                    : 'bg-white/5 text-light/70 hover:bg-white/10 hover:text-light'}
+                `}
               >
-                Statistics
+                📊 Statistics
               </button>
 
               <button
                 onClick={() => setActiveTab('requests')}
-                className={`px-3 py-2 text-xs font-medium transition-all whitespace-nowrap ${
-                  activeTab === 'requests'
-                    ? 'text-primary border-b-2 border-primary'
-                    : 'text-light/60 hover:text-light'
-                }`}
+                className={`
+                  px-6 py-2 rounded-lg transition-all duration-200 font-medium
+                  ${activeTab === 'requests'
+                    ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg'
+                    : 'bg-white/5 text-light/70 hover:bg-white/10 hover:text-light'}
+                `}
               >
-                Pending Requests
+                📬 Pending Requests
               </button>
 
               <button
@@ -1426,8 +1429,9 @@ const filteredOrderResponses = useMemo(() => {
                     : 'bg-white/5 text-light/70 hover:bg-white/10 hover:text-light'}
                 `}
               >
-                Orders
+                🛒 Orders
               </button>
+
               <button
                 onClick={() => setActiveTab('notifications')}
                 className={`
