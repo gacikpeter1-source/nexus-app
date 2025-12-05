@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, ROLES } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
+import NotificationsTab from '../components/NotificationsTab';
 
 import { 
   getAllClubs, 
@@ -104,7 +105,7 @@ export default function ClubManagement() {
   const [teamTrainerFilter, setTeamTrainerFilter] = useState('');
 
   // Tab state
-  const [activeTab, setActiveTab] = useState('management'); // management, requests, statistics, orders
+  const [activeTab, setActiveTab] = useState('management'); // management, requests, statistics, orders, notifications
 
   // Orders tab state
 const [orders, setOrders] = useState([]);
@@ -1418,13 +1419,25 @@ const filteredOrderResponses = useMemo(() => {
 
               <button
                 onClick={() => setActiveTab('orders')}
-                className={`px-3 py-2 text-xs font-medium transition-all whitespace-nowrap ${
-                  activeTab === 'orders'
-                    ? 'text-primary border-b-2 border-primary'
-                    : 'text-light/60 hover:text-light'
-                }`}
+                className={`
+                  px-6 py-2 rounded-lg transition-all duration-200 font-medium
+                  ${activeTab === 'orders'
+                    ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg'
+                    : 'bg-white/5 text-light/70 hover:bg-white/10 hover:text-light'}
+                `}
               >
                 Orders
+              </button>
+              <button
+                onClick={() => setActiveTab('notifications')}
+                className={`
+                  px-6 py-2 rounded-lg transition-all duration-200 font-medium
+                  ${activeTab === 'notifications'
+                    ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg'
+                    : 'bg-white/5 text-light/70 hover:bg-white/10 hover:text-light'}
+                `}
+              >
+                🔔 Notifications
               </button>
             </div>
           </div>
@@ -2627,6 +2640,14 @@ const filteredOrderResponses = useMemo(() => {
     </div>
   </div>
 )}
+        {/* Notifications Tab */}
+        {selectedClubId && activeTab === 'notifications' && (
+          <NotificationsTab
+            clubId={selectedClubId}
+            clubTeams={clubTeams}
+            userRole={user?.role}
+          />
+        )}
 
       {/* Team Assignment Modal */}
       {showTeamAssignModal && userToAssign && (

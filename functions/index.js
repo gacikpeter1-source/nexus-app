@@ -6,6 +6,68 @@ const admin = require('firebase-admin');
 
 admin.initializeApp();
 
+// Add at top of file
+async function areNotificationsEnabled(clubId, teamId, notificationType) {
+  try {
+    const path = teamId 
+      ? `clubs/${clubId}/teams/${teamId}/notificationSettings/config`
+      : `clubs/${clubId}/notificationSettings/config`;
+    
+    const settingsDoc = await admin.firestore().doc(path).get();
+    
+    if (!settingsDoc.exists()) {
+      return false;
+    }
+    
+    const settings = settingsDoc.data();
+    const parts = notificationType.split('.');
+    let value = settings;
+    
+    for (const part of parts) {
+      if (value && typeof value === 'object' && part in value) {
+        value = value[part];
+      } else {
+        return false;
+      }
+    }
+    
+    return value === true;
+  } catch (error) {
+    console.error('Error checking notification settings:', error);
+    return false;
+  }
+}
+
+async function sendEmailNotification(userIds, subject, body) {
+  try {
+    const emails = [];
+    for (const userId of userIds) {
+      const userDoc = await admin.firestore().collection('users').doc(userId).get();
+      if (userDoc.exists()) {
+        const email = userDoc.data().email;
+        if (email) emails.push(email);
+      }
+    }
+    
+    if (emails.length === 0) return;
+    
+    await admin.firestore().collection('emailQueue').add({
+      to: emails,
+      message: {
+        subject: subject,
+        text: body,
+        html: body
+      },
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    
+    console.log(`✉️ Email queued for ${emails.length} recipients`);
+  } catch (error) {
+    console.error('Error sending email notification:', error);
+  }
+}
+
+
 /**
  * Helper function to send notifications using FCM v1 API
  * Sends to multiple tokens in batches of 500 (FCM limit)
@@ -191,10 +253,29 @@ exports.onEventCreated = functions.firestore
   .document('events/{eventId}')
   .onCreate(async (snap, context) => {
     const event = snap.data();
+    const eventId = context.params.eventId;
     
     console.log('📅 New event created:', event.title);
 
     try {
+      // Check if notifications are enabled
+      const pushEnabled = await areNotificationsEnabled(
+        event.clubId,
+        event.teamId,
+        'push.events.created'
+      );
+      
+      const emailEnabled = await areNotificationsEnabled(
+        event.clubId,
+        event.teamId,
+        'email.events.created'
+      );
+      
+      if (!pushEnabled && !emailEnabled) {
+        console.log('ℹ️ All notifications disabled for new events');
+        return;
+      }
+
       // Get club data to find all users who can see this event
       const clubDoc = await admin.firestore()
         .collection('clubs')
@@ -252,34 +333,43 @@ exports.onEventCreated = functions.firestore
 
       console.log(`👥 Notifying ${targetUserIds.length} users`);
 
-      // Get FCM tokens for all users
-      const tokens = await getUserTokens(targetUserIds);
+      // Send push notifications if enabled
+      if (pushEnabled) {
+        // Get FCM tokens for all users
+        const tokens = await getUserTokens(targetUserIds);
 
-      if (tokens.length === 0) {
-        console.log('⚠️ No FCM tokens found');
-        return;
+        if (tokens.length > 0) {
+          console.log(`🔔 Sending push to ${tokens.length} devices`);
+
+          // Send notification
+          const result = await sendMulticastNotification(
+            tokens,
+            {
+              title: '📅 New Event Created',
+              body: `${event.title} - ${new Date(event.start).toLocaleDateString()}`
+            },
+            {
+              type: 'event_new',
+              eventId: eventId,
+              clubId: event.clubId,
+              teamId: event.teamId || ''
+            }
+          );
+
+          // Clean up invalid tokens
+          if (result.invalidTokens.length > 0) {
+            await cleanupInvalidTokens(result.invalidTokens);
+          }
+        }
       }
 
-      console.log(`🔔 Sending to ${tokens.length} devices`);
-
-      // Send notification
-      const result = await sendMulticastNotification(
-        tokens,
-        {
-          title: '📅 New Event Created',
-          body: `${event.title} - ${new Date(event.start).toLocaleDateString()}`
-        },
-        {
-          type: 'event_new',
-          eventId: context.params.eventId,
-          clubId: event.clubId,
-          teamId: event.teamId || ''
-        }
-      );
-
-      // Clean up invalid tokens
-      if (result.invalidTokens.length > 0) {
-        await cleanupInvalidTokens(result.invalidTokens);
+      // Send email notifications if enabled
+      if (emailEnabled) {
+        await sendEmailNotification(
+          targetUserIds,
+          `📅 New Event: ${event.title}`,
+          `A new event has been created:\n\n${event.title}\n${new Date(event.start).toLocaleDateString()}\n\nLocation: ${event.location || 'TBD'}\n\nCheck the app for more details.`
+        );
       }
 
       console.log('✅ Event notification complete');
@@ -312,6 +402,24 @@ exports.onEventUpdated = functions.firestore
     console.log('📝 Event updated:', after.title);
 
     try {
+      // Check if notifications are enabled
+      const pushEnabled = await areNotificationsEnabled(
+        after.clubId,
+        after.teamId,
+        'push.events.updated'
+      );
+      
+      const emailEnabled = await areNotificationsEnabled(
+        after.clubId,
+        after.teamId,
+        'email.events.updated'
+      );
+      
+      if (!pushEnabled && !emailEnabled) {
+        console.log('ℹ️ Notifications disabled for event updates');
+        return;
+      }
+
       // Get users who responded to this event
       const responses = after.responses || {};
       let targetUserIds = new Set(Object.keys(responses));
@@ -326,40 +434,49 @@ exports.onEventUpdated = functions.firestore
 
       console.log(`👥 Notifying ${targetUserIds.length} attendees`);
 
-      // Get FCM tokens
-      const tokens = await getUserTokens(targetUserIds);
-
-      if (tokens.length === 0) {
-        console.log('⚠️ No FCM tokens found');
-        return;
-      }
-
-      console.log(`🔔 Sending to ${tokens.length} devices`);
-
       // Determine what changed
       let changeDescription = '';
       if (before.title !== after.title) changeDescription = 'Title changed';
       else if (before.start !== after.start || before.end !== after.end) changeDescription = 'Time changed';
       else if (before.location !== after.location) changeDescription = 'Location changed';
 
-      // Send notification
-      const result = await sendMulticastNotification(
-        tokens,
-        {
-          title: '📝 Event Modified',
-          body: `${after.title} - ${changeDescription}`
-        },
-        {
-          type: 'event_modified',
-          eventId: context.params.eventId,
-          clubId: after.clubId,
-          teamId: after.teamId || ''
-        }
-      );
+      // Send push notifications if enabled
+      if (pushEnabled) {
+        // Get FCM tokens
+        const tokens = await getUserTokens(targetUserIds);
 
-      // Clean up invalid tokens
-      if (result.invalidTokens.length > 0) {
-        await cleanupInvalidTokens(result.invalidTokens);
+        if (tokens.length > 0) {
+          console.log(`🔔 Sending push to ${tokens.length} devices`);
+
+          // Send notification
+          const result = await sendMulticastNotification(
+            tokens,
+            {
+              title: '📝 Event Modified',
+              body: `${after.title} - ${changeDescription}`
+            },
+            {
+              type: 'event_modified',
+              eventId: context.params.eventId,
+              clubId: after.clubId,
+              teamId: after.teamId || ''
+            }
+          );
+
+          // Clean up invalid tokens
+          if (result.invalidTokens.length > 0) {
+            await cleanupInvalidTokens(result.invalidTokens);
+          }
+        }
+      }
+
+      // Send email notifications if enabled
+      if (emailEnabled) {
+        await sendEmailNotification(
+          targetUserIds,
+          `📝 Event Updated: ${after.title}`,
+          `The event "${after.title}" has been updated.\n\n${changeDescription}\n\nCheck the app for updated details.`
+        );
       }
 
       console.log('✅ Event update notification complete');
@@ -379,6 +496,24 @@ exports.onEventDeleted = functions.firestore
     console.log('🗑️ Event deleted:', event.title);
 
     try {
+      // Check if notifications are enabled
+      const pushEnabled = await areNotificationsEnabled(
+        event.clubId,
+        event.teamId,
+        'push.events.deleted'
+      );
+      
+      const emailEnabled = await areNotificationsEnabled(
+        event.clubId,
+        event.teamId,
+        'email.events.deleted'
+      );
+      
+      if (!pushEnabled && !emailEnabled) {
+        console.log('ℹ️ Notifications disabled for event deletions');
+        return;
+      }
+
       // Get users who responded
       const responses = event.responses || {};
       let targetUserIds = Array.from(new Set(Object.keys(responses)));
@@ -390,34 +525,43 @@ exports.onEventDeleted = functions.firestore
 
       console.log(`👥 Notifying ${targetUserIds.length} attendees`);
 
-      // Get FCM tokens
-      const tokens = await getUserTokens(targetUserIds);
+      // Send push notifications if enabled
+      if (pushEnabled) {
+        // Get FCM tokens
+        const tokens = await getUserTokens(targetUserIds);
 
-      if (tokens.length === 0) {
-        console.log('⚠️ No FCM tokens found');
-        return;
+        if (tokens.length > 0) {
+          console.log(`🔔 Sending push to ${tokens.length} devices`);
+
+          // Send notification
+          const result = await sendMulticastNotification(
+            tokens,
+            {
+              title: '❌ Event Cancelled',
+              body: `${event.title} has been cancelled`
+            },
+            {
+              type: 'event_deleted',
+              eventId: context.params.eventId,
+              clubId: event.clubId,
+              teamId: event.teamId || ''
+            }
+          );
+
+          // Clean up invalid tokens
+          if (result.invalidTokens.length > 0) {
+            await cleanupInvalidTokens(result.invalidTokens);
+          }
+        }
       }
 
-      console.log(`🔔 Sending to ${tokens.length} devices`);
-
-      // Send notification
-      const result = await sendMulticastNotification(
-        tokens,
-        {
-          title: '❌ Event Cancelled',
-          body: `${event.title} has been cancelled`
-        },
-        {
-          type: 'event_deleted',
-          eventId: context.params.eventId,
-          clubId: event.clubId,
-          teamId: event.teamId || ''
-        }
-      );
-
-      // Clean up invalid tokens
-      if (result.invalidTokens.length > 0) {
-        await cleanupInvalidTokens(result.invalidTokens);
+      // Send email notifications if enabled
+      if (emailEnabled) {
+        await sendEmailNotification(
+          targetUserIds,
+          `❌ Event Cancelled: ${event.title}`,
+          `The event "${event.title}" has been cancelled.\n\nPlease check the app for more information.`
+        );
       }
 
       console.log('✅ Event deletion notification complete');
@@ -504,6 +648,24 @@ exports.onOrderCreated = functions.firestore
     console.log('🛒 New order created:', order.productName);
 
     try {
+      // Check if notifications are enabled
+      const pushEnabled = await areNotificationsEnabled(
+        order.clubId,
+        null,
+        'push.orders.created'
+      );
+      
+      const emailEnabled = await areNotificationsEnabled(
+        order.clubId,
+        null,
+        'email.orders.created'
+      );
+      
+      if (!pushEnabled && !emailEnabled) {
+        console.log('ℹ️ Notifications disabled for new orders');
+        return;
+      }
+
       // Get club data
       const clubDoc = await admin.firestore()
         .collection('clubs')
@@ -534,33 +696,42 @@ exports.onOrderCreated = functions.firestore
 
       console.log(`👥 Notifying ${targetUserIds.length} users`);
 
-      // Get FCM tokens
-      const tokens = await getUserTokens(targetUserIds);
+      // Send push notifications if enabled
+      if (pushEnabled) {
+        // Get FCM tokens
+        const tokens = await getUserTokens(targetUserIds);
 
-      if (tokens.length === 0) {
-        console.log('⚠️ No FCM tokens found');
-        return;
+        if (tokens.length > 0) {
+          console.log(`🔔 Sending push to ${tokens.length} devices`);
+
+          // Send notification
+          const result = await sendMulticastNotification(
+            tokens,
+            {
+              title: '🛒 New Order Available',
+              body: `${order.productName} - Order now!`
+            },
+            {
+              type: 'order_new',
+              orderId: context.params.orderId,
+              clubId: order.clubId
+            }
+          );
+
+          // Clean up invalid tokens
+          if (result.invalidTokens.length > 0) {
+            await cleanupInvalidTokens(result.invalidTokens);
+          }
+        }
       }
 
-      console.log(`🔔 Sending to ${tokens.length} devices`);
-
-      // Send notification
-      const result = await sendMulticastNotification(
-        tokens,
-        {
-          title: '🛒 New Order Available',
-          body: `${order.productName} - Order now!`
-        },
-        {
-          type: 'order_new',
-          orderId: context.params.orderId,
-          clubId: order.clubId
-        }
-      );
-
-      // Clean up invalid tokens
-      if (result.invalidTokens.length > 0) {
-        await cleanupInvalidTokens(result.invalidTokens);
+      // Send email notifications if enabled
+      if (emailEnabled) {
+        await sendEmailNotification(
+          targetUserIds,
+          `🛒 New Order: ${order.productName}`,
+          `A new order is available: ${order.productName}\n\nDeadline: ${order.deadline ? new Date(order.deadline).toLocaleDateString() : 'TBD'}\n\nCheck the app to place your order.`
+        );
       }
 
       console.log('✅ Order notification complete');
