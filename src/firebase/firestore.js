@@ -157,24 +157,59 @@ export const updateClub = async (clubId, updates) => {
   }
 };
 
+// DEPRECATED: Use getUserClubs() instead
+// This function cannot work with security rules that require user membership
 export const getAllClubs = async () => {
+  console.warn('getAllClubs is deprecated - security rules prevent reading all clubs. Use getUserClubs(userId) instead.');
   try {
     const snapshot = await getDocs(collection(db, 'clubs'));
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
     console.error('Error getting all clubs:', error);
-    throw error;
+    // Return empty array instead of throwing to prevent app crashes
+    return [];
   }
 };
 
+// Get clubs for a specific user using proper queries
 export const getUserClubs = async (userId) => {
   try {
-    const allClubs = await getAllClubs();
-    return allClubs.filter(club => 
-      club.members?.includes(userId) ||
-      club.trainers?.includes(userId) ||
-      club.assistants?.includes(userId)
-    );
+    if (!userId) {
+      console.error('getUserClubs: userId is required');
+      return [];
+    }
+
+    const clubsRef = collection(db, 'clubs');
+    const clubs = [];
+    
+    // Query for clubs where user is a member
+    const memberQuery = query(clubsRef, where('members', 'array-contains', userId));
+    const memberSnapshot = await getDocs(memberQuery);
+    memberSnapshot.forEach(doc => {
+      clubs.push({ id: doc.id, ...doc.data() });
+    });
+    
+    // Query for clubs where user is a trainer
+    const trainerQuery = query(clubsRef, where('trainers', 'array-contains', userId));
+    const trainerSnapshot = await getDocs(trainerQuery);
+    trainerSnapshot.forEach(doc => {
+      // Check if not already added
+      if (!clubs.find(c => c.id === doc.id)) {
+        clubs.push({ id: doc.id, ...doc.data() });
+      }
+    });
+    
+    // Query for clubs where user is an assistant
+    const assistantQuery = query(clubsRef, where('assistants', 'array-contains', userId));
+    const assistantSnapshot = await getDocs(assistantQuery);
+    assistantSnapshot.forEach(doc => {
+      // Check if not already added
+      if (!clubs.find(c => c.id === doc.id)) {
+        clubs.push({ id: doc.id, ...doc.data() });
+      }
+    });
+    
+    return clubs;
   } catch (error) {
     console.error('Error getting user clubs:', error);
     throw error;
