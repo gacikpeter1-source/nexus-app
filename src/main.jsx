@@ -32,17 +32,28 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 );
 
 // ============================================
-// PWA Service Worker Registration
+// Service Worker Registration (PWA + FCM)
 // ============================================
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
+    // 1. Register PWA Service Worker (for offline caching)
     navigator.serviceWorker
       .register('/service-worker.js')
       .then((registration) => {
-        console.log('✅ PWA Service Worker registered successfully:', registration.scope);
+        console.log('✅ PWA Service Worker registered:', registration.scope);
       })
       .catch((error) => {
-        console.log('❌ Service Worker registration failed:', error);
+        console.log('❌ PWA Service Worker failed:', error);
+      });
+
+    // 2. Register Firebase Cloud Messaging Service Worker (for notifications)
+    navigator.serviceWorker
+      .register('/firebase-messaging-sw.js')
+      .then((registration) => {
+        console.log('✅ Firebase Messaging SW registered:', registration.scope);
+      })
+      .catch((error) => {
+        console.error('❌ Firebase Messaging SW failed:', error);
       });
   });
 }
