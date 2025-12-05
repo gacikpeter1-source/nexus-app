@@ -1,10 +1,136 @@
-// functions/index.js
+// functions/index.js - FIXED VERSION with FCM v1 API
 // Firebase Cloud Functions for Push Notifications
 
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 
 admin.initializeApp();
+
+/**
+ * Helper function to send notifications using FCM v1 API
+ * Sends to multiple tokens in batches of 500 (FCM limit)
+ */
+async function sendMulticastNotification(tokens, notification, data = {}) {
+  if (!tokens || tokens.length === 0) {
+    console.log('No tokens provided');
+    return { successCount: 0, failureCount: 0, invalidTokens: [] };
+  }
+
+  console.log(`Sending notification to ${tokens.length} tokens`);
+  
+  let successCount = 0;
+  let failureCount = 0;
+  const invalidTokens = [];
+
+  // FCM allows max 500 tokens per batch
+  const batchSize = 500;
+  
+  for (let i = 0; i < tokens.length; i += batchSize) {
+    const batchTokens = tokens.slice(i, i + batchSize);
+    
+    try {
+      // Use sendEachForMulticast instead of sendMulticast
+      const message = {
+        notification: {
+          title: notification.title,
+          body: notification.body
+        },
+        data: data,
+        tokens: batchTokens
+      };
+
+      const response = await admin.messaging().sendEachForMulticast(message);
+      
+      successCount += response.successCount;
+      failureCount += response.failureCount;
+
+      // Collect invalid tokens
+      response.responses.forEach((resp, idx) => {
+        if (!resp.success) {
+          const error = resp.error;
+          if (
+            error.code === 'messaging/invalid-registration-token' ||
+            error.code === 'messaging/registration-token-not-registered'
+          ) {
+            invalidTokens.push(batchTokens[idx]);
+          }
+          console.log(`Failed to send to token ${idx}:`, error.code);
+        }
+      });
+
+    } catch (error) {
+      console.error(`Error sending batch ${i / batchSize}:`, error);
+      failureCount += batchTokens.length;
+    }
+  }
+
+  console.log(`✅ Successfully sent: ${successCount}`);
+  console.log(`❌ Failed: ${failureCount}`);
+  
+  if (invalidTokens.length > 0) {
+    console.log(`🗑️ Invalid tokens to clean up: ${invalidTokens.length}`);
+  }
+
+  return { successCount, failureCount, invalidTokens };
+}
+
+/**
+ * Helper function to get FCM tokens for multiple users
+ */
+async function getUserTokens(userIds) {
+  const tokens = [];
+  
+  for (const userId of userIds) {
+    try {
+      const userDoc = await admin.firestore()
+        .collection('users')
+        .doc(userId)
+        .get();
+      
+      if (userDoc.exists) {
+        const userData = userDoc.data();
+        const userTokens = userData.fcmTokens || [];
+        tokens.push(...userTokens);
+      }
+    } catch (error) {
+      console.error(`Error getting tokens for user ${userId}:`, error);
+    }
+  }
+  
+  return tokens;
+}
+
+/**
+ * Helper function to clean up invalid tokens
+ */
+async function cleanupInvalidTokens(invalidTokens) {
+  console.log(`Cleaning up ${invalidTokens.length} invalid tokens`);
+  
+  const usersSnapshot = await admin.firestore()
+    .collection('users')
+    .get();
+  
+  const batch = admin.firestore().batch();
+  let updatesCount = 0;
+
+  usersSnapshot.forEach((doc) => {
+    const userData = doc.data();
+    const userTokens = userData.fcmTokens || [];
+    
+    // Filter out invalid tokens
+    const validTokens = userTokens.filter(token => !invalidTokens.includes(token));
+    
+    if (validTokens.length !== userTokens.length) {
+      batch.update(doc.ref, { fcmTokens: validTokens });
+      updatesCount++;
+    }
+  });
+
+  if (updatesCount > 0) {
+    await batch.commit();
+    console.log(`✅ Cleaned up tokens from ${updatesCount} users`);
+  }
+}
 
 /**
  * Send push notification to multiple FCM tokens
@@ -36,73 +162,27 @@ exports.sendNotification = functions.https.onCall(async (data, context) => {
   }
 
   try {
-    // Prepare message
-    const message = {
-      notification: {
-        title: notification.title,
-        body: notification.body
-      },
-      data: notification.data || {},
-      tokens: tokens
-    };
-
-    // Send to multiple devices
-    const response = await admin.messaging().sendMulticast(message);
-
-    console.log(`Successfully sent ${response.successCount} notifications`);
-    console.log(`Failed to send ${response.failureCount} notifications`);
+    const result = await sendMulticastNotification(
+      tokens,
+      notification,
+      notification.data || {}
+    );
 
     // Clean up invalid tokens
-    const tokensToRemove = [];
-    response.responses.forEach((resp, idx) => {
-      if (!resp.success) {
-        const error = resp.error;
-        if (
-          error.code === 'messaging/invalid-registration-token' ||
-          error.code === 'messaging/registration-token-not-registered'
-        ) {
-          tokensToRemove.push(tokens[idx]);
-        }
-      }
-    });
-
-    // Remove invalid tokens from database
-    if (tokensToRemove.length > 0) {
-      await cleanupInvalidTokens(tokensToRemove);
+    if (result.invalidTokens.length > 0) {
+      await cleanupInvalidTokens(result.invalidTokens);
     }
 
     return {
       success: true,
-      successCount: response.successCount,
-      failureCount: response.failureCount
+      successCount: result.successCount,
+      failureCount: result.failureCount
     };
   } catch (error) {
     console.error('Error sending notification:', error);
     throw new functions.https.HttpsError('internal', error.message);
   }
 });
-
-/**
- * Remove invalid FCM tokens from user documents
- */
-async function cleanupInvalidTokens(tokens) {
-  const db = admin.firestore();
-  const usersRef = db.collection('users');
-
-  for (const token of tokens) {
-    const querySnapshot = await usersRef
-      .where('fcmTokens', 'array-contains', token)
-      .get();
-
-    querySnapshot.forEach(async (doc) => {
-      await doc.ref.update({
-        fcmTokens: admin.firestore.FieldValue.arrayRemove(token)
-      });
-    });
-  }
-
-  console.log(`Cleaned up ${tokens.length} invalid tokens`);
-}
 
 /**
  * Firestore Trigger: Send notification when event is created
@@ -112,87 +192,99 @@ exports.onEventCreated = functions.firestore
   .onCreate(async (snap, context) => {
     const event = snap.data();
     
+    console.log('📅 New event created:', event.title);
+
     try {
-      // Get club data to find members
+      // Get club data to find all users who can see this event
       const clubDoc = await admin.firestore()
         .collection('clubs')
         .doc(event.clubId)
         .get();
       
       if (!clubDoc.exists) {
-        console.log('Club not found');
+        console.log('⚠️ Club not found');
         return;
       }
 
       const clubData = clubDoc.data();
       let targetUserIds = new Set();
 
-      // Personal events - no notifications (only creator)
-      if (event.visibilityLevel === 'personal') {
-        console.log('Personal event - no notifications sent');
-        return;
-      }
-
-      // Team events - notify all team members, trainers, and assistants
-      if (event.visibilityLevel === 'team' && event.teamId) {
-        const team = clubData.teams?.find(t => t.id === event.teamId);
-        if (team) {
-          (team.members || []).forEach(id => targetUserIds.add(id));
-          (team.trainers || []).forEach(id => targetUserIds.add(id));
-          (team.assistants || []).forEach(id => targetUserIds.add(id));
-        }
-      }
-
-      // Club events - notify ALL members from ALL teams + club-level roles
-      if (event.visibilityLevel === 'club') {
-        // Add club-level trainers and assistants
-        (clubData.trainers || []).forEach(id => targetUserIds.add(id));
-        (clubData.assistants || []).forEach(id => targetUserIds.add(id));
-        (clubData.members || []).forEach(id => targetUserIds.add(id));
+      // If event is for specific team, get team members
+      if (event.teamId) {
+        const teamDoc = await admin.firestore()
+          .collection('clubs')
+          .doc(event.clubId)
+          .collection('teams')
+          .doc(event.teamId)
+          .get();
         
-        // Add members from all teams
-        (clubData.teams || []).forEach(team => {
+        if (teamDoc.exists) {
+          const teamData = teamDoc.data();
+          (teamData.members || []).forEach(id => targetUserIds.add(id));
+          (teamData.assistants || []).forEach(id => targetUserIds.add(id));
+        }
+      } else {
+        // Event for all club members
+        (clubData.members || []).forEach(id => targetUserIds.add(id));
+        (clubData.admins || []).forEach(id => targetUserIds.add(id));
+        
+        // Include all team members if no specific team
+        const teamsSnapshot = await admin.firestore()
+          .collection('clubs')
+          .doc(event.clubId)
+          .collection('teams')
+          .get();
+        
+        teamsSnapshot.forEach(teamDoc => {
+          const team = teamDoc.data();
           (team.members || []).forEach(id => targetUserIds.add(id));
-          (team.trainers || []).forEach(id => targetUserIds.add(id));
           (team.assistants || []).forEach(id => targetUserIds.add(id));
         });
       }
 
-      // Convert Set to Array and remove event creator (don't notify them)
+      // Convert Set to Array and remove event creator
       targetUserIds = Array.from(targetUserIds).filter(id => id !== event.createdBy);
 
       if (targetUserIds.length === 0) {
-        console.log('No users to notify');
+        console.log('ℹ️ No users to notify');
         return;
       }
+
+      console.log(`👥 Notifying ${targetUserIds.length} users`);
 
       // Get FCM tokens for all users
       const tokens = await getUserTokens(targetUserIds);
 
       if (tokens.length === 0) {
-        console.log('No FCM tokens found');
+        console.log('⚠️ No FCM tokens found');
         return;
       }
 
+      console.log(`🔔 Sending to ${tokens.length} devices`);
+
       // Send notification
-      const message = {
-        notification: {
+      const result = await sendMulticastNotification(
+        tokens,
+        {
           title: '📅 New Event Created',
           body: `${event.title} - ${new Date(event.start).toLocaleDateString()}`
         },
-        data: {
+        {
           type: 'event_new',
           eventId: context.params.eventId,
           clubId: event.clubId,
           teamId: event.teamId || ''
-        },
-        tokens: tokens
-      };
+        }
+      );
 
-      const response = await admin.messaging().sendMulticast(message);
-      console.log(`Event notification sent: ${response.successCount} success, ${response.failureCount} failed`);
+      // Clean up invalid tokens
+      if (result.invalidTokens.length > 0) {
+        await cleanupInvalidTokens(result.invalidTokens);
+      }
+
+      console.log('✅ Event notification complete');
     } catch (error) {
-      console.error('Error sending event notification:', error);
+      console.error('❌ Error sending event notification:', error);
     }
   });
 
@@ -213,81 +305,66 @@ exports.onEventUpdated = functions.firestore
       before.location !== after.location;
     
     if (!hasChanged) {
-      return; // No notification needed
+      console.log('ℹ️ No meaningful changes detected');
+      return;
     }
 
+    console.log('📝 Event updated:', after.title);
+
     try {
-      // Get club data to find all users who can see this event
-      const clubDoc = await admin.firestore()
-        .collection('clubs')
-        .doc(after.clubId)
-        .get();
-      
-      if (!clubDoc.exists) {
-        console.log('Club not found');
-        return;
-      }
-
-      const clubData = clubDoc.data();
-      let targetUserIds = new Set();
-
-      // Get users who responded (they're definitely interested)
+      // Get users who responded to this event
       const responses = after.responses || {};
-      Object.keys(responses).forEach(id => targetUserIds.add(id));
+      let targetUserIds = new Set(Object.keys(responses));
 
-      // Also notify all users who CAN see the event but haven't responded yet
-      if (after.visibilityLevel === 'team' && after.teamId) {
-        const team = clubData.teams?.find(t => t.id === after.teamId);
-        if (team) {
-          (team.members || []).forEach(id => targetUserIds.add(id));
-          (team.trainers || []).forEach(id => targetUserIds.add(id));
-          (team.assistants || []).forEach(id => targetUserIds.add(id));
-        }
-      } else if (after.visibilityLevel === 'club') {
-        // Notify everyone in club
-        (clubData.trainers || []).forEach(id => targetUserIds.add(id));
-        (clubData.assistants || []).forEach(id => targetUserIds.add(id));
-        (clubData.members || []).forEach(id => targetUserIds.add(id));
-        
-        (clubData.teams || []).forEach(team => {
-          (team.members || []).forEach(id => targetUserIds.add(id));
-          (team.trainers || []).forEach(id => targetUserIds.add(id));
-          (team.assistants || []).forEach(id => targetUserIds.add(id));
-        });
-      }
-
-      // Remove event creator (don't notify them of their own changes)
+      // Convert to array and filter
       targetUserIds = Array.from(targetUserIds).filter(id => id !== after.createdBy);
 
       if (targetUserIds.length === 0) {
-        console.log('No users to notify');
+        console.log('ℹ️ No attendees to notify');
         return;
       }
 
+      console.log(`👥 Notifying ${targetUserIds.length} attendees`);
+
+      // Get FCM tokens
       const tokens = await getUserTokens(targetUserIds);
 
       if (tokens.length === 0) {
-        console.log('No FCM tokens found');
+        console.log('⚠️ No FCM tokens found');
         return;
       }
 
-      const message = {
-        notification: {
-          title: '📝 Event Updated',
-          body: `${after.title} has been modified`
+      console.log(`🔔 Sending to ${tokens.length} devices`);
+
+      // Determine what changed
+      let changeDescription = '';
+      if (before.title !== after.title) changeDescription = 'Title changed';
+      else if (before.start !== after.start || before.end !== after.end) changeDescription = 'Time changed';
+      else if (before.location !== after.location) changeDescription = 'Location changed';
+
+      // Send notification
+      const result = await sendMulticastNotification(
+        tokens,
+        {
+          title: '📝 Event Modified',
+          body: `${after.title} - ${changeDescription}`
         },
-        data: {
+        {
           type: 'event_modified',
           eventId: context.params.eventId,
-          clubId: after.clubId
-        },
-        tokens: tokens
-      };
+          clubId: after.clubId,
+          teamId: after.teamId || ''
+        }
+      );
 
-      const response = await admin.messaging().sendMulticast(message);
-      console.log(`Event update notification sent: ${response.successCount} success`);
+      // Clean up invalid tokens
+      if (result.invalidTokens.length > 0) {
+        await cleanupInvalidTokens(result.invalidTokens);
+      }
+
+      console.log('✅ Event update notification complete');
     } catch (error) {
-      console.error('Error sending event update notification:', error);
+      console.error('❌ Error sending event update notification:', error);
     }
   });
 
@@ -299,297 +376,195 @@ exports.onEventDeleted = functions.firestore
   .onDelete(async (snap, context) => {
     const event = snap.data();
     
+    console.log('🗑️ Event deleted:', event.title);
+
     try {
-      // Get club data to find all users who could see this event
-      const clubDoc = await admin.firestore()
-        .collection('clubs')
-        .doc(event.clubId)
-        .get();
-      
-      if (!clubDoc.exists) {
-        console.log('Club not found');
-        return;
-      }
-
-      const clubData = clubDoc.data();
-      let targetUserIds = new Set();
-
-      // Get users who responded (they definitely knew about it)
+      // Get users who responded
       const responses = event.responses || {};
-      Object.keys(responses).forEach(id => targetUserIds.add(id));
-
-      // Also notify all users who COULD have seen the event
-      if (event.visibilityLevel === 'team' && event.teamId) {
-        const team = clubData.teams?.find(t => t.id === event.teamId);
-        if (team) {
-          (team.members || []).forEach(id => targetUserIds.add(id));
-          (team.trainers || []).forEach(id => targetUserIds.add(id));
-          (team.assistants || []).forEach(id => targetUserIds.add(id));
-        }
-      } else if (event.visibilityLevel === 'club') {
-        (clubData.trainers || []).forEach(id => targetUserIds.add(id));
-        (clubData.assistants || []).forEach(id => targetUserIds.add(id));
-        (clubData.members || []).forEach(id => targetUserIds.add(id));
-        
-        (clubData.teams || []).forEach(team => {
-          (team.members || []).forEach(id => targetUserIds.add(id));
-          (team.trainers || []).forEach(id => targetUserIds.add(id));
-          (team.assistants || []).forEach(id => targetUserIds.add(id));
-        });
-      }
-
-      targetUserIds = Array.from(targetUserIds).filter(id => id !== event.createdBy);
+      let targetUserIds = Array.from(new Set(Object.keys(responses)));
 
       if (targetUserIds.length === 0) {
-        console.log('No users to notify');
+        console.log('ℹ️ No attendees to notify');
         return;
       }
 
+      console.log(`👥 Notifying ${targetUserIds.length} attendees`);
+
+      // Get FCM tokens
       const tokens = await getUserTokens(targetUserIds);
 
       if (tokens.length === 0) {
-        console.log('No FCM tokens found');
+        console.log('⚠️ No FCM tokens found');
         return;
       }
 
-      const message = {
-        notification: {
+      console.log(`🔔 Sending to ${tokens.length} devices`);
+
+      // Send notification
+      const result = await sendMulticastNotification(
+        tokens,
+        {
           title: '❌ Event Cancelled',
           body: `${event.title} has been cancelled`
         },
-        data: {
+        {
           type: 'event_deleted',
-          clubId: event.clubId
-        },
-        tokens: tokens
-      };
+          eventId: context.params.eventId,
+          clubId: event.clubId,
+          teamId: event.teamId || ''
+        }
+      );
 
-      const response = await admin.messaging().sendMulticast(message);
-      console.log(`Event deletion notification sent: ${response.successCount} success`);
+      // Clean up invalid tokens
+      if (result.invalidTokens.length > 0) {
+        await cleanupInvalidTokens(result.invalidTokens);
+      }
+
+      console.log('✅ Event deletion notification complete');
     } catch (error) {
-      console.error('Error sending event deletion notification:', error);
+      console.error('❌ Error sending event deletion notification:', error);
     }
   });
 
 /**
- * Helper: Get FCM tokens for multiple users
+ * Scheduled function to check order deadlines
+ * Runs daily at 9 AM
  */
-async function getUserTokens(userIds) {
-  const tokens = [];
-  const db = admin.firestore();
-
-  for (const userId of userIds) {
+exports.checkOrderDeadlines = functions.pubsub
+  .schedule('0 9 * * *')
+  .timeZone('Europe/Bratislava')
+  .onRun(async (context) => {
+    console.log('⏰ Checking order deadlines...');
+    
     try {
-      const userDoc = await db.collection('users').doc(userId).get();
-      if (userDoc.exists) {
-        const userData = userDoc.data();
-        const userTokens = userData.fcmTokens || [];
-        tokens.push(...userTokens);
-      }
-    } catch (error) {
-      console.error(`Error getting tokens for user ${userId}:`, error);
-    }
-  }
+      const now = new Date();
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
 
-  return tokens;
-}
+      // Get all orders with deadline tomorrow
+      const ordersSnapshot = await admin.firestore()
+        .collection('orders')
+        .where('deadline', '>=', now.toISOString())
+        .where('deadline', '<', tomorrow.toISOString())
+        .where('status', '==', 'open')
+        .get();
+
+      console.log(`Found ${ordersSnapshot.size} orders expiring tomorrow`);
+
+      for (const orderDoc of ordersSnapshot.docs) {
+        const order = orderDoc.data();
+        
+        // Get club admins
+        const clubDoc = await admin.firestore()
+          .collection('clubs')
+          .doc(order.clubId)
+          .get();
+        
+        if (!clubDoc.exists) continue;
+        
+        const clubData = clubDoc.data();
+        const adminIds = clubData.admins || [];
+
+        if (adminIds.length === 0) continue;
+
+        // Get tokens
+        const tokens = await getUserTokens(adminIds);
+
+        if (tokens.length === 0) continue;
+
+        // Send reminder
+        await sendMulticastNotification(
+          tokens,
+          {
+            title: '⏰ Order Deadline Reminder',
+            body: `Order "${order.productName}" closes tomorrow!`
+          },
+          {
+            type: 'order_deadline',
+            orderId: orderDoc.id,
+            clubId: order.clubId
+          }
+        );
+      }
+
+      console.log('✅ Order deadline check complete');
+    } catch (error) {
+      console.error('❌ Error checking order deadlines:', error);
+    }
+  });
 
 /**
- * Firestore Trigger: Send notification when order is created
+ * Firestore Trigger: Send notification when new order is created
  */
 exports.onOrderCreated = functions.firestore
   .document('orders/{orderId}')
   .onCreate(async (snap, context) => {
     const order = snap.data();
     
+    console.log('🛒 New order created:', order.productName);
+
     try {
-      // Get club data to find eligible users
+      // Get club data
       const clubDoc = await admin.firestore()
         .collection('clubs')
         .doc(order.clubId)
         .get();
       
       if (!clubDoc.exists) {
-        console.log('Club not found');
+        console.log('⚠️ Club not found');
         return;
       }
 
       const clubData = clubDoc.data();
-      const eligibleUserIds = new Set();
+      let targetUserIds = [];
 
-      // If order is for all teams (no specific teams selected)
-      if (!order.teams || order.teams.length === 0) {
-        // Notify all club members
-        (clubData.trainers || []).forEach(id => eligibleUserIds.add(id));
-        (clubData.assistants || []).forEach(id => eligibleUserIds.add(id));
-        (clubData.members || []).forEach(id => eligibleUserIds.add(id));
-        
-        // Add all team members
-        (clubData.teams || []).forEach(team => {
-          (team.members || []).forEach(id => eligibleUserIds.add(id));
-          (team.trainers || []).forEach(id => eligibleUserIds.add(id));
-          (team.assistants || []).forEach(id => eligibleUserIds.add(id));
-        });
-      } else {
-        // Specific teams - only members of those teams
-        order.teams.forEach(teamId => {
-          const team = clubData.teams?.find(t => t.id === teamId);
-          if (team) {
-            (team.members || []).forEach(id => eligibleUserIds.add(id));
-            (team.trainers || []).forEach(id => eligibleUserIds.add(id));
-            (team.assistants || []).forEach(id => eligibleUserIds.add(id));
-          }
-        });
-      }
+      // Notify all club members
+      targetUserIds = [
+        ...(clubData.members || []),
+        ...(clubData.admins || [])
+      ];
 
-      // Remove order creator (don't notify them)
-      const targetUserIds = Array.from(eligibleUserIds).filter(id => id !== order.createdBy);
+      // Remove duplicates and order creator
+      targetUserIds = Array.from(new Set(targetUserIds)).filter(id => id !== order.createdBy);
 
       if (targetUserIds.length === 0) {
-        console.log('No users to notify');
+        console.log('ℹ️ No users to notify');
         return;
       }
 
+      console.log(`👥 Notifying ${targetUserIds.length} users`);
+
+      // Get FCM tokens
       const tokens = await getUserTokens(targetUserIds);
 
       if (tokens.length === 0) {
-        console.log('No FCM tokens found');
+        console.log('⚠️ No FCM tokens found');
         return;
       }
 
+      console.log(`🔔 Sending to ${tokens.length} devices`);
+
       // Send notification
-      const message = {
-        notification: {
+      const result = await sendMulticastNotification(
+        tokens,
+        {
           title: '🛒 New Order Available',
-          body: `"${order.title}" - Respond by ${new Date(order.deadline).toLocaleDateString()}`
+          body: `${order.productName} - Order now!`
         },
-        data: {
+        {
           type: 'order_new',
           orderId: context.params.orderId,
           clubId: order.clubId
-        },
-        tokens: tokens
-      };
-
-      const response = await admin.messaging().sendMulticast(message);
-      console.log(`New order notification sent: ${response.successCount} success, ${response.failureCount} failed`);
-    } catch (error) {
-      console.error('Error sending new order notification:', error);
-    }
-  });
-
-/**
- * Scheduled Function: Check order deadlines daily
- * Runs every day at 9 AM
- */
-exports.checkOrderDeadlines = functions.pubsub
-  .schedule('0 9 * * *')
-  .timeZone('Europe/Bratislava')
-  .onRun(async (context) => {
-    console.log('Checking order deadlines...');
-    
-    try {
-      const db = admin.firestore();
-      const now = new Date();
-      const tomorrow = new Date(now);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-
-      // Get orders with deadline today or tomorrow
-      const ordersSnapshot = await db
-        .collection('orders')
-        .where('status', '==', 'pending')
-        .get();
-
-      for (const doc of ordersSnapshot.docs) {
-        const order = doc.data();
-        const deadline = new Date(order.deadline);
-        const daysUntil = Math.ceil((deadline - now) / (1000 * 60 * 60 * 24));
-
-        if (daysUntil === 0 || daysUntil === 1) {
-          // Get all responses for this order
-          const responsesSnapshot = await db
-            .collection('orderResponses')
-            .where('orderId', '==', doc.id)
-            .get();
-          
-          // Get users who already responded
-          const respondedUserIds = new Set();
-          responsesSnapshot.forEach(responseDoc => {
-            respondedUserIds.add(responseDoc.data().userId);
-          });
-
-          // Get eligible users who haven't responded yet (status = pending)
-          const clubDoc = await db.collection('clubs').doc(order.clubId).get();
-          if (!clubDoc.exists) {
-            console.log(`Club ${order.clubId} not found`);
-            continue;
-          }
-
-          const clubData = clubDoc.data();
-          const eligibleUserIds = new Set();
-
-          // If order is for all teams (no specific teams selected)
-          if (!order.teams || order.teams.length === 0) {
-            // All club members are eligible
-            (clubData.trainers || []).forEach(id => eligibleUserIds.add(id));
-            (clubData.assistants || []).forEach(id => eligibleUserIds.add(id));
-            (clubData.members || []).forEach(id => eligibleUserIds.add(id));
-            
-            // Add all team members
-            (clubData.teams || []).forEach(team => {
-              (team.members || []).forEach(id => eligibleUserIds.add(id));
-              (team.trainers || []).forEach(id => eligibleUserIds.add(id));
-              (team.assistants || []).forEach(id => eligibleUserIds.add(id));
-            });
-          } else {
-            // Specific teams - only members of those teams
-            order.teams.forEach(teamId => {
-              const team = clubData.teams?.find(t => t.id === teamId);
-              if (team) {
-                (team.members || []).forEach(id => eligibleUserIds.add(id));
-                (team.trainers || []).forEach(id => eligibleUserIds.add(id));
-                (team.assistants || []).forEach(id => eligibleUserIds.add(id));
-              }
-            });
-          }
-
-          // Get users with PENDING status (eligible but not responded yet)
-          const pendingUserIds = Array.from(eligibleUserIds).filter(
-            id => !respondedUserIds.has(id)
-          );
-
-          if (pendingUserIds.length === 0) {
-            console.log(`No pending users for order ${doc.id}`);
-            continue;
-          }
-
-          // Send reminder to pending users only
-          const tokens = await getUserTokens(pendingUserIds);
-          
-          if (tokens.length > 0) {
-            const body = daysUntil === 0 
-              ? `Order "${order.title}" deadline is TODAY!`
-              : `Order "${order.title}" deadline is TOMORROW!`;
-
-            const message = {
-              notification: {
-                title: '⏰ Order Deadline Reminder',
-                body: body
-              },
-              data: {
-                type: 'order_deadline',
-                orderId: doc.id,
-                clubId: order.clubId
-              },
-              tokens: tokens
-            };
-
-            await admin.messaging().sendMulticast(message);
-            console.log(`Deadline reminder sent for order ${doc.id} to ${pendingUserIds.length} users`);
-          }
         }
+      );
+
+      // Clean up invalid tokens
+      if (result.invalidTokens.length > 0) {
+        await cleanupInvalidTokens(result.invalidTokens);
       }
+
+      console.log('✅ Order notification complete');
     } catch (error) {
-      console.error('Error checking order deadlines:', error);
+      console.error('❌ Error sending order notification:', error);
     }
   });
