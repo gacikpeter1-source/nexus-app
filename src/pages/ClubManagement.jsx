@@ -250,9 +250,11 @@ const [orderSearchQuery, setOrderSearchQuery] = useState('');
 
     setLoadingRequests(true);
     try {
-      const allRequests = await getPendingRequests();
-      const clubRequests = allRequests.filter(r => r.clubId === clubId && r.status === 'pending');
-      setPendingRequests(clubRequests);
+      // Pass clubId to query so Firestore can filter at database level
+      const clubRequests = await getPendingRequests(clubId);
+      // Filter again for safety (status already filtered in query)
+      const pendingOnly = clubRequests.filter(r => r.status === 'pending');
+      setPendingRequests(pendingOnly);
     } catch (error) {
       console.error('Error loading pending requests:', error);
       setPendingRequests([]);
