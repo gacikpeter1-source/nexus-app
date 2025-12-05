@@ -86,6 +86,11 @@ service cloud.firestore {
                     && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isSuperAdmin']))
                     && request.resource.data.email == resource.data.email; // Can't change email
       
+      // Allow updating FCM tokens
+      allow update: if isOwner(userId)
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['fcmTokens', 'lastTokenUpdate']);
+      
       // Admins can update any user (including roles)
       allow update: if isAdmin()
                     && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['isSuperAdmin']) || isSuperAdmin());
@@ -125,6 +130,28 @@ service cloud.firestore {
       
       // Only admins can delete clubs
       allow delete: if isAdmin();
+      
+      // 🔔 NOTIFICATION SETTINGS - CLUB LEVEL
+      match /notificationSettings/{document=**} {
+        allow read: if isSignedIn() && (
+          isAdmin() ||
+          request.auth.uid in getClubData(clubId).members ||
+          request.auth.uid in getClubData(clubId).trainers ||
+          request.auth.uid in getClubData(clubId).assistants
+        );
+        allow write: if isAdmin() || isClubTrainer(clubId) || isClubAssistant(clubId);
+      }
+      
+      // 🔔 NOTIFICATION SETTINGS - TEAM LEVEL
+      match /teams/{teamId}/notificationSettings/{document=**} {
+        allow read: if isSignedIn() && (
+          isAdmin() ||
+          request.auth.uid in getClubData(clubId).members ||
+          request.auth.uid in getClubData(clubId).trainers ||
+          request.auth.uid in getClubData(clubId).assistants
+        );
+        allow write: if isAdmin() || isClubTrainer(clubId) || isClubAssistant(clubId);
+      }
     }
     
     
@@ -184,6 +211,68 @@ service cloud.firestore {
       allow delete: if (isSignedIn() && resource.data.userId == request.auth.uid && resource.data.status == 'pending')
                     || canManageClub(resource.data.clubId)
                     || isAdmin();
+    }
+    
+    
+    /* ===========================
+       ORDER TEMPLATES
+       =========================== */
+    
+    match /orderTemplates/{orderId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && 
+        (resource.data.createdBy == request.auth.uid || 
+         get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.owner == request.auth.uid);
+    }
+    
+    
+    /* ===========================
+       ORDER RESPONSES
+       =========================== */
+    
+    match /orderResponses/{responseId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;    
+    }
+    
+    
+    /* ===========================
+       🔔 ACTION REQUIRED NOTIFICATIONS
+       =========================== */
+    
+    match /actionRequiredNotifications/{notificationId} {
+      // Users can read their own notifications
+      allow read: if isSignedIn() && request.auth.uid == resource.data.userId;
+      
+      // Cloud Functions can create notifications
+      allow create: if isSignedIn();
+      
+      // Users can update their own notifications (respond to them)
+      allow update: if isSignedIn() 
+                    && request.auth.uid == resource.data.userId 
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['status', 'respondedBy', 'respondedAt']);
+    }
+    
+    
+    /* ===========================
+       📧 EMAIL QUEUE (Cloud Functions Only)
+       =========================== */
+    
+    match /emailQueue/{emailId} {
+      // Only Cloud Functions can read/write
+      allow read, write: if false;
+    }
+    
+    
+    /* ===========================
+       TEST COLLECTION
+       =========================== */
+    
+    match /test/{document=**} {
+      allow read, write: if isSignedIn();
     }
     
     

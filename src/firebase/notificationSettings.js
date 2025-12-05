@@ -240,3 +240,4 @@ export const areNotificationsEnabled = async (clubId, teamId, type) => {
     return false;
   }
 };
+
