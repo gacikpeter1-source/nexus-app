@@ -6,7 +6,7 @@ import { useToast } from '../contexts/ToastContext';
 import NotificationsTab from '../components/NotificationsTab';
 
 import { 
-  getAllClubs, 
+  getUserClubs, 
   getClub, 
   getAllUsers, 
   updateClub, 
@@ -169,12 +169,11 @@ const [orderSearchQuery, setOrderSearchQuery] = useState('');
       const usersAll = await getAllUsers();
       setAllUsers(usersAll);
 
-      // Load clubs - SuperAdmin sees all, others see their clubs
+      // Load clubs - Use getUserClubs for all users (including SuperAdmin)
       let clubsAll = [];
-      if (user?.isSuperAdmin === true) {
-        clubsAll = await getAllClubs();
-      } else {
-        clubsAll = listClubsForUser ? await listClubsForUser() : [];
+      if (user?.id) {
+        // Use getUserClubs which queries by user membership
+        clubsAll = await getUserClubs(user.id);
       }
       
       setClubs(Array.isArray(clubsAll) ? clubsAll : []);
