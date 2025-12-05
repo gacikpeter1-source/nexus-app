@@ -27,8 +27,8 @@ messaging.onBackgroundMessage((payload) => {
   
   const notificationOptions = {
     body: payload.notification?.body || 'You have a new notification',
-    icon: '/icon-192.png',
-    badge: '/icon-96.png',
+    icon: '/nexus-icon.svg',
+    badge: '/favicon.ico',
     tag: payload.data?.type || 'general',
     data: payload.data,
     actions: requiresResponse ? [
