@@ -5,7 +5,7 @@ import { useToast } from '../contexts/ToastContext';
 import { useNavigate } from 'react-router-dom';
 import CreateClubWithSubscription from '../components/CreateClubWithSubscription';
 import { 
-  getAllClubs, 
+  getUserClubs, 
   createRequest, 
   createOrderResponse,
   getClubOrderTemplates
@@ -48,6 +48,8 @@ export default function ClubsDashboard() {
   const [allClubsForRequest, setAllClubsForRequest] = useState([]);
   const [selectedClubForRequest, setSelectedClubForRequest] = useState('');
   const [selectedTeam, setSelectedTeam] = useState('');
+  const [clubSearchQuery, setClubSearchQuery] = useState('');
+  const [teamSearchQuery, setTeamSearchQuery] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showOrderResponseModal, setShowOrderResponseModal] = useState(false);
   const [orderResponseForm, setOrderResponseForm] = useState({});
@@ -71,14 +73,25 @@ export default function ClubsDashboard() {
 
   async function loadAllClubsForRequest() {
     try {
-      const allClubs = await getAllClubs();
+      if (!user?.id) {
+        setAllClubsForRequest([]);
+        return;
+      }
+
+      // Get user's current clubs
+      const userClubs = await getUserClubs(user.id);
+      const userClubIds = userClubs.map(c => c.id);
+      
+      // Get ALL clubs from Firestore (now allowed by updated rules)
+      const db = (await import('../firebase/config')).db;
+      const { collection, getDocs } = await import('firebase/firestore');
+      
+      const clubsSnapshot = await getDocs(collection(db, 'clubs'));
+      const allClubs = clubsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
       // Filter out clubs user is already member of
-      const availableClubs = allClubs.filter(club => {
-        const isMember = (club.members || []).includes(user?.id) ||
-                        (club.trainers || []).includes(user?.id) ||
-                        (club.assistants || []).includes(user?.id);
-        return !isMember;
-      });
+      const availableClubs = allClubs.filter(club => !userClubIds.includes(club.id));
+      
       setAllClubsForRequest(availableClubs);
     } catch (error) {
       console.error('Error loading clubs:', error);
@@ -89,24 +102,13 @@ export default function ClubsDashboard() {
   async function loadClubs() {
     setLoading(true);
     try {
-      // Load all clubs from Firebase
-      const allClubs = await getAllClubs();
-      
-      // Filter clubs where user is a member
-      let userClubs = allClubs.filter(club => {
-        // SuperAdmin sees all clubs
-        if (user?.isSuperAdmin) return true;
-        
-        // Admin sees all clubs
-        if (user?.role === ROLES.ADMIN) return true;
-        
-        // Regular users see clubs where they are members
-        return club.createdBy === user?.id ||
-               (club.trainers || []).includes(user?.id) ||
-               (club.assistants || []).includes(user?.id) ||
-               (club.members || []).includes(user?.id);
-      });
+      if (!user?.id) {
+        setClubs([]);
+        return;
+      }
 
+      // Use getUserClubs which queries by user membership
+      const userClubs = await getUserClubs(user.id);
       setClubs(userClubs);
     } catch (error) {
       console.error('Error loading clubs:', error);
@@ -190,6 +192,26 @@ async function handleSubmitOrderResponse(status) {
     const club = allClubsForRequest.find(c => c.id === selectedClubForRequest);
     return club?.teams || [];
   }, [selectedClubForRequest, allClubsForRequest]);
+
+  // Filtered clubs based on search query
+  const filteredClubsForRequest = useMemo(() => {
+    if (!clubSearchQuery.trim()) return allClubsForRequest;
+    const query = clubSearchQuery.toLowerCase();
+    return allClubsForRequest.filter(club => 
+      club.name.toLowerCase().includes(query) ||
+      (club.clubType && club.clubType.toLowerCase().includes(query))
+    );
+  }, [allClubsForRequest, clubSearchQuery]);
+
+  // Filtered teams based on search query
+  const filteredTeams = useMemo(() => {
+    if (!teamSearchQuery.trim()) return availableTeams;
+    const query = teamSearchQuery.toLowerCase();
+    return availableTeams.filter(team => 
+      team.name.toLowerCase().includes(query)
+    );
+  }, [availableTeams, teamSearchQuery]);
+
 
   const submitJoinRequest = async () => {
     if (!selectedClubForRequest) return showToast('Please select a club.', 'error');
@@ -432,42 +454,104 @@ async function handleSubmitOrderResponse(status) {
       <Modal 
         open={openRequestModal} 
         title="Request to Join" 
-        onClose={() => setOpenRequestModal(false)}
+        onClose={() => {
+          setOpenRequestModal(false);
+          setSelectedClubForRequest('');
+          setSelectedTeam('');
+          setClubSearchQuery('');
+          setTeamSearchQuery('');
+        }}
       >
         <div className="space-y-4">
+          {/* Club Search */}
           <div>
-            <label className="block text-sm font-medium text-light/80 mb-2">Select Club</label>
+            <label className="block text-sm font-medium text-light/80 mb-2">
+              🔍 Search Club
+            </label>
+            <input
+              type="text"
+              placeholder="Type to search clubs..."
+              value={clubSearchQuery}
+              onChange={(e) => setClubSearchQuery(e.target.value)}
+              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all mb-2"
+            />
+            
+            {/* Club Dropdown */}
             <select
               value={selectedClubForRequest}
-              onChange={(e) => { setSelectedClubForRequest(e.target.value); setSelectedTeam(''); }}
+              onChange={(e) => { 
+                setSelectedClubForRequest(e.target.value); 
+                setSelectedTeam(''); 
+                setTeamSearchQuery('');
+              }}
               className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
             >
               <option value="" className="bg-mid-dark">-- Select a club --</option>
-              {allClubsForRequest.map(c => (
-                <option key={c.id} value={c.id} className="bg-mid-dark">{c.name}</option>
+              {filteredClubsForRequest.map(c => (
+                <option key={c.id} value={c.id} className="bg-mid-dark">
+                  {c.name} {c.clubType ? `(${c.clubType})` : ''}
+                </option>
               ))}
             </select>
+            
+            {clubSearchQuery && filteredClubsForRequest.length === 0 && (
+              <p className="text-sm text-light/50 mt-2">No clubs found matching "{clubSearchQuery}"</p>
+            )}
+            
+            {!clubSearchQuery && allClubsForRequest.length === 0 && (
+              <p className="text-sm text-light/50 mt-2">You're already a member of all available clubs!</p>
+            )}
           </div>
 
-          {availableTeams.length > 0 && (
+          {/* Team Search (only show if club selected) */}
+          {selectedClubForRequest && availableTeams.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-light/80 mb-2">Select Team (optional)</label>
+              <label className="block text-sm font-medium text-light/80 mb-2">
+                🔍 Search Team
+              </label>
+              <input
+                type="text"
+                placeholder="Type to search teams..."
+                value={teamSearchQuery}
+                onChange={(e) => setTeamSearchQuery(e.target.value)}
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all mb-2"
+              />
+              
+              {/* Team Dropdown */}
               <select
                 value={selectedTeam}
                 onChange={(e) => setSelectedTeam(e.target.value)}
                 className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
               >
-                <option value="" className="bg-mid-dark">-- Select a team --</option>
-                {availableTeams.map(t => (
+                <option value="" className="bg-mid-dark">-- Select a team (optional) --</option>
+                {filteredTeams.map(t => (
                   <option key={t.id} value={t.id} className="bg-mid-dark">{t.name}</option>
                 ))}
               </select>
+              
+              {teamSearchQuery && filteredTeams.length === 0 && (
+                <p className="text-sm text-light/50 mt-2">No teams found matching "{teamSearchQuery}"</p>
+              )}
+              
+              <p className="text-xs text-light/50 mt-2">
+                💡 Selecting a specific team helps trainers process your request faster
+              </p>
+            </div>
+          )}
+
+          {/* Info Message */}
+          {selectedClubForRequest && availableTeams.length === 0 && (
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+              <p className="text-sm text-blue-400">
+                ℹ️ This club has no teams. Your request will go to the club admins.
+              </p>
             </div>
           )}
 
           <button
             onClick={submitJoinRequest}
-            className="w-full btn-primary"
+            disabled={!selectedClubForRequest}
+            className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Submit Request
           </button>

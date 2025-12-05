@@ -110,13 +110,9 @@ service cloud.firestore {
        =========================== */
     
     match /clubs/{clubId} {
-      // Anyone authenticated can read clubs they're a member of
-      allow read: if isSignedIn() && (
-        isAdmin() || 
-        request.auth.uid in resource.data.members ||
-        request.auth.uid in resource.data.trainers ||
-        request.auth.uid in resource.data.assistants
-      );
+      // 🆕 PUBLIC BROWSING: Any authenticated user can read club info (for searching/joining)
+      // This allows the "Request to Join" feature to work
+      allow read: if isSignedIn();
       
       // Trainers and above can create clubs
       allow create: if isSignedIn() 
