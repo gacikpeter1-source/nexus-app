@@ -1,0 +1,174 @@
+<!-- public/email-verified.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email Verified - Nexus</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      padding: 20px;
+    }
+    
+    .container {
+      background: white;
+      padding: 3rem 2rem;
+      border-radius: 1.5rem;
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
+      text-align: center;
+      max-width: 450px;
+      width: 100%;
+      animation: slideUp 0.4s ease;
+    }
+    
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .checkmark {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: #10b981;
+      margin: 0 auto 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: bounce 0.6s ease;
+      box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);
+    }
+    
+    @keyframes bounce {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+    
+    .checkmark svg {
+      width: 60px;
+      height: 60px;
+      stroke: white;
+      stroke-width: 4;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    
+    h1 {
+      color: #1f2937;
+      font-size: 2rem;
+      margin-bottom: 1rem;
+      font-weight: 700;
+    }
+    
+    p {
+      color: #6b7280;
+      font-size: 1.1rem;
+      margin-bottom: 2rem;
+      line-height: 1.6;
+    }
+    
+    .info-box {
+      background: #f0fdf4;
+      border: 2px solid #bbf7d0;
+      border-radius: 0.75rem;
+      padding: 1rem;
+      margin-bottom: 2rem;
+    }
+    
+    .info-box p {
+      color: #166534;
+      font-size: 0.95rem;
+      margin: 0;
+    }
+    
+    button {
+      background: #10b981;
+      color: white;
+      border: none;
+      padding: 1rem 3rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+      border-radius: 0.75rem;
+      cursor: pointer;
+      width: 100%;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+    }
+    
+    button:hover {
+      background: #059669;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+    }
+    
+    button:active {
+      transform: translateY(0);
+    }
+    
+    .footer {
+      margin-top: 1.5rem;
+      color: #9ca3af;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="checkmark">
+      <svg viewBox="0 0 24 24">
+        <path d="M5 13l4 4L19 7"/>
+      </svg>
+    </div>
+    
+    <h1>✅ Email Verified!</h1>
+    <p>Your email has been successfully verified.</p>
+    
+    <div class="info-box">
+      <p>You can now close this window and return to the registration page to login.</p>
+    </div>
+    
+    <button onclick="closeWindow()">Verification Completed ✓</button>
+    
+    <p class="footer">This window will close automatically</p>
+  </div>
+
+  <script>
+    function closeWindow() {
+      // Try to close the window
+      window.close();
+      
+      // If window.close() fails (some browsers block it)
+      setTimeout(function() {
+        // Check if window is still open
+        if (!window.closed) {
+          alert('Please close this tab manually and return to the app');
+        }
+      }, 100);
+    }
+    
+    // Auto-close after 10 seconds as backup
+    setTimeout(function() {
+      closeWindow();
+    }, 10000);
+  </script>
+</body>
+</html>

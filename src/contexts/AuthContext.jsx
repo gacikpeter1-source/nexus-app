@@ -46,8 +46,9 @@ export const AuthProvider = ({ children }) => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
+      // Send verification email with static HTML success page
       await sendEmailVerification(userCredential.user, {
-        url: 'https://nexus-app-tau.vercel.app/auth-action',
+        url: 'https://nexus-app-tau.vercel.app/email-verified.html',
         handleCodeInApp: false
       });
 
@@ -272,7 +273,7 @@ export const AuthProvider = ({ children }) => {
         throw new Error('No user logged in');
       }
       await sendEmailVerification(auth.currentUser, {
-        url: 'https://nexus-app-tau.vercel.app/auth-action',
+        url: 'https://nexus-app-tau.vercel.app/email-verified.html',
         handleCodeInApp: false
       });
       return { ok: true, message: 'Verification email sent' };
