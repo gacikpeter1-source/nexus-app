@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { getUserEvents, getAllClubs } from '../firebase/firestore';
+import { getUserEvents, getUserClubs } from '../firebase/firestore';
 
 export default function Calendar() {
   const { user } = useAuth();
@@ -38,13 +38,7 @@ export default function Calendar() {
       setEvents(userEvents || []);
 
       // Load clubs for filter
-      const allClubs = await getAllClubs();
-      const userClubs = allClubs.filter(club =>
-        (club.members || []).includes(user.id) ||
-        (club.trainers || []).includes(user.id) ||
-        (club.assistants || []).includes(user.id) ||
-        club.createdBy === user.id
-      );
+      const userClubs = await getUserClubs(user.id);
       setClubs(userClubs);
 
     } catch (error) {
