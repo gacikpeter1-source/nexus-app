@@ -26,6 +26,7 @@ import Feedback from './pages/Feedback';
 import PendingRequests from './pages/PendingRequests';
 import AdminDashboard from './pages/AdminDashboard';
 import FirebaseDiagnostic from './components/FirebaseDiagnostic';
+import AuthAction from './pages/AuthAction';
 
 function App() {
   return (
@@ -42,6 +43,7 @@ function App() {
                   <Route path="/login" element={<Login />} />
                   <Route path="/verify-email" element={<VerifyEmail />} />
                   <Route path="/complete-registration" element={<CompleteRegistration />} />
+                  <Route path="/auth-action" element={<AuthAction />} />
 
                   {/* Protected Routes */}
                   <Route
