@@ -304,6 +304,14 @@ const [orderSearchQuery, setOrderSearchQuery] = useState('');
         teams: updatedTeams
       });
 
+      // Update user's clubIds array
+      const requestUser = await getUser(request.userId);
+      const updatedClubIds = [...(requestUser.clubIds || [])];
+      if (!updatedClubIds.includes(request.clubId)) {
+        updatedClubIds.push(request.clubId);
+      }
+      await updateUser(request.userId, { clubIds: updatedClubIds });
+
       showToast('✅ Request approved!', 'success');
       await loadPendingRequests(selectedClubId);
       await loadClubData(selectedClubId);
