@@ -156,19 +156,30 @@
       // Try to close the window
       window.close();
       
-      // If window.close() fails (some browsers block it)
+      // If window.close() fails (most browsers block it for user-opened tabs)
       setTimeout(function() {
-        // Check if window is still open
-        if (!window.closed) {
-          alert('Please close this tab manually and return to the app');
-        }
+        // Change button text to show manual instruction
+        const button = document.querySelector('button');
+        button.innerHTML = '✓ Verified - Please Close This Tab';
+        button.style.backgroundColor = '#059669';
+        button.disabled = true;
+        
+        // Show additional message
+        const container = document.querySelector('.container');
+        const msg = document.createElement('div');
+        msg.style.marginTop = '1rem';
+        msg.style.padding = '1rem';
+        msg.style.backgroundColor = '#fef3c7';
+        msg.style.border = '2px solid #fbbf24';
+        msg.style.borderRadius = '0.5rem';
+        msg.style.fontSize = '0.9rem';
+        msg.style.color = '#92400e';
+        msg.innerHTML = '<strong>📌 Note:</strong> Please close this tab manually (click the X) and return to the app to login.';
+        container.appendChild(msg);
       }, 100);
     }
     
-    // Auto-close after 10 seconds as backup
-    setTimeout(function() {
-      closeWindow();
-    }, 10000);
+    // Don't auto-close - let user close manually
   </script>
 </body>
 </html>
