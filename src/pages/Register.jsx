@@ -66,9 +66,18 @@ export default function Register() {
     setLoading(true);
 
     try {
-      await register(email, username, password);
-      setSuccess(true);
-      // Don't navigate - show success message with instructions
+      const result = await register({ 
+        email, 
+        password, 
+        username, 
+        role: 'user' 
+      });
+      
+      if (result.ok) {
+        setSuccess(true);
+      } else {
+        setError(result.message || 'Registration failed. Please try again.');
+      }
     } catch (err) {
       setError(err.message || 'Registration failed. Please try again.');
     } finally {

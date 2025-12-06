@@ -110,9 +110,13 @@ service cloud.firestore {
        =========================== */
     
     match /clubs/{clubId} {
-      // 🆕 PUBLIC BROWSING: Any authenticated user can read club info (for searching/joining)
-      // This allows the "Request to Join" feature to work
-      allow read: if isSignedIn();
+      // Anyone authenticated can read clubs they're a member of
+      allow read: if isSignedIn() && (
+        isAdmin() || 
+        request.auth.uid in resource.data.members ||
+        request.auth.uid in resource.data.trainers ||
+        request.auth.uid in resource.data.assistants
+      );
       
       // Trainers and above can create clubs
       allow create: if isSignedIn() 
@@ -187,11 +191,14 @@ service cloud.firestore {
        =========================== */
     
     match /requests/{requestId} {
-      // Users can read their own requests
+      // Users can read their own requests OR requests for clubs they manage
       allow read: if isSignedIn() && (
         resource.data.userId == request.auth.uid ||
-        canManageClub(resource.data.clubId) ||
-        isAdmin()
+        isAdmin() ||
+        // Check club membership directly (avoid circular dependency)
+        request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.trainers ||
+        request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.assistants ||
+        request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.members
       );
       
       // Authenticated users can create join requests
@@ -200,13 +207,20 @@ service cloud.firestore {
                     && request.resource.data.status == 'pending'
                     && request.resource.data.clubId is string;
       
-      // Club trainers and admins can update requests (approve/deny)
-      allow update: if canManageClub(resource.data.clubId) || isAdmin();
+      // Club trainers/assistants and admins can update requests (approve/deny)
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.trainers ||
+        request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.assistants
+      );
       
       // Users can delete their own pending requests, trainers/admins can delete any
-      allow delete: if (isSignedIn() && resource.data.userId == request.auth.uid && resource.data.status == 'pending')
-                    || canManageClub(resource.data.clubId)
-                    || isAdmin();
+      allow delete: if isSignedIn() && (
+        (resource.data.userId == request.auth.uid && resource.data.status == 'pending') ||
+        isAdmin() ||
+        request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.trainers ||
+        request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.assistants
+      );
     }
     
     
