@@ -47,7 +47,7 @@ export const AuthProvider = ({ children }) => {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
       await sendEmailVerification(userCredential.user, {
-        url: 'https://nexus-app-tau.vercel.app/complete-registration?verified=true',
+        url: 'https://nexus-app-tau.vercel.app',
         handleCodeInApp: false
       });
 
