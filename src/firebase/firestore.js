@@ -157,53 +157,24 @@ export const updateClub = async (clubId, updates) => {
   }
 };
 
-// DEPRECATED: Use getUserClubs() instead
-// This function cannot work with security rules that require user membership
 export const getAllClubs = async () => {
-  console.error('getAllClubs is deprecated and disabled - security rules prevent reading all clubs. Use getUserClubs(userId) instead.');
-  // Return empty array immediately without querying Firestore
-  return [];
+  try {
+    const snapshot = await getDocs(collection(db, 'clubs'));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.error('Error getting all clubs:', error);
+    throw error;
+  }
 };
 
-// Get clubs for a specific user using proper queries
 export const getUserClubs = async (userId) => {
   try {
-    if (!userId) {
-      console.error('getUserClubs: userId is required');
-      return [];
-    }
-
-    const clubsRef = collection(db, 'clubs');
-    const clubs = [];
-    
-    // Query for clubs where user is a member
-    const memberQuery = query(clubsRef, where('members', 'array-contains', userId));
-    const memberSnapshot = await getDocs(memberQuery);
-    memberSnapshot.forEach(doc => {
-      clubs.push({ id: doc.id, ...doc.data() });
-    });
-    
-    // Query for clubs where user is a trainer
-    const trainerQuery = query(clubsRef, where('trainers', 'array-contains', userId));
-    const trainerSnapshot = await getDocs(trainerQuery);
-    trainerSnapshot.forEach(doc => {
-      // Check if not already added
-      if (!clubs.find(c => c.id === doc.id)) {
-        clubs.push({ id: doc.id, ...doc.data() });
-      }
-    });
-    
-    // Query for clubs where user is an assistant
-    const assistantQuery = query(clubsRef, where('assistants', 'array-contains', userId));
-    const assistantSnapshot = await getDocs(assistantQuery);
-    assistantSnapshot.forEach(doc => {
-      // Check if not already added
-      if (!clubs.find(c => c.id === doc.id)) {
-        clubs.push({ id: doc.id, ...doc.data() });
-      }
-    });
-    
-    return clubs;
+    const allClubs = await getAllClubs();
+    return allClubs.filter(club => 
+      club.members?.includes(userId) ||
+      club.trainers?.includes(userId) ||
+      club.assistants?.includes(userId)
+    );
   } catch (error) {
     console.error('Error getting user clubs:', error);
     throw error;
@@ -339,13 +310,8 @@ export const updateEventResponse = async (eventId, userId, status, message = nul
 // Get all events for a user (where they're a member of the team/club OR invited)
 export const getUserEvents = async (userId) => {
   try {
-    // Get all clubs user is part of
-    const allClubs = await getAllClubs();
-    const userClubs = allClubs.filter(club =>
-      (club.members || []).includes(userId) ||
-      (club.trainers || []).includes(userId) ||
-      (club.assistants || []).includes(userId)
-    );
+    // Get user's clubs directly (no getAllClubs call)
+    const userClubs = await getUserClubs(userId);
 
     // Get all events from user's clubs
     const allEvents = [];
@@ -625,8 +591,8 @@ export const getUserPendingOrders = async (userId) => {
       if (responseExists) continue;
       
       // Check if user is eligible for this order
-      // If order.teams is empty or length === 0 → show to all club members
-      // If order.teams has specific teams → only show if user is in those teams
+      // If order.teams is empty or length === 0 â†’ show to all club members
+      // If order.teams has specific teams â†’ only show if user is in those teams
       if (!order.teams || order.teams.length === 0) {
         // All teams - show to all club members
         pendingOrders.push(order);
