@@ -154,13 +154,10 @@ service cloud.firestore {
        EVENTS COLLECTION
        =========================== */
     
-    match /events/{eventId} {
-      // Users can read events from clubs they belong to
-      allow read: if isSignedIn() && (
-        isAdmin() ||
-        isClubMember(resource.data.clubId) ||
-        resource.data.createdBy == request.auth.uid
-      );
+      match /events/{eventId} {
+        // TEMPORARY - test if rules are the problem
+        allow read: if isSignedIn();
+      
       
       // Trainers, assistants, and admins can create events
       allow create: if isSignedIn()
