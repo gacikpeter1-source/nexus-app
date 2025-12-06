@@ -641,7 +641,7 @@ exports.checkOrderDeadlines = functions.pubsub
  * Firestore Trigger: Send notification when new order is created
  */
 exports.onOrderCreated = functions.firestore
-  .document('orders/{orderId}')
+  .document('orderTemplates/{orderId}')
   .onCreate(async (snap, context) => {
     const order = snap.data();
     
