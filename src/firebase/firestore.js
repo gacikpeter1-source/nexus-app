@@ -339,13 +339,8 @@ export const updateEventResponse = async (eventId, userId, status, message = nul
 // Get all events for a user (where they're a member of the team/club OR invited)
 export const getUserEvents = async (userId) => {
   try {
-    // Get all clubs user is part of
-    const allClubs = await getAllClubs();
-    const userClubs = allClubs.filter(club =>
-      (club.members || []).includes(userId) ||
-      (club.trainers || []).includes(userId) ||
-      (club.assistants || []).includes(userId)
-    );
+    // Get user's clubs directly (no getAllClubs call)
+    const userClubs = await getUserClubs(userId);
 
     // Get all events from user's clubs
     const allEvents = [];
@@ -603,9 +598,8 @@ export const getUserPendingOrders = async (userId) => {
     // Get user's team memberships
     const userTeamIds = [];
     for (const club of userClubs) {
-      // Get all teams from this club
-      const allClubs = await getAllClubs();
-      const fullClub = allClubs.find(c => c.id === club.id);
+      // Get full club data with teams
+      const fullClub = await getClub(club.id);
       if (fullClub && fullClub.teams) {
         for (const team of fullClub.teams) {
           if ((team.members || []).includes(userId) ||
