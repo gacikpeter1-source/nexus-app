@@ -159,10 +159,10 @@ export const updateClub = async (clubId, updates) => {
 
 // DEPRECATED: Use getUserClubs() instead
 // This function cannot work with security rules that require user membership
+// Get all clubs - Used by admin/manager pages only
 export const getAllClubs = async () => {
-  console.error('getAllClubs is deprecated and disabled - security rules prevent reading all clubs. Use getUserClubs(userId) instead.');
-  // Return empty array immediately without querying Firestore
-  return [];
+  const snapshot = await getDocs(collection(db, 'clubs'));
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 };
 
 // Get clubs for a specific user using proper queries
