@@ -1,26 +1,38 @@
-// src/pages/Profile.jsx
+// src/pages/Profile.jsx - Updated with Subscription Tab
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useSubscription } from '../contexts/SubscriptionContext';
 import NotificationSettings from '../components/NotificationSettings';
-
-
-
+import SubscriptionPlans from '../components/SubscriptionPlans';
+import InvoiceGenerator from '../components/InvoiceGenerator';
 
 export default function Profile() {
   const { user } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const { 
+    userSubscription, 
+    getCurrentPlan, 
+    isSubscriptionActive, 
+    getExpiryDate,
+    subscribe,
+    PLAN_FEATURES 
+  } = useSubscription();
 
+  const [activeTab, setActiveTab] = useState('profile'); // profile, notifications, subscription
   const [form, setForm] = useState({
     displayName: '',
     avatar: '',
     phone: '',
     bio: '',
   });
-
   const [avatarPreview, setAvatarPreview] = useState(null);
+  const [selectedPlan, setSelectedPlan] = useState(null);
+  const [selectedCycle, setSelectedCycle] = useState(null);
+  const [pendingSubscription, setPendingSubscription] = useState(null);
+  const [showInvoice, setShowInvoice] = useState(false);
 
   // Load user data
   useEffect(() => {
@@ -85,6 +97,20 @@ export default function Profile() {
     window.location.reload(); // Reload to update navbar
   };
 
+  const handleSelectPlan = async (plan, billingCycle) => {
+    setSelectedPlan(plan);
+    setSelectedCycle(billingCycle);
+    
+    try {
+      const result = await subscribe(plan, billingCycle);
+      setPendingSubscription(result.subscription);
+      setShowInvoice(true);
+    } catch (error) {
+      console.error('Error creating subscription:', error);
+      alert('Failed to create subscription');
+    }
+  };
+
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -93,9 +119,12 @@ export default function Profile() {
     );
   }
 
+  const currentPlan = getCurrentPlan();
+  const planFeatures = PLAN_FEATURES[currentPlan];
+
   return (
     <div className="min-h-screen p-6">
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8 animate-fade-in">
           <button
@@ -112,171 +141,223 @@ export default function Profile() {
           </p>
         </div>
 
-        {/* ✅ ADD NOTIFICATION SETTINGS HERE */}
-        <NotificationSettings />
+        {/* Tabs */}
+        <div className="flex gap-2 mb-6 border-b border-white/10">
+          {['profile', 'notifications', 'subscription'].map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-6 py-3 font-medium transition-all ${
+                activeTab === tab
+                  ? 'text-primary border-b-2 border-primary'
+                  : 'text-light/60 hover:text-light'
+              }`}
+            >
+              {tab === 'profile' && '👤 Profile'}
+              {tab === 'notifications' && '🔔 Notifications'}
+              {tab === 'subscription' && '💳 Subscription'}
+            </button>
+          ))}
+        </div>
 
-        {/* Profile Form */}
-        <form onSubmit={handleSubmit} className="space-y-6 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-          {/* Avatar Section */}
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-            <h2 className="font-title text-2xl text-light mb-4 flex items-center gap-3">
-              <span className="w-1 h-6 bg-primary rounded"></span>
-              {t('profile.avatarSection')} 
-            </h2>
+        {/* Profile Tab */}
+        {activeTab === 'profile' && (
+          <form onSubmit={handleSubmit} className="space-y-6 animate-fade-in">
+            {/* Avatar Section */}
+            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+              <h2 className="font-title text-2xl text-light mb-4 flex items-center gap-3">
+                <span className="w-1 h-6 bg-primary rounded"></span>
+                {t('profile.avatarSection')} 
+              </h2>
 
-            <div className="flex items-center gap-6">
-              {/* Avatar Preview */}
-              <div className="relative">
-                {avatarPreview ? (
-                  <img
-                    src={avatarPreview}
-                    alt="Avatar"
-                    className="w-32 h-32 rounded-full object-cover border-4 border-primary shadow-lg"
+              <div className="flex items-center gap-6">
+                <div className="relative">
+                  {avatarPreview ? (
+                    <img
+                      src={avatarPreview}
+                      alt="Avatar"
+                      className="w-32 h-32 rounded-full object-cover border-4 border-primary shadow-lg"
+                    />
+                  ) : (
+                    <div className="w-32 h-32 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-6xl font-bold text-white shadow-lg">
+                      {(form.displayName || user.username || user.email).charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <label
+                    htmlFor="avatar-upload"
+                    className="absolute bottom-0 right-0 w-10 h-10 bg-primary hover:bg-primary/80 rounded-full flex items-center justify-center cursor-pointer shadow-lg transition-all"
+                  >
+                    <span className="text-2xl">📷</span>
+                  </label>
+                  <input
+                    id="avatar-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
                   />
-                ) : (
-                  <div className="w-32 h-32 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-6xl font-bold text-white shadow-lg">
-                    {(form.displayName || user.username || user.email).charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <label
-                  htmlFor="avatar-upload"
-                  className="absolute bottom-0 right-0 w-10 h-10 bg-primary hover:bg-primary/80 rounded-full flex items-center justify-center cursor-pointer shadow-lg transition-all"
-                >
-                  <span className="text-2xl">📷</span>
+                </div>
+
+                <div className="flex-1">
+                  <p className="text-light/80 text-sm mb-2">
+                    {t('profile.uploadAvatar')}
+                  </p>
+                  <p className="text-light/50 text-xs">
+                    {t('profile.acceptedFormats')}
+                  </p>
+                  {avatarPreview && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAvatarPreview(null);
+                        setForm(f => ({ ...f, avatar: '' }));
+                      }}
+                      className="mt-3 px-3 py-1 bg-red-600/20 text-red-400 rounded text-sm hover:bg-red-600/30 transition-colors"
+                    >
+                      {t('profile.removePicture')}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Display Name */}
+            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+              <h2 className="font-title text-2xl text-light mb-4 flex items-center gap-3">
+                <span className="w-1 h-6 bg-primary rounded"></span>
+                {t('profile.displayName')}
+              </h2>
+              
+              <div>
+                <label className="block text-sm font-medium text-light/80 mb-2">
+                  {t('profile.displayNameDesc')}
                 </label>
                 <input
-                  id="avatar-upload"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                />
-              </div>
-
-              {/* Upload Instructions */}
-              <div className="flex-1">
-                <p className="text-light/80 text-sm mb-2">
-                  {t('profile.uploadAvatar')}
-                </p>
-                <p className="text-light/50 text-xs">
-                  {t('profile.acceptedFormats')}
-                </p>
-                {avatarPreview && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAvatarPreview(null);
-                      setForm(f => ({ ...f, avatar: '' }));
-                    }}
-                    className="mt-3 px-3 py-1 bg-red-600/20 text-red-400 rounded text-sm hover:bg-red-600/30 transition-colors"
-                  >
-                    {t('profile.removePicture')}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Display Name */}
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-            <h2 className="font-title text-2xl text-light mb-4 flex items-center gap-3">
-              <span className="w-1 h-6 bg-primary rounded"></span>
-              {t('profile.displayName')}
-            </h2>
-            
-            <div>
-              <label className="block text-sm font-medium text-light/80 mb-2">
-                {t('profile.displayNameDesc')}
-              </label>
-              <input
-                type="text"
-                value={form.displayName}
-                onChange={(e) => setForm(f => ({ ...f, displayName: e.target.value }))}
-                placeholder="Enter your display name"
-                className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-                required
-              />
-              <p className="text-xs text-light/50 mt-2">
-                {t('profile.displayNameDesc')}
-              </p>
-            </div>
-          </div>
-
-          {/* Contact Info */}
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-            <h2 className="font-title text-2xl text-light mb-4 flex items-center gap-3">
-              <span className="w-1 h-6 bg-primary rounded"></span>
-              {t('profile.contactInfo')}
-            </h2>
-
-            <div className="space-y-4">
-              {/* Email (Read-only) */}
-              <div>
-                <label className="block text-sm font-medium text-light/80 mb-2">{t('ommon.email')}</label>
-                <input
-                  type="email"
-                  value={user.email}
-                  disabled
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-light/50 cursor-not-allowed"
-                />
-                <p className="text-xs text-light/50 mt-1">{t('profile.emailCannotChange')}</p>
-              </div>
-
-              {/* Phone */}
-              <div>
-                <label className="block text-sm font-medium text-light/80 mb-2">{t('profile.phone')}</label>
-                <input
-                  type="tel"
-                  value={form.phone}
-                  onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))}
-                  placeholder="+421 XXX XXX XXX"
+                  type="text"
+                  value={form.displayName}
+                  onChange={(e) => setForm(f => ({ ...f, displayName: e.target.value }))}
+                  placeholder="Enter your display name"
                   className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                  required
                 />
               </div>
             </div>
-          </div>
 
-          {/* Bio */}
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-            <h2 className="font-title text-2xl text-light mb-4 flex items-center gap-3">
-              <span className="w-1 h-6 bg-primary rounded"></span>
-              {t('profile.bio')}
-            </h2>
+            {/* Contact Info */}
+            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+              <h2 className="font-title text-2xl text-light mb-4 flex items-center gap-3">
+                <span className="w-1 h-6 bg-primary rounded"></span>
+                {t('profile.contactInfo')}
+              </h2>
 
-            <div>
-              <label className="block text-sm font-medium text-light/80 mb-2">
-                {t('profile.bioPlaceholder')}
-              </label>
-              <textarea
-                value={form.bio}
-                onChange={(e) => setForm(f => ({ ...f, bio: e.target.value }))}
-                placeholder="Write a short bio..."
-                rows={4}
-                className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none"
-              />
-              <p className="text-xs text-light/50 mt-1">
-                {t('profile.maxChars')}
-              </p>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-light/80 mb-2">Email</label>
+                  <input
+                    type="email"
+                    value={user.email}
+                    disabled
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-light/50 cursor-not-allowed"
+                  />
+                  <p className="text-xs text-light/50 mt-1">Email cannot be changed</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-light/80 mb-2">Phone</label>
+                  <input
+                    type="tel"
+                    value={form.phone}
+                    onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))}
+                    placeholder="+421 XXX XXX XXX"
+                    className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                  />
+                </div>
+              </div>
             </div>
-          </div>
 
-          {/* Save Button */}
-          <div className="flex gap-4">
-            <button
-              type="submit"
-              className="flex-1 btn-primary py-4 text-lg font-semibold"
-            >
-              💾 {t('profile.saveChanges')}
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate(-1)}
-              className="px-6 py-4 bg-white/10 hover:bg-white/20 text-light rounded-lg transition-colors"
-            >
-              {t('common.cancel')}
-            </button>
+            {/* Bio */}
+            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+              <h2 className="font-title text-2xl text-light mb-4 flex items-center gap-3">
+                <span className="w-1 h-6 bg-primary rounded"></span>
+                Bio
+              </h2>
+
+              <div>
+                <textarea
+                  value={form.bio}
+                  onChange={(e) => setForm(f => ({ ...f, bio: e.target.value }))}
+                  placeholder="Write a short bio..."
+                  rows={4}
+                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none"
+                />
+              </div>
+            </div>
+
+            {/* Save Button */}
+            <div className="flex gap-4">
+              <button
+                type="submit"
+                className="flex-1 btn-primary py-4 text-lg font-semibold"
+              >
+                💾 Save Changes
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                className="px-6 py-4 bg-white/10 hover:bg-white/20 text-light rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Notifications Tab */}
+        {activeTab === 'notifications' && (
+          <div className="animate-fade-in">
+            <NotificationSettings />
           </div>
-        </form>
+        )}
+
+        {/* Subscription Tab */}
+        {activeTab === 'subscription' && (
+          <div className="space-y-6 animate-fade-in">
+            {/* Current Plan */}
+            <div className="bg-gradient-to-br from-primary/20 to-accent/20 border-2 border-primary/50 rounded-xl p-6">
+              <h3 className="text-2xl font-bold text-light mb-4">Current Plan</h3>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-3xl font-bold text-accent">{planFeatures.name}</p>
+                  <p className="text-light/70 mt-1">{planFeatures.description}</p>
+                  {userSubscription && isSubscriptionActive() && (
+                    <p className="text-sm text-success mt-2">
+                      ✓ Active until {new Date(getExpiryDate()).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Upgrade Plans or Invoice */}
+            {showInvoice && pendingSubscription ? (
+              <InvoiceGenerator 
+                subscription={pendingSubscription}
+                onInvoiceCreated={() => {
+                  setShowInvoice(false);
+                  setPendingSubscription(null);
+                }}
+              />
+            ) : (
+              <>
+                <h3 className="text-2xl font-bold text-light">Upgrade Your Plan</h3>
+                <SubscriptionPlans 
+                  onSelectPlan={handleSelectPlan}
+                  showFreePlan={true}
+                />
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

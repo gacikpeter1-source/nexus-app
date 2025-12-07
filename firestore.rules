@@ -276,13 +276,57 @@ service cloud.firestore {
     match /test/{document=**} {
       allow read, write: if isSignedIn();
     }
+
+    /* ===========================
+       SUBSCRIPTIONS COLLECTION
+       =========================== */
     
+    match /subscriptions/{subscriptionId} {
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin() ||
+        isSuperAdmin()
+      );
+      
+      allow create: if isSignedIn() && 
+                    request.resource.data.userId == request.auth.uid &&
+                    request.resource.data.status == 'pending';
+      
+      allow update: if isAdmin() || isSuperAdmin();
+      allow delete: if isAdmin() || isSuperAdmin();
+    }
+    
+    /* ===========================
+       INVOICES COLLECTION
+       =========================== */
+    
+    match /invoices/{invoiceId} {
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin() ||
+        isSuperAdmin()
+      );
+      
+      allow create: if isSignedIn();
+      allow update: if isAdmin() || isSuperAdmin();
+      allow delete: if isSuperAdmin();
+    }
+    
+    /* ===========================
+       VOUCHERS COLLECTION
+       =========================== */
+    
+    match /vouchers/{voucherId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() || isSuperAdmin();
+      allow update: if isSignedIn() || isAdmin() || isSuperAdmin();
+      allow delete: if isAdmin() || isSuperAdmin();
+    }
     
     /* ===========================
        DEFAULT DENY ALL
        =========================== */
     
-    // Deny all other access by default
     match /{document=**} {
       allow read, write: if false;
     }

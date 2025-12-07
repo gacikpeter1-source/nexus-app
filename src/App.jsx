@@ -27,6 +27,9 @@ import PendingRequests from './pages/PendingRequests';
 import AdminDashboard from './pages/AdminDashboard';
 import FirebaseDiagnostic from './components/FirebaseDiagnostic';
 import AuthAction from './pages/AuthAction';
+// import { SubscriptionProvider } from './contexts/SubscriptionContext';
+import SubscriptionManager from './components/SubscriptionManager';
+import VoucherGenerator from './components/VoucherGenerator'
 
 function App() {
   return (
@@ -189,6 +192,23 @@ function App() {
                         <FirebaseDiagnostic />
                       </ProtectedRoute>
                     }
+                  />
+                  <Route 
+                    path="/admin/subscriptions" 
+                    element={
+                      <ProtectedRoute requiredRole="admin">
+                        <SubscriptionManager />
+                      </ProtectedRoute>
+                    } 
+                  />
+
+                  <Route 
+                    path="/admin/vouchers" 
+                    element={
+                      <ProtectedRoute requiredRole="admin">
+                        <VoucherGenerator />
+                      </ProtectedRoute>
+                    } 
                   />
 
                   {/* Catch all - redirect to home */}

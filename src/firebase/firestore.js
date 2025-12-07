@@ -15,6 +15,7 @@ import {
   where,
   orderBy,
   onSnapshot,
+  limit,
   serverTimestamp
 } from 'firebase/firestore';
 
@@ -733,6 +734,357 @@ export const getOrderStatistics = async (orderId) => {
   }
 };
 
+/* ===========================
+   SUBSCRIPTION FUNCTIONS
+   =========================== */
+
+// Get user's subscription
+export const getUserSubscription = async (userId) => {
+  try {
+    const q = query(
+      collection(db, 'subscriptions'),
+      where('userId', '==', userId),
+      where('clubId', '==', null),
+      where('status', '==', 'active'),
+      orderBy('createdAt', 'desc'),
+      limit(1)
+    );
+    const snapshot = await getDocs(q);
+    
+    if (snapshot.empty) return null;
+    
+    const doc = snapshot.docs[0];
+    return { id: doc.id, ...doc.data() };
+  } catch (error) {
+    console.error('Error getting user subscription:', error);
+    return null;
+  }
+};
+
+// Get club's subscription
+export const getClubSubscription = async (clubId) => {
+  try {
+    const q = query(
+      collection(db, 'subscriptions'),
+      where('clubId', '==', clubId),
+      where('status', '==', 'active'),
+      orderBy('createdAt', 'desc'),
+      limit(1)
+    );
+    const snapshot = await getDocs(q);
+    
+    if (snapshot.empty) return null;
+    
+    const doc = snapshot.docs[0];
+    return { id: doc.id, ...doc.data() };
+  } catch (error) {
+    console.error('Error getting club subscription:', error);
+    return null;
+  }
+};
+
+// Get subscription by ID
+export const getSubscription = async (subscriptionId) => {
+  try {
+    const docRef = doc(db, 'subscriptions', subscriptionId);
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) return null;
+    
+    return { id: docSnap.id, ...docSnap.data() };
+  } catch (error) {
+    console.error('Error getting subscription:', error);
+    return null;
+  }
+};
+
+// Create subscription
+export const createSubscription = async (subscriptionData) => {
+  try {
+    const docRef = await addDoc(collection(db, 'subscriptions'), {
+      ...subscriptionData,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+    
+    return { id: docRef.id, ...subscriptionData };
+  } catch (error) {
+    console.error('Error creating subscription:', error);
+    throw error;
+  }
+};
+
+// Update subscription
+export const updateSubscription = async (subscriptionId, updates) => {
+  try {
+    const docRef = doc(db, 'subscriptions', subscriptionId);
+    await updateDoc(docRef, {
+      ...updates,
+      updatedAt: new Date().toISOString()
+    });
+    
+    return { id: subscriptionId, ...updates };
+  } catch (error) {
+    console.error('Error updating subscription:', error);
+    throw error;
+  }
+};
+
+// Cancel subscription
+export const cancelSubscription = async (subscriptionId) => {
+  try {
+    await updateSubscription(subscriptionId, {
+      status: 'cancelled',
+      cancelledAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error cancelling subscription:', error);
+    throw error;
+  }
+};
+
+/* ===========================
+   INVOICE FUNCTIONS
+   =========================== */
+
+// Create invoice
+export const createInvoice = async (invoiceData) => {
+  try {
+    const docRef = await addDoc(collection(db, 'invoices'), {
+      ...invoiceData,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+    
+    return { id: docRef.id, ...invoiceData };
+  } catch (error) {
+    console.error('Error creating invoice:', error);
+    throw error;
+  }
+};
+
+// Get invoice
+export const getInvoice = async (invoiceId) => {
+  try {
+    const docRef = doc(db, 'invoices', invoiceId);
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) return null;
+    
+    return { id: docSnap.id, ...docSnap.data() };
+  } catch (error) {
+    console.error('Error getting invoice:', error);
+    return null;
+  }
+};
+
+// Update invoice
+export const updateInvoice = async (invoiceId, updates) => {
+  try {
+    const docRef = doc(db, 'invoices', invoiceId);
+    await updateDoc(docRef, {
+      ...updates,
+      updatedAt: new Date().toISOString()
+    });
+    
+    return { id: invoiceId, ...updates };
+  } catch (error) {
+    console.error('Error updating invoice:', error);
+    throw error;
+  }
+};
+
+// Get all invoices (admin only)
+export const getAllInvoices = async () => {
+  try {
+    const snapshot = await getDocs(collection(db, 'invoices'));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.error('Error getting invoices:', error);
+    return [];
+  }
+};
+
+// Get user invoices
+export const getUserInvoices = async (userId) => {
+  try {
+    const q = query(
+      collection(db, 'invoices'),
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.error('Error getting user invoices:', error);
+    return [];
+  }
+};
+
+// Send invoice email
+export const sendInvoiceEmail = async (invoice) => {
+  try {
+    await addDoc(collection(db, 'emailQueue'), {
+      to: invoice.customerEmail,
+      template: 'invoice',
+      data: {
+        invoiceNumber: invoice.invoiceNumber,
+        customerName: invoice.customerName,
+        planName: invoice.planName,
+        amount: invoice.total,
+        dueDate: invoice.dueDate
+      },
+      createdAt: new Date().toISOString(),
+      status: 'pending'
+    });
+    
+    console.log('Invoice email queued');
+  } catch (error) {
+    console.error('Error sending invoice email:', error);
+    throw error;
+  }
+};
+
+/* ===========================
+   VOUCHER FUNCTIONS
+   =========================== */
+
+// Create voucher (admin only)
+export const createVoucher = async (voucherData) => {
+  try {
+    const docRef = await addDoc(collection(db, 'vouchers'), {
+      ...voucherData,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+    
+    return { id: docRef.id, ...voucherData };
+  } catch (error) {
+    console.error('Error creating voucher:', error);
+    throw error;
+  }
+};
+
+// Get all vouchers (admin only)
+export const getAllVouchers = async () => {
+  try {
+    const snapshot = await getDocs(collection(db, 'vouchers'));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.error('Error getting vouchers:', error);
+    return [];
+  }
+};
+
+// Validate voucher code
+export const validateVoucher = async (code) => {
+  try {
+    const q = query(
+      collection(db, 'vouchers'),
+      where('code', '==', code.toUpperCase()),
+      where('status', '==', 'active'),
+      limit(1)
+    );
+    const snapshot = await getDocs(q);
+    
+    if (snapshot.empty) {
+      return { valid: false, reason: 'Voucher code not found' };
+    }
+    
+    const voucher = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+    
+    // Check expiration
+    if (new Date(voucher.expirationDate) < new Date()) {
+      return { valid: false, reason: 'Voucher has expired' };
+    }
+    
+    // Check max uses
+    if (voucher.usedCount >= voucher.maxUses) {
+      return { valid: false, reason: 'Voucher has reached maximum uses' };
+    }
+    
+    // Plan names
+    const planNames = {
+      trial: 'Trial (All Features)',
+      user: 'User Subscription',
+      club: 'Club Subscription',
+      full: 'Full Subscription'
+    };
+    
+    return {
+      valid: true,
+      id: voucher.id,
+      code: voucher.code,
+      plan: voucher.plan,
+      planName: planNames[voucher.plan] || voucher.plan,
+      duration: voucher.duration,
+      expirationDate: voucher.expirationDate,
+      usesRemaining: voucher.maxUses - voucher.usedCount
+    };
+  } catch (error) {
+    console.error('Error validating voucher:', error);
+    return { valid: false, reason: 'Error validating voucher' };
+  }
+};
+
+// Redeem voucher
+export const redeemVoucher = async (voucherId, userId, clubId = null) => {
+  try {
+    const voucherRef = doc(db, 'vouchers', voucherId);
+    const voucherDoc = await getDoc(voucherRef);
+    
+    if (!voucherDoc.exists()) {
+      throw new Error('Voucher not found');
+    }
+    
+    const voucher = voucherDoc.data();
+    
+    await updateDoc(voucherRef, {
+      usedCount: (voucher.usedCount || 0) + 1,
+      usedBy: [...(voucher.usedBy || []), {
+        userId,
+        clubId,
+        redeemedAt: new Date().toISOString()
+      }],
+      updatedAt: new Date().toISOString()
+    });
+    
+    return true;
+  } catch (error) {
+    console.error('Error redeeming voucher:', error);
+    throw error;
+  }
+};
+
+// Delete voucher (admin only)
+export const deleteVoucher = async (voucherId) => {
+  try {
+    await deleteDoc(doc(db, 'vouchers', voucherId));
+  } catch (error) {
+    console.error('Error deleting voucher:', error);
+    throw error;
+  }
+};
+
+// Get voucher by code
+export const getVoucherByCode = async (code) => {
+  try {
+    const q = query(
+      collection(db, 'vouchers'),
+      where('code', '==', code.toUpperCase()),
+      limit(1)
+    );
+    const snapshot = await getDocs(q);
+    
+    if (snapshot.empty) return null;
+    
+    return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+  } catch (error) {
+    console.error('Error getting voucher by code:', error);
+    return null;
+  }
+};
+
 export default {
   // Users
   createUser,
@@ -789,6 +1141,30 @@ export default {
   updateOrderResponse,
   getOrderResponses,
   checkUserOrderResponse,
-  getOrderStatistics
+  getOrderStatistics,
+
+    // Subscription functions
+  getUserSubscription,
+  getClubSubscription,
+  getSubscription,
+  createSubscription,
+  updateSubscription,
+  cancelSubscription,
+  
+  // Invoice functions
+  createInvoice,
+  getInvoice,
+  updateInvoice,
+  getAllInvoices,
+  getUserInvoices,
+  sendInvoiceEmail,
+  
+  // Voucher functions
+  createVoucher,
+  getAllVouchers,
+  validateVoucher,
+  redeemVoucher,
+  deleteVoucher,
+  getVoucherByCode
   
 };

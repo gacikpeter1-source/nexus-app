@@ -1,11 +1,15 @@
-// src/components/CreateClubWithSubscription.jsx
+// src/components/CreateClubWithSubscription.jsx - WITH VOUCHER SUPPORT
 import React, { useState } from 'react';
 import { useAuth, ROLES } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
+import { useSubscription } from '../contexts/SubscriptionContext';
+import SubscriptionPlans from './SubscriptionPlans';
+import { validateVoucher, redeemVoucher } from '../firebase/firestore';
 
 export default function CreateClubWithSubscription({ onClose }) {
   const { user, refreshUser } = useAuth();
   const { showToast } = useToast();
+  const { subscribe } = useSubscription();
   
   const [step, setStep] = useState(1);
   const [clubName, setClubName] = useState('');
@@ -16,6 +20,16 @@ export default function CreateClubWithSubscription({ onClose }) {
   const [busy, setBusy] = useState(false);
   const [customerID, setCustomerID] = useState('');
   const [createdClub, setCreatedClub] = useState(null);
+  
+  // Payment method selection
+  const [paymentMethod, setPaymentMethod] = useState(''); // 'voucher' or 'subscription'
+  const [voucherCode, setVoucherCode] = useState('');
+  const [validatingVoucher, setValidatingVoucher] = useState(false);
+  const [validatedVoucher, setValidatedVoucher] = useState(null);
+  
+  // Subscription state
+  const [selectedPlan, setSelectedPlan] = useState(null);
+  const [selectedCycle, setSelectedCycle] = useState(null);
 
   const CLUB_TYPES = [
     'Football',
@@ -56,26 +70,59 @@ export default function CreateClubWithSubscription({ onClose }) {
       showToast('Please accept the terms and conditions', 'error');
       return;
     }
-    setStep(3);
+    setStep(3); // Go to payment method selection
   };
 
-  const handlePaymentSimulation = async () => {
+  const handleValidateVoucher = async () => {
+    if (!voucherCode.trim()) {
+      showToast('Please enter a voucher code', 'error');
+      return;
+    }
+
+    try {
+      setValidatingVoucher(true);
+      const voucher = await validateVoucher(voucherCode.trim().toUpperCase());
+      
+      if (voucher.valid) {
+        setValidatedVoucher(voucher);
+        showToast('Voucher validated successfully!', 'success');
+      } else {
+        showToast(voucher.reason || 'Invalid voucher code', 'error');
+        setValidatedVoucher(null);
+      }
+    } catch (error) {
+      console.error('Error validating voucher:', error);
+      showToast('Failed to validate voucher', 'error');
+      setValidatedVoucher(null);
+    } finally {
+      setValidatingVoucher(false);
+    }
+  };
+
+  const handleCreateClubWithVoucher = async () => {
+    if (!validatedVoucher) {
+      showToast('Please validate your voucher first', 'error');
+      return;
+    }
+
     setBusy(true);
     
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
       const newCustomerID = generateCustomerID();
       setCustomerID(newCustomerID);
 
       const clubCode = String(Math.floor(100000 + Math.random() * 900000));
       
+      // Create club
       const clubData = {
         name: clubName.trim(),
         clubType: clubType === 'Custom' ? customClubType.trim() : clubType,
         customerID: newCustomerID,
         subscriptionActive: true,
+        subscriptionType: 'voucher',
+        voucherCode: validatedVoucher.code,
         subscriptionDate: new Date().toISOString(),
+        subscriptionExpiryDate: validatedVoucher.expirationDate,
         superTrainer: user.id,
         clubCode: clubCode,
         clubNumber: clubCode,
@@ -101,6 +148,13 @@ export default function CreateClubWithSubscription({ onClose }) {
       const { createClub: createClubInFirestore } = await import('../firebase/firestore');
       const newClub = await createClubInFirestore(clubData);
       
+      // Redeem voucher
+      await redeemVoucher(validatedVoucher.id, user.id, newClub.id);
+      
+      // Create subscription from voucher
+      await subscribe(validatedVoucher.plan, 'custom', newClub.id, validatedVoucher);
+      
+      // Update user
       const { updateUser } = await import('../firebase/firestore');
       const newRole = (user.role === ROLES.TRAINER || user.role === ROLES.ADMIN) 
         ? user.role 
@@ -119,11 +173,13 @@ export default function CreateClubWithSubscription({ onClose }) {
 
       setCreatedClub({
         ...newClub,
-        clubCode: clubCode
+        clubCode: clubCode,
+        voucherUsed: true,
+        expiryDate: validatedVoucher.expirationDate
       });
-      setStep(4);
+      setStep(5); // Success screen
       
-      showToast('Club created successfully!', 'success');
+      showToast('Club created successfully with voucher!', 'success');
 
     } catch (error) {
       console.error('Error creating club:', error);
@@ -131,6 +187,12 @@ export default function CreateClubWithSubscription({ onClose }) {
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleSelectPlan = async (plan, billingCycle) => {
+    setSelectedPlan(plan);
+    setSelectedCycle(billingCycle);
+    setStep(4); // Go to confirmation/invoice step
   };
 
   const handleClose = () => {
@@ -152,7 +214,8 @@ export default function CreateClubWithSubscription({ onClose }) {
   const hasExistingClubs = ownedClubs.length > 0;
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-4xl mx-auto">
+      {/* Step 1: Club Details */}
       {step === 1 && (
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 animate-fade-in">
           <h2 className="font-title text-3xl text-light mb-6 flex items-center gap-3">
@@ -168,7 +231,7 @@ export default function CreateClubWithSubscription({ onClose }) {
               </h3>
               <p className="text-light/80 text-sm mb-3">
                 You currently own <strong>{ownedClubs.length}</strong> club{ownedClubs.length > 1 ? 's' : ''}. 
-                Creating a new club will require a <strong>separate subscription</strong>.
+                Creating a new club will require a <strong>separate subscription or voucher</strong>.
               </p>
             </div>
           )}
@@ -186,7 +249,6 @@ export default function CreateClubWithSubscription({ onClose }) {
                 className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                 required
               />
-              <p className="text-xs text-light/50 mt-1">Minimum 2 characters</p>
             </div>
 
             <div>
@@ -200,7 +262,6 @@ export default function CreateClubWithSubscription({ onClose }) {
                 placeholder="e.g., U-12 Boys Team"
                 className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
               />
-              <p className="text-xs text-light/50 mt-1">You can add more teams later</p>
             </div>
 
             <div>
@@ -218,9 +279,9 @@ export default function CreateClubWithSubscription({ onClose }) {
                 className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                 required
               >
-                <option value="" className="bg-mid-dark text-light">Select club type...</option>
+                <option value="">Select club type...</option>
                 {CLUB_TYPES.map(type => (
-                  <option key={type} value={type} className="bg-mid-dark text-light">{type}</option>
+                  <option key={type} value={type}>{type}</option>
                 ))}
               </select>
             </div>
@@ -252,6 +313,7 @@ export default function CreateClubWithSubscription({ onClose }) {
         </div>
       )}
 
+      {/* Step 2: Terms */}
       {step === 2 && (
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 animate-fade-in">
           <h2 className="font-title text-3xl text-light mb-6">Terms & Conditions</h2>
@@ -260,11 +322,11 @@ export default function CreateClubWithSubscription({ onClose }) {
             <div className="text-light/80 space-y-4 text-sm">
               <h3 className="font-bold text-light text-lg">NEXUS Club Subscription Agreement</h3>
               <p><strong>1. Subscription Terms</strong></p>
-              <p>By creating a club, you agree to an annual subscription for club management services.</p>
+              <p>By creating a club, you agree to maintain an active subscription or use a valid voucher for club management services.</p>
               <p><strong>2. SuperTrainer Role</strong></p>
               <p>As the club creator, you will become the SuperTrainer with full access to all teams.</p>
-              <p><strong>3. Customer ID</strong></p>
-              <p>You will receive a unique Customer ID for support and billing.</p>
+              <p><strong>3. Voucher Usage</strong></p>
+              <p>If using a voucher code, the subscription will expire based on the voucher's expiration date.</p>
             </div>
           </div>
 
@@ -299,53 +361,122 @@ export default function CreateClubWithSubscription({ onClose }) {
         </div>
       )}
 
+      {/* Step 3: Payment Method Selection */}
       {step === 3 && (
-        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 animate-fade-in">
-          <h2 className="font-title text-3xl text-light mb-6">Subscription Setup</h2>
+        <div className="space-y-6 animate-fade-in">
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+            <h2 className="font-title text-3xl text-light mb-6">Choose Payment Method</h2>
 
-          <div className="bg-warning/10 border border-warning/30 rounded-lg p-4 mb-6">
-            <p className="text-warning font-semibold mb-2">🚧 Development Mode</p>
-            <p className="text-light/70 text-sm">
-              Simulated payment for development purposes.
-            </p>
-          </div>
+            {/* Voucher Option */}
+            <div className={`border-2 rounded-xl p-6 mb-4 cursor-pointer transition-all ${
+              paymentMethod === 'voucher'
+                ? 'border-accent bg-accent/10'
+                : 'border-white/20 hover:border-white/40'
+            }`}
+            onClick={() => setPaymentMethod('voucher')}>
+              <div className="flex items-start gap-4">
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  checked={paymentMethod === 'voucher'}
+                  onChange={() => setPaymentMethod('voucher')}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold text-light mb-2">🎫 Use Voucher Code</h3>
+                  <p className="text-light/70 mb-4">
+                    Have a voucher code? Activate full features instantly!
+                  </p>
 
-          <div className="bg-white/5 border border-white/10 rounded-lg p-6 mb-6">
-            <h3 className="font-bold text-light mb-4">Subscription Summary</h3>
-            <div className="space-y-3 text-light/80">
-              <div className="flex justify-between">
-                <span>Club Name:</span>
-                <span className="font-semibold text-light">{clubName}</span>
-              </div>
-              {initialTeamName && (
-                <div className="flex justify-between">
-                  <span>Initial Team:</span>
-                  <span className="font-semibold text-light">{initialTeamName}</span>
+                  {paymentMethod === 'voucher' && (
+                    <div className="space-y-4">
+                      <div className="flex gap-3">
+                        <input
+                          type="text"
+                          value={voucherCode}
+                          onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                          placeholder="Enter voucher code (e.g., TRIAL-A7F9-251231-30D)"
+                          className="flex-1 bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light font-mono"
+                        />
+                        <button
+                          onClick={handleValidateVoucher}
+                          disabled={validatingVoucher}
+                          className="px-6 py-3 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium disabled:opacity-50"
+                        >
+                          {validatingVoucher ? 'Validating...' : 'Validate'}
+                        </button>
+                      </div>
+
+                      {validatedVoucher && (
+                        <div className="bg-success/20 border border-success/30 rounded-lg p-4">
+                          <h4 className="font-semibold text-success mb-2">✓ Valid Voucher</h4>
+                          <div className="space-y-1 text-sm text-light/80">
+                            <p><strong>Plan:</strong> {validatedVoucher.planName}</p>
+                            <p><strong>Duration:</strong> {validatedVoucher.duration} days</p>
+                            <p><strong>Expires:</strong> {new Date(validatedVoucher.expirationDate).toLocaleDateString()}</p>
+                          </div>
+                          <button
+                            onClick={handleCreateClubWithVoucher}
+                            disabled={busy}
+                            className="mt-4 w-full px-6 py-3 bg-success hover:bg-success/80 text-white rounded-lg font-semibold disabled:opacity-50"
+                          >
+                            {busy ? 'Creating Club...' : '✓ Create Club with Voucher'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
-          </div>
 
-          <div className="flex gap-4">
-            <button
-              onClick={() => setStep(2)}
-              disabled={busy}
-              className="flex-1 px-6 py-3 bg-white/10 hover:bg-white/20 text-light rounded-lg disabled:opacity-50"
-            >
-              Back
-            </button>
-            <button
-              onClick={handlePaymentSimulation}
-              disabled={busy}
-              className="flex-1 px-6 py-3 bg-primary hover:bg-primary/80 text-white rounded-lg disabled:opacity-50"
-            >
-              {busy ? 'Processing...' : 'Complete Setup'}
-            </button>
+            {/* Subscription Option */}
+            <div className={`border-2 rounded-xl p-6 cursor-pointer transition-all ${
+              paymentMethod === 'subscription'
+                ? 'border-primary bg-primary/10'
+                : 'border-white/20 hover:border-white/40'
+            }`}
+            onClick={() => setPaymentMethod('subscription')}>
+              <div className="flex items-start gap-4">
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  checked={paymentMethod === 'subscription'}
+                  onChange={() => setPaymentMethod('subscription')}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold text-light mb-2">💳 Purchase Subscription</h3>
+                  <p className="text-light/70">
+                    Choose a plan and receive an invoice
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {paymentMethod === 'subscription' && (
+              <div className="mt-6">
+                <SubscriptionPlans 
+                  onSelectPlan={handleSelectPlan}
+                  clubId="new"
+                />
+              </div>
+            )}
+
+            <div className="mt-6">
+              <button
+                onClick={() => setStep(2)}
+                className="w-full px-6 py-3 bg-white/10 hover:bg-white/20 text-light rounded-lg"
+              >
+                ← Back
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {step === 4 && (
+      {/* Step 5: Success */}
+      {step === 5 && (
         <div className="bg-white/5 backdrop-blur-sm border border-success/30 rounded-xl p-6 animate-scale-in">
           <div className="text-center mb-6">
             <div className="w-20 h-20 bg-success/20 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -356,19 +487,7 @@ export default function CreateClubWithSubscription({ onClose }) {
           </div>
 
           <div className="bg-gradient-to-br from-primary/20 to-accent/20 border-2 border-primary/50 rounded-xl p-6 mb-6">
-            <h3 className="font-bold text-light text-center mb-4">Your Customer ID</h3>
-            <div className="bg-dark/50 rounded-lg p-4 text-center">
-              <code className="text-3xl font-mono font-bold text-accent tracking-wider">
-                {customerID}
-              </code>
-            </div>
-            <p className="text-xs text-light/60 text-center mt-3">
-              ⚠️ Save this ID for support and billing
-            </p>
-          </div>
-
-          <div className="bg-white/5 border border-white/10 rounded-lg p-6 mb-6">
-            <h3 className="font-semibold text-light mb-2">Club Details</h3>
+            <h3 className="font-bold text-light text-center mb-4">Club Details</h3>
             <div className="space-y-2 text-sm text-light/70">
               <div className="flex justify-between">
                 <span>Club Name:</span>
@@ -378,10 +497,20 @@ export default function CreateClubWithSubscription({ onClose }) {
                 <span>Club Code:</span>
                 <span className="font-mono font-medium text-secondary">{createdClub?.clubCode}</span>
               </div>
-              <div className="flex justify-between">
-                <span>Your Role:</span>
-                <span className="font-medium text-accent">SuperTrainer</span>
-              </div>
+              {createdClub?.voucherUsed && (
+                <>
+                  <div className="flex justify-between">
+                    <span>Voucher:</span>
+                    <span className="font-medium text-accent">{createdClub?.voucherCode}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Expires:</span>
+                    <span className="font-medium text-warning">
+                      {new Date(createdClub?.expiryDate).toLocaleDateString()}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
