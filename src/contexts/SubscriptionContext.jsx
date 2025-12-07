@@ -171,6 +171,11 @@ export function SubscriptionProvider({ children }) {
 
   // Check if user has a specific feature
   const hasFeature = (feature, clubId = null) => {
+    // ADMIN/SUPERADMIN BYPASS - Always grant full access
+    if (user && (user.isSuperAdmin || user.role === 'admin')) {
+      return true;
+    }
+    
     // Check club subscription first if clubId provided
     if (clubId && clubSubscriptions[clubId]) {
       const clubSub = clubSubscriptions[clubId];
@@ -195,6 +200,11 @@ export function SubscriptionProvider({ children }) {
 
   // Get current plan level
   const getCurrentPlan = (clubId = null) => {
+    // ADMIN/SUPERADMIN BYPASS - Show as "Full" plan
+    if (user && (user.isSuperAdmin || user.role === 'admin')) {
+      return SUBSCRIPTION_PLANS.FULL;
+    }
+    
     if (clubId && clubSubscriptions[clubId]) {
       const clubSub = clubSubscriptions[clubId];
       if (clubSub.status === 'active') {
