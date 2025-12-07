@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { createEvent, getAllClubs } from '../firebase/firestore';
+import { createEvent, getUserClubs } from '../firebase/firestore';
 import { notifyEventCreated, getNotificationRecipients } from '../utils/notifications';
 
 export default function NewEvent() {
@@ -59,29 +59,22 @@ export default function NewEvent() {
 
   async function loadClubs() {
     try {
-      const allClubs = await getAllClubs();
-      setClubs(allClubs);
+      // Get only clubs user belongs to
+      const userClubs = await getUserClubs(user.id);
+      setClubs(userClubs);
 
-      // Extract teams from clubs
+      // Extract teams from user's clubs
       const allTeams = [];
-      allClubs.forEach(club => {
-        // Check if user is part of this club
-        const isTrainer = (club.trainers || []).includes(user?.id);
-        const isAssistant = (club.assistants || []).includes(user?.id);
-        const isMember = (club.members || []).includes(user?.id);
-        const isAdmin = user?.role === 'admin' || user?.isSuperAdmin;
-
-        if (isTrainer || isAssistant || isMember || isAdmin) {
-          const clubTeams = club.teams || [];
-          clubTeams.forEach(team => {
-            allTeams.push({
-              ...team,
-              clubId: club.id,
-              clubName: club.name,
-              displayName: `${team.name} (${club.name})`
-            });
+      userClubs.forEach(club => {
+        const clubTeams = club.teams || [];
+        clubTeams.forEach(team => {
+          allTeams.push({
+            ...team,
+            clubId: club.id,
+            clubName: club.name,
+            displayName: `${team.name} (${club.name})`
           });
-        }
+        });
       });
 
       setTeams(allTeams);
