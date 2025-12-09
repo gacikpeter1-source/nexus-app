@@ -1,5 +1,5 @@
 // src/components/VoucherGenerator.jsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { createVoucher, getAllVouchers, deleteVoucher } from '../firebase/firestore';
@@ -17,7 +17,7 @@ export default function VoucherGenerator() {
   const [maxUses, setMaxUses] = useState(1);
   const [description, setDescription] = useState('');
 
-  useState(() => {
+  useEffect(() => {
     loadVouchers();
   }, []);
 
