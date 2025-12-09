@@ -180,7 +180,7 @@ export default function SubscriptionManager() {
                     </div>
                     <div>
                       <span className="text-light/50">Amount:</span>
-                      <p className="text-accent font-bold text-lg">€{invoice.total.toFixed(2)}</p>
+                      <p className="text-accent font-bold text-lg">€{(invoice.total || 0).toFixed(2)}</p>
                     </div>
                     <div>
                       <span className="text-light/50">Due Date:</span>
@@ -237,7 +237,7 @@ export default function SubscriptionManager() {
           </div>
           <div className="bg-white/5 border border-white/10 rounded-lg p-4 text-center">
             <div className="text-2xl font-bold text-accent">
-              €{invoices.filter(i => i.status === 'paid').reduce((sum, i) => sum + i.total, 0).toFixed(2)}
+              €{invoices.filter(i => i.status === 'paid').reduce((sum, i) => sum + (i.total || 0), 0).toFixed(2)}
             </div>
             <div className="text-sm text-light/60">Total Revenue</div>
           </div>

@@ -148,12 +148,13 @@ export default function VoucherGenerator() {
             <select
               value={plan}
               onChange={(e) => setPlan(e.target.value)}
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light"
+              className="w-full bg-dark border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:outline-none"
+              style={{ colorScheme: 'dark' }}
             >
-              <option value="trial">Trial (All Features)</option>
-              <option value="user">User Subscription</option>
-              <option value="club">Club Subscription</option>
-              <option value="full">Full Subscription</option>
+              <option value="trial" className="bg-dark text-light">Trial (All Features)</option>
+              <option value="user" className="bg-dark text-light">User Subscription</option>
+              <option value="club" className="bg-dark text-light">Club Subscription</option>
+              <option value="full" className="bg-dark text-light">Full Subscription</option>
             </select>
           </div>
 
@@ -168,7 +169,7 @@ export default function VoucherGenerator() {
               onChange={(e) => setDuration(e.target.value)}
               min="1"
               max="365"
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light"
+              className="w-full bg-dark border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:outline-none"
             />
           </div>
 
@@ -183,7 +184,7 @@ export default function VoucherGenerator() {
               onChange={(e) => setMaxUses(e.target.value)}
               min="1"
               max="1000"
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light"
+              className="w-full bg-dark border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:outline-none"
             />
             <p className="text-xs text-light/50 mt-1">
               How many users can use this code
@@ -200,7 +201,7 @@ export default function VoucherGenerator() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="e.g., Q1 2025 Trial Campaign"
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light"
+              className="w-full bg-dark border border-white/20 rounded-lg px-4 py-3 text-light placeholder:text-light/40 focus:border-primary focus:outline-none"
             />
           </div>
         </div>
