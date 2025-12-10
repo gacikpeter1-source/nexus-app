@@ -1085,6 +1085,56 @@ export const getVoucherByCode = async (code) => {
   }
 };
 
+/* ===========================
+   ADDITIONAL CHAT SYSTEM FUNCTIONS
+   =========================== */
+
+// Get all clubs (for chat member selection)
+export const getClubs = async () => {
+  try {
+    const clubsRef = collection(db, 'clubs');
+    const querySnapshot = await getDocs(clubsRef);
+    const clubs = [];
+    querySnapshot.forEach((doc) => {
+      clubs.push({ id: doc.id, ...doc.data() });
+    });
+    return clubs;
+  } catch (error) {
+    console.error('Error getting clubs:', error);
+    throw error;
+  }
+};
+
+// Get multiple users by IDs (for chat member details)
+export const getUsersByIds = async (userIds) => {
+  try {
+    if (!userIds || userIds.length === 0) {
+      return [];
+    }
+
+    const users = [];
+    // Firestore 'in' queries are limited to 10 items, so we need to batch
+    const chunks = [];
+    for (let i = 0; i < userIds.length; i += 10) {
+      chunks.push(userIds.slice(i, i + 10));
+    }
+
+    for (const chunk of chunks) {
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('__name__', 'in', chunk));
+      const querySnapshot = await getDocs(q);
+      querySnapshot.forEach((doc) => {
+        users.push({ id: doc.id, ...doc.data() });
+      });
+    }
+
+    return users;
+  } catch (error) {
+    console.error('Error getting users by IDs:', error);
+    throw error;
+  }
+};
+
 export default {
   // Users
   createUser,
@@ -1092,6 +1142,7 @@ export default {
   getUserByEmail,
   updateUser,
   getAllUsers,
+  getUsersByIds,
   deleteUser,
   
   // Clubs
@@ -1101,6 +1152,7 @@ export default {
   updateClub,
   getAllClubs,
   getUserClubs,
+  getClubs,
   deleteClub,
   
   // Events

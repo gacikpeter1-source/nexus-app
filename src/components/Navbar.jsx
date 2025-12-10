@@ -1,4 +1,4 @@
-// src/components/Navbar.jsx - WITH MOBILE HAMBURGER MENU
+// src/components/Navbar.jsx - WITH CHATS LINK
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -180,6 +180,17 @@ export default function Navbar() {
             >
               Teams
             </Link>
+            {/* CHATS LINK - NEW */}
+            <Link
+              to="/chats"
+              className={`text-sm font-medium transition ${
+                location.pathname.includes('/chat')
+                  ? 'text-primary'
+                  : 'text-light/80 hover:text-light'
+              }`}
+            >
+              💬 Chats
+            </Link>
             {isSuperAdminOrAdmin() && (
               <Link
                 to="/admin"
@@ -235,7 +246,7 @@ export default function Navbar() {
                       onClick={() => setIsDropdownOpen(false)}
                       className="block px-4 py-2 text-sm text-light hover:bg-white/5 transition"
                     >
-                      🌍 Language
+                      🌐 Language
                     </Link>
                     <Link
                       to="/support"
@@ -337,6 +348,19 @@ export default function Navbar() {
                 }`}
               >
                 Teams
+              </Link>
+
+              {/* CHATS LINK - NEW */}
+              <Link
+                to="/chats"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`block px-4 py-3 rounded-lg text-sm font-medium transition ${
+                  location.pathname.includes('/chat')
+                    ? 'bg-primary text-white'
+                    : 'text-light hover:bg-white/10'
+                }`}
+              >
+                💬 Chats
               </Link>
               
               {isSuperAdminOrAdmin() && (

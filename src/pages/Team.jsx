@@ -13,6 +13,7 @@ import {
   getOrderResponses,
   createOrderResponse
 } from '../firebase/firestore';
+import { getTeamChats, createChat } from '../firebase/chats';
 
 
 export default function Team() {
@@ -34,6 +35,8 @@ export default function Team() {
   const [orderResponseForm, setOrderResponseForm] = useState({});
   const [respondingToOrder, setRespondingToOrder] = useState(false);  
   const [showOrdersDropdown, setShowOrdersDropdown] = useState(false);
+  const [teamChat, setTeamChat] = useState(null);
+  
 
   // Load club and team from Firebase
   useEffect(() => {
@@ -155,6 +158,47 @@ async function handleSubmitOrderResponse(status) {
       setRespondingToOrder(false);
     }
   }
+
+// Load team chat
+useEffect(() => {
+  const loadTeamChat = async () => {
+    if (!team) return;
+    
+    try {
+      const chats = await getTeamChats(team.id);
+      if (chats.length > 0) {
+        setTeamChat(chats[0]); // Use first team chat
+      }
+    } catch (error) {
+      console.error('Error loading team chat:', error);
+    }
+  };
+
+  loadTeamChat();
+}, [team]);
+
+// Function to create team chat
+const handleCreateTeamChat = async () => {
+  try {
+    const chatId = await createChat({
+      title: `${team.name} - Team Chat`,
+      clubId: clubId,
+      teamId: team.id,
+      createdBy: user.id,
+      members: [
+        ...team.trainers,
+        ...team.assistants,
+        ...team.members
+      ],
+    });
+    
+    // Navigate to the new chat
+    navigate(`/chat/${chatId}`);
+  } catch (error) {
+    console.error('Error creating team chat:', error);
+    alert('Failed to create team chat');
+  }
+};
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -431,6 +475,17 @@ async function handleSubmitOrderResponse(status) {
           Statistics
         </button>
       </div>
+
+      <button
+        onClick={() => setActiveTab('chat')}
+        className={`px-6 py-3 font-medium transition ${
+          activeTab === 'chat'
+            ? 'bg-primary text-white'
+            : 'bg-mid-dark text-light hover:bg-white/5'
+        } rounded-lg`}
+      >
+        💬 Chat
+      </button>
 
       {/* Tab Content */}
       <div className="flex-1">
@@ -848,6 +903,40 @@ async function handleSubmitOrderResponse(status) {
             </div>
           </div>
         )}
+
+        {activeTab === 'chat' && (
+          <div className="bg-mid-dark rounded-lg p-6">
+            <h3 className="text-xl font-bold text-light mb-4">Team Chat</h3>
+            {teamChat ? (
+              <div className="space-y-4">
+                <p className="text-light/60">
+                  This team has an active chat room
+                </p>
+                <button
+                  onClick={() => navigate(`/chat/${teamChat.id}`)}
+                  className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium"
+                >
+                  Open Team Chat
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-light/60">
+                  No team chat exists yet. Create one to start communicating with your team members.
+                </p>
+                <button
+                  onClick={handleCreateTeamChat}
+                  className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium"
+                >
+                  Create Team Chat
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+
+
       </div>
         {/* Order Response Modal */}
       {showOrderResponseModal && selectedOrder && (
