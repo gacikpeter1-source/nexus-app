@@ -169,26 +169,24 @@ async function handleSubmitOrderResponse(status) {
     return null;
   }, [club, teamId]);
 
-  // Load team chat
-  useEffect(() => {
-    const loadTeamChat = async () => {
-      if (!team) return;
-      
-      try {
-        const chats = await getTeamChats(team.id);
-        if (chats.length > 0) {
-          setTeamChat(chats[0]);
-        }
-      } catch (error) {
-        // Silently ignore - user might not have permission to query team chats
-        // Just show "Create Team Chat" button instead
-        console.log('No team chat accessible');
-        setTeamChat(null);
+// Load team chat
+useEffect(() => {
+  const loadTeamChat = async () => {
+    if (!team) return;
+    
+    try {
+      const chats = await getTeamChats(team.id);
+      if (chats.length > 0) {
+        setTeamChat(chats[0]); // Use first team chat
       }
-    };
+    } catch (error) {
+      console.error('Error loading team chat:', error);
+    }
+  };
 
   loadTeamChat();
 }, [team]);
+
 // Function to create team chat
 const handleCreateTeamChat = async () => {
   try {
