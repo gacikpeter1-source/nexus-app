@@ -1,17 +1,20 @@
-// src/pages/Chats.jsx - UPDATED WITH SMART MEMBER SELECTION
+// src/pages/Chats.jsx - WITH MANAGE & DELETE BUTTONS
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useChat } from '../contexts/ChatContext';
-import { getClub, getUser } from '../firebase/firestore';
-import { isSuperAdmin, isClubOwner } from '../utils/permissions';
+import { getClub, getUser, getAllUsers } from '../firebase/firestore';
+import { isSuperAdmin } from '../utils/permissions';
+import { addChatMember, removeChatMember } from '../firebase/chats';
 
 export default function Chats() {
   const { user } = useAuth();
-  const { chats, loading, createChat } = useChat();
+  const { chats, loading, createChat, deleteChat } = useChat();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showManageModal, setShowManageModal] = useState(false);
+  const [selectedChat, setSelectedChat] = useState(null);
   const [filteredChats, setFilteredChats] = useState([]);
   const [chatDetails, setChatDetails] = useState({});
 
@@ -77,6 +80,30 @@ export default function Chats() {
 
   const handleChatClick = (chatId) => {
     navigate(`/chat/${chatId}`);
+  };
+
+  const canManageChat = (chat) => {
+    return isSuperAdmin(user) || chat.createdBy === user.id;
+  };
+
+  const handleManageChat = (chat, e) => {
+    e.stopPropagation();
+    setSelectedChat(chat);
+    setShowManageModal(true);
+  };
+
+  const handleDeleteChat = async (chat, e) => {
+    e.stopPropagation();
+    if (!confirm(`Are you sure you want to delete "${chat.title}"? This cannot be undone.`)) {
+      return;
+    }
+
+    const result = await deleteChat(chat.id);
+    if (result.ok) {
+      alert('Chat deleted successfully');
+    } else {
+      alert('Failed to delete chat');
+    }
   };
 
   const formatTimestamp = (timestamp) => {
@@ -213,14 +240,18 @@ export default function Chats() {
           ) : (
             filteredChats.map((chat) => {
               const details = chatDetails[chat.id] || {};
+              const canManage = canManageChat(chat);
+              
               return (
                 <div
                   key={chat.id}
-                  onClick={() => handleChatClick(chat.id)}
                   className="bg-mid-dark hover:bg-mid-dark/80 border border-white/10 rounded-lg p-4 cursor-pointer transition group"
                 >
                   <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
+                    <div 
+                      className="flex-1 min-w-0"
+                      onClick={() => handleChatClick(chat.id)}
+                    >
                       {/* Title */}
                       <h3 className="text-lg font-semibold text-light group-hover:text-primary transition truncate">
                         {chat.title}
@@ -251,9 +282,34 @@ export default function Chats() {
                       )}
                     </div>
 
-                    {/* Timestamp */}
-                    <div className="ml-4 text-xs text-light/40 whitespace-nowrap">
-                      {formatTimestamp(chat.lastMessageAt || chat.updatedAt)}
+                    {/* Actions & Timestamp */}
+                    <div className="ml-4 flex flex-col items-end gap-2">
+                      <div className="text-xs text-light/40 whitespace-nowrap">
+                        {formatTimestamp(chat.lastMessageAt || chat.updatedAt)}
+                      </div>
+                      
+                      {canManage && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={(e) => handleManageChat(chat, e)}
+                            className="p-2 hover:bg-blue-500/20 text-blue-400 rounded-lg transition"
+                            title="Manage members"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={(e) => handleDeleteChat(chat, e)}
+                            className="p-2 hover:bg-red-500/20 text-red-400 rounded-lg transition"
+                            title="Delete chat"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -262,7 +318,7 @@ export default function Chats() {
           )}
         </div>
 
-        {/* Create Chat Modal */}
+        {/* Modals */}
         {showCreateModal && (
           <CreateChatModal
             user={user}
@@ -276,12 +332,217 @@ export default function Chats() {
             }}
           />
         )}
+
+        {showManageModal && selectedChat && (
+          <ManageChatModal
+            chat={selectedChat}
+            user={user}
+            onClose={() => {
+              setShowManageModal(false);
+              setSelectedChat(null);
+            }}
+          />
+        )}
       </div>
     </div>
   );
 }
 
-// Create Chat Modal Component with Smart Member Selection
+// Manage Chat Modal Component
+function ManageChatModal({ chat, user, onClose }) {
+  const [members, setMembers] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredUsers, setFilteredUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [usersData, membersData] = await Promise.all([
+          getAllUsers(),
+          Promise.all(chat.members.map(id => getUser(id)))
+        ]);
+
+        setMembers(membersData.filter(Boolean));
+        setAllUsers(usersData.filter(u => !chat.members.includes(u.id)));
+        setFilteredUsers(usersData.filter(u => !chat.members.includes(u.id)));
+        setLoading(false);
+      } catch (error) {
+        console.error('Error loading users:', error);
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [chat]);
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredUsers(allUsers);
+    } else {
+      const lowerQuery = searchQuery.toLowerCase();
+      const filtered = allUsers.filter((u) => {
+        const username = (u.username || '').toLowerCase();
+        const email = (u.email || '').toLowerCase();
+        return username.includes(lowerQuery) || email.includes(lowerQuery);
+      });
+      setFilteredUsers(filtered);
+    }
+  }, [searchQuery, allUsers]);
+
+  const handleAddMember = async (userId) => {
+    try {
+      await addChatMember(chat.id, userId);
+      
+      // Update local state
+      const userToAdd = allUsers.find(u => u.id === userId);
+      if (userToAdd) {
+        setMembers([...members, userToAdd]);
+        setAllUsers(allUsers.filter(u => u.id !== userId));
+        setFilteredUsers(filteredUsers.filter(u => u.id !== userId));
+      }
+      
+      alert('Member added successfully');
+    } catch (error) {
+      console.error('Error adding member:', error);
+      alert('Failed to add member');
+    }
+  };
+
+  const handleRemoveMember = async (userId) => {
+    if (userId === chat.createdBy) {
+      alert('Cannot remove the chat creator');
+      return;
+    }
+
+    if (!confirm('Remove this member from the chat?')) return;
+
+    try {
+      await removeChatMember(chat.id, userId);
+      
+      // Update local state
+      const userToRemove = members.find(m => m.id === userId);
+      if (userToRemove) {
+        setMembers(members.filter(m => m.id !== userId));
+        setAllUsers([...allUsers, userToRemove]);
+        setFilteredUsers([...filteredUsers, userToRemove]);
+      }
+      
+      alert('Member removed successfully');
+    } catch (error) {
+      console.error('Error removing member:', error);
+      alert('Failed to remove member');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-mid-dark rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="p-6 border-b border-white/10">
+          <h2 className="text-2xl font-bold text-light">Manage Chat Members</h2>
+          <p className="text-sm text-light/60 mt-1">{chat.title}</p>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6">
+          {/* Current Members */}
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-light mb-3">Current Members ({members.length})</h3>
+            <div className="space-y-2">
+              {members.map((member) => (
+                <div key={member.id} className="flex items-center justify-between p-3 bg-dark rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center font-bold text-white">
+                      {(member.username || member.email).charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-light">
+                        {member.username || member.email}
+                        {member.id === chat.createdBy && ' 👑'}
+                      </p>
+                      <p className="text-xs text-light/60 capitalize">{member.role}</p>
+                    </div>
+                  </div>
+                  {member.id !== chat.createdBy && (
+                    <button
+                      onClick={() => handleRemoveMember(member.id)}
+                      className="px-3 py-1 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded transition"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Add Members */}
+          <div>
+            <h3 className="text-lg font-semibold text-light mb-3">Add Members</h3>
+            
+            {/* Search */}
+            <div className="relative mb-3">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search users..."
+                className="w-full px-4 py-2 pl-10 bg-dark border border-white/10 rounded-lg text-light text-sm placeholder-light/40 focus:outline-none focus:border-primary transition"
+              />
+              <svg
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-light/40"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+
+            <div className="max-h-64 overflow-y-auto space-y-2">
+              {filteredUsers.length === 0 ? (
+                <p className="text-light/40 text-sm text-center py-4">
+                  {searchQuery ? 'No users found' : 'All users are already members'}
+                </p>
+              ) : (
+                filteredUsers.map((u) => (
+                  <div key={u.id} className="flex items-center justify-between p-3 bg-dark rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center font-bold text-white">
+                        {(u.username || u.email).charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-light">{u.username || u.email}</p>
+                        <p className="text-xs text-light/60 capitalize">{u.role}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleAddMember(u.id)}
+                      className="px-3 py-1 text-xs bg-primary hover:bg-primary-dark text-white rounded transition"
+                    >
+                      Add
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-white/10">
+          <button
+            onClick={onClose}
+            className="w-full px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Create Chat Modal Component (keeping your existing one with all the features)
 function CreateChatModal({ user, onClose, onCreate }) {
   const [title, setTitle] = useState('');
   const [selectedClub, setSelectedClub] = useState('');
@@ -293,7 +554,7 @@ function CreateChatModal({ user, onClose, onCreate }) {
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  const [userRole, setUserRole] = useState(null); // 'owner', 'trainer', 'user'
+  const [userRole, setUserRole] = useState(null);
 
   // Filter users based on search query
   useEffect(() => {
@@ -325,7 +586,6 @@ function CreateChatModal({ user, onClose, onCreate }) {
           getAllUsers(),
         ]);
 
-        // Determine user's clubs and role
         let userClubs = [];
         let detectedRole = 'user';
 
@@ -361,15 +621,12 @@ function CreateChatModal({ user, onClose, onCreate }) {
     loadData();
   }, [user]);
 
-  // Load teams when club is selected and filter available users
   useEffect(() => {
     if (selectedClub) {
       const club = clubs.find((c) => c.id === selectedClub);
       if (club) {
-        // Get teams based on user role
         let filteredTeams = club.teams || [];
         
-        // Trainers/Assistants only see their teams
         if (userRole === 'trainer') {
           filteredTeams = filteredTeams.filter((team) =>
             team.trainers?.includes(user.id) || team.assistants?.includes(user.id)
@@ -378,7 +635,6 @@ function CreateChatModal({ user, onClose, onCreate }) {
 
         setTeams(filteredTeams);
 
-        // If club owner, show all club members
         if (userRole === 'owner') {
           const clubMemberIds = [
             ...(club.trainers || []),
@@ -389,21 +645,19 @@ function CreateChatModal({ user, onClose, onCreate }) {
           setAvailableUsers(clubUsers);
         }
       }
-      } else {
-        setTeams([]);
-        setSelectedTeam('');
-        setSelectedMembers([]);
-      }
+    } else {
+      setTeams([]);
+      setSelectedTeam('');
+      setSelectedMembers([]);
+    }
   }, [selectedClub, clubs, userRole, user.id]);
 
-  // Auto-select team members when team is selected
   useEffect(() => {
     if (selectedTeam && selectedClub) {
       const club = clubs.find((c) => c.id === selectedClub);
       const team = club?.teams?.find((t) => t.id === selectedTeam);
       
       if (team) {
-        // Auto-select all team members
         const teamMemberIds = [
           ...(team.trainers || []),
           ...(team.assistants || []),
@@ -412,12 +666,10 @@ function CreateChatModal({ user, onClose, onCreate }) {
 
         setSelectedMembers(teamMemberIds);
 
-        // Filter available users to only team members
         const teamUsers = availableUsers.filter((u) => teamMemberIds.includes(u.id));
         setAvailableUsers(teamUsers);
       }
     } else if (selectedClub && userRole === 'owner') {
-      // Club owner without team - show all club members
       const club = clubs.find((c) => c.id === selectedClub);
       if (club) {
         const clubMemberIds = [
@@ -425,8 +677,6 @@ function CreateChatModal({ user, onClose, onCreate }) {
           ...(club.assistants || []),
           ...(club.members || [])
         ];
-        const clubUsers = availableUsers.filter((u) => clubMemberIds.includes(u.id));
-        setAvailableUsers(clubUsers);
       }
     }
   }, [selectedTeam, selectedClub, clubs, userRole, user.id]);
@@ -435,7 +685,6 @@ function CreateChatModal({ user, onClose, onCreate }) {
     e.preventDefault();
     if (!title.trim()) return;
     
-    // Ensure at least one member is selected
     if (selectedMembers.length === 0) {
       alert('Please select at least one member for the chat');
       return;
@@ -455,6 +704,8 @@ function CreateChatModal({ user, onClose, onCreate }) {
         ? prev.filter((id) => id !== userId)
         : [...prev, userId]
     );
+    
+    // Clear search after selecting
     setSearchQuery('');
   };
 
@@ -467,11 +718,9 @@ function CreateChatModal({ user, onClose, onCreate }) {
     setSelectedMembers([]);
   };
 
-  // Check if all filtered users are selected
   const allSelected = filteredUsers.length > 0 && 
                       filteredUsers.every((u) => selectedMembers.includes(u.id));
   
-  // Show Select All only when club is selected but no team
   const showSelectAll = selectedClub && !selectedTeam && userRole === 'owner';
 
   return (
@@ -487,7 +736,6 @@ function CreateChatModal({ user, onClose, onCreate }) {
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Title */}
           <div>
             <label className="block text-sm font-medium text-light mb-2">
               Chat Title *
@@ -502,7 +750,6 @@ function CreateChatModal({ user, onClose, onCreate }) {
             />
           </div>
 
-          {/* Club Selection */}
           {clubs.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-light mb-2">
@@ -527,7 +774,6 @@ function CreateChatModal({ user, onClose, onCreate }) {
             </div>
           )}
 
-          {/* Team Selection */}
           {selectedClub && teams.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-light mb-2">
@@ -556,7 +802,6 @@ function CreateChatModal({ user, onClose, onCreate }) {
             </div>
           )}
 
-          {/* Member Selection */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-medium text-light">
@@ -582,7 +827,6 @@ function CreateChatModal({ user, onClose, onCreate }) {
               )}
             </div>
 
-            {/* Quick Search */}
             <div className="relative mb-3">
               <input
                 type="text"
@@ -653,7 +897,6 @@ function CreateChatModal({ user, onClose, onCreate }) {
             </p>
           </div>
 
-          {/* Actions */}
           <div className="flex gap-3 pt-4">
             <button
               type="button"
