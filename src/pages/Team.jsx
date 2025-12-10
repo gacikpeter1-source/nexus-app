@@ -159,6 +159,16 @@ async function handleSubmitOrderResponse(status) {
     }
   }
 
+  // Define team BEFORE using it in useEffect
+  const team = useMemo(() => {
+    if (!club || !club.teams) return null;
+    const foundTeam = club.teams.find(t => t.id === teamId);
+    if (foundTeam) {
+      return { ...foundTeam, clubId: club.id, clubName: club.name };
+    }
+    return null;
+  }, [club, teamId]);
+
 // Load team chat
 useEffect(() => {
   const loadTeamChat = async () => {
@@ -211,15 +221,6 @@ const handleCreateTeamChat = async () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showOrdersDropdown]);
-
-  const team = useMemo(() => {
-    if (!club || !club.teams) return null;
-    const foundTeam = club.teams.find(t => t.id === teamId);
-    if (foundTeam) {
-      return { ...foundTeam, clubId: club.id, clubName: club.name };
-    }
-    return null;
-  }, [club, teamId]);
 
   // Get upcoming events (next 5)
   const upcomingEvents = useMemo(() => {

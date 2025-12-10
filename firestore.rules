@@ -126,6 +126,7 @@ service cloud.firestore {
         request.auth.uid == resource.data.userId ||
         isAdmin()
       );
+      
       allow create: if isAuthenticated();
       allow update: if isAuthenticated() && (
         request.auth.uid == resource.data.userId ||
@@ -133,5 +134,18 @@ service cloud.firestore {
       );
       allow delete: if isAdmin();
     } 
+
+    // Order templates
+    match /orderTemplates/{templateId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Subscriptions (already mentioned earlier)
+    match /subscriptions/{subscriptionId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+    }
+
   }
 }
