@@ -301,13 +301,14 @@ function UsersTab() {
               value={filterRole}
               onChange={(e) => setFilterRole(e.target.value)}
               className="w-full px-4 py-2 bg-dark border border-white/20 rounded-lg text-light focus:border-primary outline-none"
+              style={{ colorScheme: 'dark' }}
             >
-              <option value="all">All Roles</option>
-              <option value="admin">Admin</option>
-              <option value="trainer">Trainer</option>
-              <option value="assistant">Assistant</option>
-              <option value="user">User</option>
-              <option value="parent">Parent</option>
+              <option value="all" className="bg-dark text-light">All Roles</option>
+              <option value="admin" className="bg-dark text-light">Admin</option>
+              <option value="trainer" className="bg-dark text-light">Trainer</option>
+              <option value="assistant" className="bg-dark text-light">Assistant</option>
+              <option value="user" className="bg-dark text-light">User</option>
+              <option value="parent" className="bg-dark text-light">Parent</option>
             </select>
           </div>
         </div>
@@ -422,10 +423,11 @@ function UsersTab() {
               value={assignModal.selectedId}
               onChange={(e) => setAssignModal({ ...assignModal, selectedId: e.target.value })}
               className="w-full px-4 py-2 bg-dark border border-white/20 rounded-lg text-light focus:border-primary outline-none"
+              style={{ colorScheme: 'dark' }}
             >
-              <option value="">Select a club...</option>
+              <option value="" className="bg-dark text-light">Select a club...</option>
               {clubs.map(club => (
-                <option key={club.id} value={club.id}>{club.name}</option>
+                <option key={club.id} value={club.id} className="bg-dark text-light">{club.name}</option>
               ))}
             </select>
           </div>
@@ -459,13 +461,14 @@ function UsersTab() {
               value={roleModal.newRole}
               onChange={(e) => setRoleModal({ ...roleModal, newRole: e.target.value })}
               className="w-full px-4 py-2 bg-dark border border-white/20 rounded-lg text-light focus:border-primary outline-none"
+              style={{ colorScheme: 'dark' }}
             >
-              <option value="">Select role...</option>
-              <option value="admin">Admin</option>
-              <option value="trainer">Trainer</option>
-              <option value="assistant">Assistant</option>
-              <option value="user">User</option>
-              <option value="parent">Parent</option>
+              <option value="" className="bg-dark text-light">Select role...</option>
+              <option value="admin" className="bg-dark text-light">Admin</option>
+              <option value="trainer" className="bg-dark text-light">Trainer</option>
+              <option value="assistant" className="bg-dark text-light">Assistant</option>
+              <option value="user" className="bg-dark text-light">User</option>
+              <option value="parent" className="bg-dark text-light">Parent</option>
             </select>
           </div>
           <div className="flex gap-2">
@@ -952,10 +955,11 @@ function TeamsTab() {
               value={selectedClub}
               onChange={(e) => setSelectedClub(e.target.value)}
               className="w-full px-4 py-2 bg-dark border border-white/20 rounded-lg text-light focus:border-primary outline-none"
+              style={{ colorScheme: 'dark' }}
             >
-              <option value="all">All Clubs</option>
+              <option value="all" className="bg-dark text-light">All Clubs</option>
               {clubs.map(club => (
-                <option key={club.id} value={club.id}>{club.name}</option>
+                <option key={club.id} value={club.id} className="bg-dark text-light">{club.name}</option>
               ))}
             </select>
           </div>

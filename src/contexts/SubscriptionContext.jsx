@@ -37,6 +37,7 @@ export const PLAN_PRICING = {
 export const PLAN_FEATURES = {
   [SUBSCRIPTION_PLANS.FREE]: {
     name: 'Free Account',
+    shortDesc: 'Basic features',
     maxTeamSize: 0,
     maxTeams: 0,
     canCreateClub: false,
@@ -51,10 +52,16 @@ export const PLAN_FEATURES = {
     canExportData: false,
     hasSMSService: false,
     hasPublicEvents: false,
-    description: 'Basic features for individual users'
+    description: 'Basic features for individual users',
+    features: [
+      'View calendar',
+      'Respond to events',
+      'Basic profile'
+    ]
   },
   [SUBSCRIPTION_PLANS.USER]: {
     name: 'User Subscription',
+    shortDesc: 'Small teams',
     maxTeamSize: 10,
     maxTeams: 1,
     canCreateClub: false,
@@ -69,10 +76,19 @@ export const PLAN_FEATURES = {
     canExportData: false,
     hasSMSService: false,
     hasPublicEvents: false,
-    description: 'Perfect for small teams and personal training'
+    description: 'Perfect for small teams and personal training',
+    features: [
+      '1 team (max 10 members)',
+      'Push notifications',
+      'Statistics & reports',
+      'Library access',
+      'Chat messaging',
+      'Custom themes'
+    ]
   },
   [SUBSCRIPTION_PLANS.CLUB]: {
     name: 'Club/Company Subscription',
+    shortDesc: 'Mid-sized clubs',
     maxTeamSize: Infinity,
     maxTeams: Infinity,
     canCreateClub: true,
@@ -87,10 +103,19 @@ export const PLAN_FEATURES = {
     canExportData: true,
     hasSMSService: false,
     hasPublicEvents: false,
-    description: 'Full club management with unlimited teams'
+    description: 'Full club management with unlimited teams',
+    features: [
+      'Unlimited teams',
+      'Unlimited members',
+      'Create clubs',
+      'Advanced statistics',
+      'Data export',
+      'All User features'
+    ]
   },
   [SUBSCRIPTION_PLANS.FULL]: {
     name: 'Full Subscription',
+    shortDesc: 'Enterprise',
     maxTeamSize: Infinity,
     maxTeams: Infinity,
     canCreateClub: true,
@@ -105,10 +130,18 @@ export const PLAN_FEATURES = {
     canExportData: true,
     hasSMSService: true,
     hasPublicEvents: true,
-    description: 'Enterprise features with social media integration'
+    description: 'Enterprise features with social media integration',
+    features: [
+      'SMS notifications',
+      'Public events',
+      'Social media integration',
+      'Priority support',
+      'All Club features'
+    ]
   },
   [SUBSCRIPTION_PLANS.TRIAL]: {
     name: 'Trial Subscription',
+    shortDesc: 'Trial access',
     maxTeamSize: Infinity,
     maxTeams: Infinity,
     canCreateClub: true,
@@ -123,7 +156,12 @@ export const PLAN_FEATURES = {
     canExportData: true,
     hasSMSService: true,
     hasPublicEvents: true,
-    description: 'Full access trial period'
+    description: 'Full access trial period',
+    features: [
+      'All features unlocked',
+      'Time-limited access',
+      'Full platform trial'
+    ]
   }
 };
 

@@ -276,12 +276,13 @@ export default function CreateClubWithSubscription({ onClose }) {
                     setCustomClubType('');
                   }
                 }}
-                className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                className="w-full bg-dark border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                style={{ colorScheme: 'dark' }}
                 required
               >
-                <option value="">Select club type...</option>
+                <option value="" className="bg-dark text-light">Select club type...</option>
                 {CLUB_TYPES.map(type => (
-                  <option key={type} value={type}>{type}</option>
+                  <option key={type} value={type} className="bg-dark text-light">{type}</option>
                 ))}
               </select>
             </div>
@@ -301,6 +302,23 @@ export default function CreateClubWithSubscription({ onClose }) {
                 />
               </div>
             )}
+
+            {/* Voucher Code Field (Optional) */}
+            <div>
+              <label className="block text-light/80 font-medium mb-2">
+                Voucher Code <span className="text-light/50 text-sm">(Optional)</span>
+              </label>
+              <input
+                type="text"
+                value={voucherCode}
+                onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                placeholder="e.g., TRIA-A7F9-251231-30D"
+                className="w-full bg-dark border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-mono"
+              />
+              <p className="text-xs text-light/50 mt-1">
+                💡 Have a voucher code? Enter it here to activate your subscription instantly!
+              </p>
+            </div>
 
             <button
               type="submit"
