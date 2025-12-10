@@ -57,7 +57,9 @@ export const AuthProvider = ({ children }) => {
         username,
         role,
         emailVerified: false,
-        createdAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(), // ✅ Already present
+        firstLoginAt: null, // Will be set on first login
+        lastLoginAt: null,  // Will be updated on each login
         clubIds: [],
       };
 
@@ -98,20 +100,37 @@ export const AuthProvider = ({ children }) => {
         throw new Error('User data not found');
       }
 
+      // Track login timestamps
+      const now = new Date().toISOString();
+      const loginUpdates = {
+        lastLoginAt: now
+      };
+      
+      // Set firstLoginAt if this is the first login
+      if (!userDoc.firstLoginAt) {
+        loginUpdates.firstLoginAt = now;
+        console.log('🎉 First login detected! Setting firstLoginAt');
+      }
+      
+      // Update user document with login timestamps
+      console.log('3️⃣ Updating login timestamps...');
+      await updateUser(userCredential.user.uid, loginUpdates);
+
       const userData = { 
-        ...userDoc, 
+        ...userDoc,
+        ...loginUpdates, // Include updated timestamps
         id: userCredential.user.uid,
         uid: userCredential.user.uid,
         emailVerified: userCredential.user.emailVerified 
       };
       
-      console.log('3️⃣ Setting user state...');
+      console.log('4️⃣ Setting user state...');
       setUser(userData);
       
-      console.log('4️⃣ Saving to localStorage...');
+      console.log('5️⃣ Saving to localStorage...');
       localStorage.setItem('currentUser', JSON.stringify(userData));
       
-      console.log('5️⃣ Verifying localStorage save...');
+      console.log('6️⃣ Verifying localStorage save...');
       const savedUser = localStorage.getItem('currentUser');
       console.log('✅ localStorage verification:', savedUser ? 'SAVED' : 'FAILED');
       
@@ -119,6 +138,7 @@ export const AuthProvider = ({ children }) => {
         console.error('❌ CRITICAL: localStorage.setItem failed!');
       } else {
         console.log('✅ User logged in successfully:', userData.email);
+        console.log('⏰ Last login:', userData.lastLoginAt);
       }
 
       return { ok: true, user: userData };

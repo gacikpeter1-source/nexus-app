@@ -1,5 +1,6 @@
 // src/components/SubscriptionManager.jsx
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { 
@@ -12,6 +13,7 @@ import {
 export default function SubscriptionManager() {
   const { user } = useAuth();
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('pending'); // pending, paid, all
@@ -105,7 +107,15 @@ export default function SubscriptionManager() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="font-title text-3xl text-light">Subscription Manager</h2>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate('/admin')}
+            className="px-4 py-2 bg-white/10 hover:bg-white/20 text-light rounded-lg transition-all flex items-center gap-2"
+          >
+            ← Back
+          </button>
+          <h2 className="font-title text-3xl text-light">Subscription Manager</h2>
+        </div>
         <button
           onClick={loadInvoices}
           className="px-4 py-2 bg-white/10 hover:bg-white/20 text-light rounded-lg transition-all"

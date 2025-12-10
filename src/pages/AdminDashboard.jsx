@@ -338,10 +338,35 @@ function UsersTab() {
                     </span>
                   )}
                 </div>
-                <p className="text-light/60 mb-1"> {u.email}</p>
-                <p className="text-light/60 text-sm">
-                  🏢 Clubs: {u.clubIds?.length || 0}
-                </p>
+                <p className="text-light/60 mb-3">📧 {u.email}</p>
+                
+                {/* Enhanced Details */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-2">
+                  <div>
+                    <span className="text-light/50">Registered:</span>
+                    <p className="text-light font-medium">
+                      {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-light/50">First Login:</span>
+                    <p className="text-light font-medium">
+                      {u.firstLoginAt ? new Date(u.firstLoginAt).toLocaleDateString() : 'Never'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-light/50">Last Login:</span>
+                    <p className="text-light font-medium">
+                      {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : 'Never'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-light/50">Clubs:</span>
+                    <p className="text-light font-medium">
+                      🏢 {u.clubIds?.length || 0}
+                    </p>
+                  </div>
+                </div>
               </div>
               <div className="flex gap-2 flex-wrap">
                 <button
@@ -552,6 +577,7 @@ function UsersTab() {
 function ClubsTab() {
   const { showToast } = useToast();
   const [clubs, setClubs] = useState([]);
+  const [users, setUsers] = useState([]); // NEW: For email lookup
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -567,8 +593,12 @@ function ClubsTab() {
   const loadClubs = async () => {
     try {
       setLoading(true);
-      const fetchedClubs = await getAllClubs();
+      const [fetchedClubs, fetchedUsers] = await Promise.all([
+        getAllClubs(),
+        getAllUsers() // NEW: Load users for email lookup
+      ]);
       setClubs(fetchedClubs);
+      setUsers(fetchedUsers); // NEW: Save users
     } catch (err) {
       console.error('Error loading clubs:', err);
       showToast('Failed to load clubs: ' + err.message, 'error');
@@ -663,31 +693,77 @@ function ClubsTab() {
 
       {/* Clubs Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {filteredClubs.map((club) => (
-          <div key={club.id} className="bg-mid-dark rounded-lg p-6 border border-white/10">
-            <h3 className="text-xl font-bold text-light mb-3">{club.name}</h3>
-            <div className="space-y-2 mb-4">
-              <p className="text-light/60 text-sm">Code: <code className="bg-dark px-2 py-1 rounded">{club.clubCode}</code></p>
-              <p className="text-light/60 text-sm">Members: {club.members?.length || 0}</p>
-              <p className="text-light/60 text-sm">Teams: {club.teams?.length || 0}</p>
-              <p className="text-light/60 text-sm">Trainers: {club.trainers?.length || 0}</p>
+        {filteredClubs.map((club) => {
+          // Find owner email from users list
+          const ownerId = club.ownerId || club.createdBy;
+          const ownerUser = users.find(u => u.id === ownerId);
+          const ownerEmail = ownerUser?.email || 'Unknown';
+          
+          return (
+            <div key={club.id} className="bg-mid-dark rounded-lg p-6 border border-white/10">
+              <h3 className="text-xl font-bold text-light mb-3">{club.name}</h3>
+              
+              {/* Enhanced Details */}
+              <div className="grid grid-cols-2 gap-3 text-sm mb-3">
+                <div>
+                  <span className="text-light/50">Created:</span>
+                  <p className="text-light font-medium">
+                    {club.createdAt ? new Date(club.createdAt).toLocaleDateString() : 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-light/50">Club Code:</span>
+                  <p className="text-light font-medium">
+                    <code className="bg-dark px-2 py-1 rounded text-xs">{club.clubCode || 'N/A'}</code>
+                  </p>
+                </div>
+                <div>
+                  <span className="text-light/50">Owner:</span>
+                  <p className="text-light font-medium text-xs truncate" title={ownerEmail}>
+                    👤 {ownerEmail}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-light/50">Teams:</span>
+                  <p className="text-light font-medium">
+                    ⚽ {club.teams?.length || 0}
+                  </p>
+                </div>
+              </div>
+              
+              {/* Stats Row */}
+              <div className="flex gap-4 text-sm mb-4 p-3 bg-dark/50 rounded-lg">
+                <div className="flex-1 text-center">
+                  <p className="text-light/50 text-xs">Members</p>
+                  <p className="text-light font-bold">{club.members?.length || 0}</p>
+                </div>
+                <div className="flex-1 text-center border-l border-white/10">
+                  <p className="text-light/50 text-xs">Trainers</p>
+                  <p className="text-light font-bold">{club.trainers?.length || 0}</p>
+                </div>
+                <div className="flex-1 text-center border-l border-white/10">
+                  <p className="text-light/50 text-xs">Assistants</p>
+                  <p className="text-light font-bold">{club.assistants?.length || 0}</p>
+                </div>
+              </div>
+              
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setEditModal({ open: true, club, name: club.name })}
+                  className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition text-sm"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => setDeleteModal({ open: true, club })}
+                  className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition text-sm"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setEditModal({ open: true, club, name: club.name })}
-                className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition text-sm"
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => setDeleteModal({ open: true, club })}
-                className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition text-sm"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {filteredClubs.length === 0 && (
@@ -795,6 +871,7 @@ function ClubsTab() {
 function TeamsTab() {
   const { showToast } = useToast();
   const [clubs, setClubs] = useState([]);
+  const [users, setUsers] = useState([]); // NEW: For email lookup
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClub, setSelectedClub] = useState('all');
@@ -806,8 +883,12 @@ function TeamsTab() {
   const loadClubs = async () => {
     try {
       setLoading(true);
-      const fetchedClubs = await getAllClubs();
+      const [fetchedClubs, fetchedUsers] = await Promise.all([
+        getAllClubs(),
+        getAllUsers() // NEW: Load users for email lookup
+      ]);
       setClubs(fetchedClubs);
+      setUsers(fetchedUsers); // NEW: Save users
     } catch (err) {
       console.error('Error loading clubs:', err);
       showToast('Failed to load clubs: ' + err.message, 'error');
@@ -840,8 +921,8 @@ function TeamsTab() {
     <div>
       {/* Header with Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <StatCard label="Total Clubs" value={clubs.length} icon="ðŸ¢" />
-        <StatCard label="Total Teams" value={allTeams.length} icon="âš½" />
+        <StatCard label="Total Clubs" value={clubs.length} icon="🏢" />
+        <StatCard label="Total Teams" value={allTeams.length} icon="⚽" />
         <StatCard 
           label="Total Members" 
           value={allTeams.reduce((sum, team) => sum + (team.members?.length || 0), 0)} 
@@ -854,7 +935,7 @@ function TeamsTab() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Search */}
           <div>
-            <label className="block text-sm text-light/80 mb-2">ðŸ" Search Teams</label>
+            <label className="block text-sm text-light/80 mb-2">Search Teams</label>
             <input
               type="text"
               value={searchTerm}
@@ -866,7 +947,7 @@ function TeamsTab() {
 
           {/* Club Filter */}
           <div>
-            <label className="block text-sm text-light/80 mb-2">ðŸ¢ Filter by Club</label>
+            <label className="block text-sm text-light/80 mb-2">Filter by Club</label>
             <select
               value={selectedClub}
               onChange={(e) => setSelectedClub(e.target.value)}
@@ -884,7 +965,7 @@ function TeamsTab() {
       {/* Teams Display */}
       {filteredTeams.length === 0 ? (
         <div className="bg-mid-dark rounded-lg p-12 border border-white/10 text-center">
-          <div className="text-6xl mb-4">âš½</div>
+          <div className="text-6xl mb-4">⚽</div>
           <h3 className="text-xl font-bold text-light mb-2">No Teams Found</h3>
           <p className="text-light/60">
             {allTeams.length === 0 
@@ -895,40 +976,64 @@ function TeamsTab() {
       ) : (
         <div>
           <div className="mb-4">
-            <h2 className="text-2xl font-bold text-light">âš½ All Teams</h2>
+            <h2 className="text-2xl font-bold text-light">All Teams</h2>
             <p className="text-light/60">Showing {filteredTeams.length} of {allTeams.length} teams</p>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredTeams.map((team, index) => (
-              <div key={`${team.clubId}-${index}`} className="bg-mid-dark rounded-lg p-6 border border-white/10">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold text-light mb-1">{team.name}</h3>
-                    <p className="text-primary text-sm">{team.clubName}</p>
+            {filteredTeams.map((team, index) => {
+              // Find club info for owner
+              const parentClub = clubs.find(c => c.id === team.clubId);
+              const ownerId = parentClub?.ownerId || parentClub?.createdBy;
+              const ownerUser = users.find(u => u.id === ownerId);
+              const ownerEmail = ownerUser?.email || 'Unknown';
+              
+              return (
+                <div key={`${team.clubId}-${index}`} className="bg-mid-dark rounded-lg p-6 border border-white/10">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <h3 className="text-xl font-bold text-light mb-1">{team.name}</h3>
+                      <p className="text-primary text-sm">🏢 {team.clubName}</p>
+                    </div>
+                    <span className="px-3 py-1 bg-primary/20 text-primary rounded-full text-xs font-medium">
+                      {team.ageGroup || 'N/A'}
+                    </span>
                   </div>
-                  <span className="px-3 py-1 bg-primary/20 text-primary rounded-full text-xs font-medium">
-                    {team.ageGroup || 'N/A'}
-                  </span>
+                  
+                  {/* Enhanced Details */}
+                  <div className="grid grid-cols-2 gap-2 text-xs mb-3 p-2 bg-dark/50 rounded">
+                    <div>
+                      <span className="text-light/50">Created:</span>
+                      <p className="text-light font-medium">
+                        {team.createdAt ? new Date(team.createdAt).toLocaleDateString() : 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-light/50">Club Owner:</span>
+                      <p className="text-light font-medium truncate" title={ownerEmail}>
+                        👤 {ownerEmail}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-light/60 text-sm">
+                      <span>👥</span>
+                      <span>Members: <strong>{team.members?.length || 0}</strong></span>
+                    </div>
+                    <div className="flex items-center gap-2 text-light/60 text-sm">
+                      <span>🏃</span>
+                      <span>Trainers: <strong>{team.trainers?.length || 0}</strong></span>
+                    </div>
+                    {team.description && (
+                      <p className="text-light/60 text-sm mt-2 pt-2 border-t border-white/10">
+                        {team.description}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-light/60 text-sm">
-                    <span>👥</span>
-                    <span>Members: <strong>{team.members?.length || 0}</strong></span>
-                  </div>
-                  <div className="flex items-center gap-2 text-light/60 text-sm">
-                    <span>ðŸƒ</span>
-                    <span>Trainers: <strong>{team.trainers?.length || 0}</strong></span>
-                  </div>
-                  {team.description && (
-                    <p className="text-light/60 text-sm mt-2 pt-2 border-t border-white/10">
-                      {team.description}
-                    </p>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -1081,3 +1186,4 @@ function getRoleBadgeColor(role) {
       return 'bg-gray-600 text-white';
   }
 }
+
