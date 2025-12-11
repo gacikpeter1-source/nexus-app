@@ -11,7 +11,10 @@ import {
   getTeamEvents,
   getClubOrderTemplates,
   getOrderResponses,
-  createOrderResponse
+  createOrderResponse,
+  getTeamAttendance,
+  getTeamAttendanceStats,
+  deleteAttendance
 } from '../firebase/firestore';
 import { getTeamChats, createChat } from '../firebase/chats';
 
@@ -37,6 +40,15 @@ export default function Team() {
   const [showOrdersDropdown, setShowOrdersDropdown] = useState(false);
   const [teamChat, setTeamChat] = useState(null);
   
+  // Attendance state
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [attendanceStats, setAttendanceStats] = useState(null);
+  const [selectedAttendance, setSelectedAttendance] = useState(null);
+  const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+  const [attendanceSearchQuery, setAttendanceSearchQuery] = useState('');
+  const [attendanceFilterType, setAttendanceFilterType] = useState('all');
+  const [loadingAttendance, setLoadingAttendance] = useState(false);
+
 
   // Load club and team from Firebase
   useEffect(() => {
@@ -187,6 +199,30 @@ useEffect(() => {
   loadTeamChat();
 }, [team]);
 
+// Load attendance when Attendance tab is active
+useEffect(() => {
+  const loadAttendance = async () => {
+    if (activeTab !== 'attendance' || !team) return;
+    
+    try {
+      setLoadingAttendance(true);
+      const [records, stats] = await Promise.all([
+        getTeamAttendance(team.id),
+        getTeamAttendanceStats(team.id)
+      ]);
+      setAttendanceRecords(records);
+      setAttendanceStats(stats);
+    } catch (error) {
+      console.error('Error loading attendance:', error);
+      showToast('Failed to load attendance', 'error');
+    } finally {
+      setLoadingAttendance(false);
+    }
+  };
+
+  loadAttendance();
+}, [activeTab, team]);
+
 // Function to create team chat
 const handleCreateTeamChat = async () => {
   try {
@@ -209,6 +245,63 @@ const handleCreateTeamChat = async () => {
     alert('Failed to create team chat');
   }
 };
+
+  // Attendance helper functions
+  const filteredAttendanceRecords = useMemo(() => {
+    let filtered = attendanceRecords;
+
+    if (attendanceFilterType !== 'all') {
+      filtered = filtered.filter(r => r.type === attendanceFilterType);
+    }
+
+    if (attendanceSearchQuery.trim()) {
+      const lowerQuery = attendanceSearchQuery.toLowerCase();
+      filtered = filtered.filter(r => 
+        r.date.includes(lowerQuery) ||
+        r.type.toLowerCase().includes(lowerQuery) ||
+        r.customType?.toLowerCase().includes(lowerQuery)
+      );
+    }
+
+    return filtered;
+  }, [attendanceRecords, attendanceFilterType, attendanceSearchQuery]);
+
+  const handleViewAttendanceDetails = (record) => {
+    setSelectedAttendance(record);
+    setShowAttendanceModal(true);
+  };
+
+  const handleDeleteAttendance = async (recordId) => {
+    if (!confirm('Delete this attendance record? This cannot be undone.')) return;
+
+    try {
+      await deleteAttendance(recordId);
+      setAttendanceRecords(prev => prev.filter(r => r.id !== recordId));
+      showToast('Attendance record deleted', 'success');
+    } catch (error) {
+      console.error('Error deleting attendance:', error);
+      showToast('Failed to delete attendance record', 'error');
+    }
+  };
+
+  const formatAttendanceDate = (dateStr) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  const getAttendanceTypeIcon = (type) => {
+    switch (type) {
+      case 'training': return '🏋️';
+      case 'game': return '⚽';
+      case 'tournament': return '🏆';
+      default: return '📋';
+    }
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -946,25 +1039,257 @@ const handleCreateTeamChat = async () => {
 
         {/* Attendance Tab */}
         {activeTab === 'attendance' && (
-          <div className="bg-mid-dark rounded-lg p-6">
+          <div>
+            {/* Header with Take Attendance Button */}
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-light">📋 Attendance</h3>
+              <h3 className="text-2xl font-bold text-light">📋 Attendance History</h3>
               <button
                 onClick={() => navigate(`/team/${clubId}/${teamId}/attendance`)}
                 className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium"
               >
-                Take Attendance
+                + Take Attendance
               </button>
             </div>
-            <p className="text-light/60 mb-4">
-              Track team attendance for trainings, games, and tournaments. View attendance history and statistics.
-            </p>
-            <button
-              onClick={() => navigate(`/team/${clubId}/${teamId}/attendance/history`)}
-              className="px-6 py-3 bg-white/10 hover:bg-white/20 text-light rounded-lg transition font-medium"
-            >
-              View Attendance History
-            </button>
+
+            {/* Overall Statistics */}
+            {attendanceStats && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+                  <div className="text-sm text-light/60 mb-1">Total Sessions</div>
+                  <div className="text-3xl font-bold text-light">{attendanceStats.totalSessions}</div>
+                </div>
+                <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-4">
+                  <div className="text-sm text-green-300 mb-1">Total Present</div>
+                  <div className="text-3xl font-bold text-green-400">{attendanceStats.totalPresent}</div>
+                </div>
+                <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-4">
+                  <div className="text-sm text-red-300 mb-1">Total Absent</div>
+                  <div className="text-3xl font-bold text-red-400">{attendanceStats.totalAbsent}</div>
+                </div>
+                <div className="bg-blue-500/20 border border-blue-500/30 rounded-lg p-4">
+                  <div className="text-sm text-blue-300 mb-1">Avg Attendance</div>
+                  <div className="text-3xl font-bold text-blue-400">{attendanceStats.averageAttendance}%</div>
+                </div>
+              </div>
+            )}
+
+            {/* Filters */}
+            <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-light/80 mb-2">Filter by Type</label>
+                  <select
+                    value={attendanceFilterType}
+                    onChange={(e) => setAttendanceFilterType(e.target.value)}
+                    className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+                  >
+                    <option value="all">All Types</option>
+                    <option value="training">🏋️ Training</option>
+                    <option value="game">⚽ Game</option>
+                    <option value="tournament">🏆 Tournament</option>
+                    <option value="custom">✏️ Custom</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-light/80 mb-2">Search</label>
+                  <input
+                    type="text"
+                    value={attendanceSearchQuery}
+                    onChange={(e) => setAttendanceSearchQuery(e.target.value)}
+                    placeholder="Search by date or type..."
+                    className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Attendance Records */}
+            {loadingAttendance ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                <p className="text-light/60">Loading attendance...</p>
+              </div>
+            ) : filteredAttendanceRecords.length === 0 ? (
+              <div className="bg-white/5 border border-white/10 rounded-xl p-12 text-center">
+                <div className="text-6xl mb-4">📋</div>
+                <h3 className="font-title text-2xl text-light mb-2">No Attendance Records</h3>
+                <p className="text-light/60 mb-4">
+                  {attendanceSearchQuery || attendanceFilterType !== 'all' 
+                    ? 'No records match your filters'
+                    : 'Start by taking attendance for your team'
+                  }
+                </p>
+                {!attendanceSearchQuery && attendanceFilterType === 'all' && (
+                  <button
+                    onClick={() => navigate(`/team/${clubId}/${teamId}/attendance`)}
+                    className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition"
+                  >
+                    Take Attendance
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredAttendanceRecords.map((record) => {
+                  const displayType = record.type === 'custom' && record.customType 
+                    ? record.customType 
+                    : record.type;
+
+                  return (
+                    <div
+                      key={record.id}
+                      className="bg-white/5 border border-white/10 rounded-xl p-6 hover:bg-white/10 transition"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-4 flex-1">
+                          <div className="text-4xl">{getAttendanceTypeIcon(record.type)}</div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <h3 className="font-title text-xl text-light capitalize">
+                                {displayType}
+                              </h3>
+                              <span className="text-sm text-light/60">
+                                {formatAttendanceDate(record.date)}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-6 text-sm">
+                              <div className="flex items-center gap-2">
+                                <span className="text-light/60">Total:</span>
+                                <span className="font-semibold text-light">{record.statistics.total}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-green-400">✓ Present:</span>
+                                <span className="font-semibold text-green-400">{record.statistics.present}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-red-400">✗ Absent:</span>
+                                <span className="font-semibold text-red-400">{record.statistics.absent}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-blue-400">Rate:</span>
+                                <span className="font-semibold text-blue-400">{record.statistics.percentage}%</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleViewAttendanceDetails(record)}
+                            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm transition"
+                          >
+                            View Details
+                          </button>
+                          <button
+                            onClick={() => navigate(`/team/${clubId}/${teamId}/attendance`)}
+                            className="px-4 py-2 bg-white/10 hover:bg-white/20 text-light rounded-lg text-sm transition"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteAttendance(record.id)}
+                            className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm transition"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Details Modal */}
+            {showAttendanceModal && selectedAttendance && (
+              <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div className="bg-mid-dark border border-white/20 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                  <div className="p-6 border-b border-white/10">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-title text-2xl text-light capitalize">
+                          {selectedAttendance.type === 'custom' && selectedAttendance.customType 
+                            ? selectedAttendance.customType 
+                            : selectedAttendance.type}
+                        </h3>
+                        <p className="text-sm text-light/60 mt-1">
+                          {formatAttendanceDate(selectedAttendance.date)}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setShowAttendanceModal(false)}
+                        className="text-light/60 hover:text-light transition"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-6">
+                    {/* Statistics */}
+                    <div className="grid grid-cols-4 gap-4 mb-6">
+                      <div className="bg-white/5 rounded-lg p-4 text-center">
+                        <div className="text-2xl font-bold text-light">{selectedAttendance.statistics.total}</div>
+                        <div className="text-xs text-light/60 mt-1">Total</div>
+                      </div>
+                      <div className="bg-green-500/20 rounded-lg p-4 text-center">
+                        <div className="text-2xl font-bold text-green-400">{selectedAttendance.statistics.present}</div>
+                        <div className="text-xs text-green-300 mt-1">Present</div>
+                      </div>
+                      <div className="bg-red-500/20 rounded-lg p-4 text-center">
+                        <div className="text-2xl font-bold text-red-400">{selectedAttendance.statistics.absent}</div>
+                        <div className="text-xs text-red-300 mt-1">Absent</div>
+                      </div>
+                      <div className="bg-blue-500/20 rounded-lg p-4 text-center">
+                        <div className="text-2xl font-bold text-blue-400">{selectedAttendance.statistics.percentage}%</div>
+                        <div className="text-xs text-blue-300 mt-1">Rate</div>
+                      </div>
+                    </div>
+
+                    {/* Member List */}
+                    <div className="space-y-3">
+                      <h4 className="font-semibold text-light mb-3">Member Attendance</h4>
+                      {selectedAttendance.records.map((record) => {
+                        return (
+                          <div
+                            key={record.userId}
+                            className={`p-4 rounded-lg border ${
+                              record.present 
+                                ? 'bg-green-500/10 border-green-500/30' 
+                                : 'bg-red-500/10 border-red-500/30'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${
+                                  record.present ? 'bg-green-500' : 'bg-red-500'
+                                }`}>
+                                  {record.username.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                  <div className="font-medium text-light">{record.username}</div>
+                                  <div className="text-xs text-light/50">{record.email}</div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className={`font-semibold ${record.present ? 'text-green-400' : 'text-red-400'}`}>
+                                  {record.present ? '✓ Present' : '✗ Absent'}
+                                </div>
+                                {record.comment && (
+                                  <div className="text-xs text-light/60 mt-1">{record.comment}</div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
