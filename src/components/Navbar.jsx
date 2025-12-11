@@ -189,7 +189,7 @@ export default function Navbar() {
                   : 'text-light/80 hover:text-light'
               }`}
             >
-              💬 Chats
+              Chats
             </Link>
             {isSuperAdminOrAdmin() && (
               <Link

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth, ROLES } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import CreateClubWithSubscription from '../components/CreateClubWithSubscription';
 import { 
   getUserClubs, 
@@ -39,7 +40,7 @@ export default function ClubsDashboard() {
 
   const { showToast } = useToast();
   const navigate = useNavigate();
-
+  
   const [clubs, setClubs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedClubId, setSelectedClubId] = useState(null);
@@ -55,6 +56,13 @@ export default function ClubsDashboard() {
   const [orderResponseForm, setOrderResponseForm] = useState({});
   const [respondingToOrder, setRespondingToOrder] = useState(false);
   
+  const location = useLocation();
+    useEffect(() => {
+      if (location.state?.selectedClubId) {
+        setSelectedClubId(location.state.selectedClubId);
+      }
+    }, [location]);
+
 
   const isManager = useMemo(() => 
     user && [ROLES.ADMIN, ROLES.TRAINER, ROLES.ASSISTANT].includes(user.role), 

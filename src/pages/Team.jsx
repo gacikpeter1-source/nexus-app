@@ -343,11 +343,10 @@ const handleCreateTeamChat = async () => {
       {/* Header */}
       <div className="mb-8">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate('/', { state: { selectedClubId: clubId } })}
           className="mb-4 flex items-center gap-2 text-light/60 hover:text-light transition-colors"
         >
-          <span>←</span>
-          <span>Back</span>
+          Back to {club?.name || 'Club'}
         </button>
         
         <div className="flex items-start justify-between">
@@ -425,7 +424,7 @@ const handleCreateTeamChat = async () => {
           {/* Leave Team Button */}
           <button
             onClick={handleLeaveTeam}
-            className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-all flex items-center gap-2"
+            className="px-1 py-1 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-all flex items-center gap-2"
           >
             <span>🚪</span>
             <span>Leave Team</span>
@@ -444,6 +443,16 @@ const handleCreateTeamChat = async () => {
           }`}
         >
           Overview
+        </button>
+        <button
+          onClick={() => setActiveTab('chat')}
+          className={`px-6 py-3 font-medium transition-all ${
+            activeTab === 'chat'
+              ? 'text-primary border-b-2 border-primary'
+              : 'text-light/60 hover:text-light'
+          }`}
+        >
+          Chat
         </button>
         <button
           onClick={() => setActiveTab('members')}
@@ -476,17 +485,6 @@ const handleCreateTeamChat = async () => {
           Statistics
         </button>
       </div>
-
-      <button
-        onClick={() => setActiveTab('chat')}
-        className={`px-6 py-3 font-medium transition ${
-          activeTab === 'chat'
-            ? 'bg-primary text-white'
-            : 'bg-mid-dark text-light hover:bg-white/5'
-        } rounded-lg`}
-      >
-        💬 Chat
-      </button>
 
       {/* Tab Content */}
       <div className="flex-1">

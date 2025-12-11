@@ -52,7 +52,7 @@ function App() {
                       <Route path="/verify-email" element={<VerifyEmail />} />
                       <Route path="/complete-registration" element={<CompleteRegistration />} />
                       <Route path="/auth-action" element={<AuthAction />} />
-
+                      
                       {/* Protected Routes */}
                       <Route
                         path="/"

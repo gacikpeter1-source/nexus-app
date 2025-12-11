@@ -273,13 +273,6 @@ export default function Chats() {
                           {details.memberCount} {details.memberCount === 1 ? 'member' : 'members'}
                         </span>
                       </div>
-
-                      {/* Last Message */}
-                      {chat.lastMessage && (
-                        <p className="text-sm text-light/60 mt-2 truncate">
-                          {chat.lastMessage}
-                        </p>
-                      )}
                     </div>
 
                     {/* Actions & Timestamp */}

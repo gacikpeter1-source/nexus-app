@@ -8,14 +8,14 @@ const urlsToCache = [
   '/manifest.json'
 ];
 
-// Install service worker
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('Opened cache');
-        return cache.addAll(urlsToCache);
-      })
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(urlsToCache).catch((error) => {
+        console.log('Some files failed to cache:', error);
+        // Continue anyway
+      });
+    })
   );
 });
 
