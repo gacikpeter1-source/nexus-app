@@ -223,7 +223,7 @@ export default function AttendanceEntry() {
       <div className="mb-8">
         <div className="flex items-center gap-4 mb-4">
           <button
-            onClick={() => navigate(`/team/${clubId}/${teamId}`)}
+            onClick={() => navigate(`/team/${clubId}/${teamId}`, { state: { activeTab: 'attendance' } })}
             className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center text-light transition"
           >
             ←

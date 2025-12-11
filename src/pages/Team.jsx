@@ -1,6 +1,6 @@
 // src/pages/Team.jsx
 import { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { 
@@ -50,6 +50,13 @@ export default function Team() {
   const [loadingAttendance, setLoadingAttendance] = useState(false);
 
 
+      const location = useLocation();
+      useEffect(() => {
+        if (location.state?.activeTab) {
+          setActiveTab(location.state.activeTab);
+        }
+      }, [location]);
+
   // Load club and team from Firebase
   useEffect(() => {
     loadTeamData();
@@ -72,6 +79,8 @@ export default function Team() {
       // Load events for this team
       const teamEvents = await getTeamEvents(teamId);
       setEvents(teamEvents || []);
+
+
 
             // Load orders for this team (ADD THIS)
       if (clubData) {
@@ -1050,29 +1059,6 @@ const handleCreateTeamChat = async () => {
                 + Take Attendance
               </button>
             </div>
-
-            {/* Overall Statistics */}
-            {attendanceStats && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-                  <div className="text-sm text-light/60 mb-1">Total Sessions</div>
-                  <div className="text-3xl font-bold text-light">{attendanceStats.totalSessions}</div>
-                </div>
-                <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-4">
-                  <div className="text-sm text-green-300 mb-1">Total Present</div>
-                  <div className="text-3xl font-bold text-green-400">{attendanceStats.totalPresent}</div>
-                </div>
-                <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-4">
-                  <div className="text-sm text-red-300 mb-1">Total Absent</div>
-                  <div className="text-3xl font-bold text-red-400">{attendanceStats.totalAbsent}</div>
-                </div>
-                <div className="bg-blue-500/20 border border-blue-500/30 rounded-lg p-4">
-                  <div className="text-sm text-blue-300 mb-1">Avg Attendance</div>
-                  <div className="text-3xl font-bold text-blue-400">{attendanceStats.averageAttendance}%</div>
-                </div>
-              </div>
-            )}
-
             {/* Filters */}
             <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
               <div className="grid md:grid-cols-2 gap-4">
