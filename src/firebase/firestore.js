@@ -1135,6 +1135,158 @@ export const getUsersByIds = async (userIds) => {
   }
 };
 
+export const createAttendance = async (attendanceData) => {
+  try {
+    const docRef = await addDoc(collection(db, 'attendance'), {
+      ...attendanceData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating attendance:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get attendance by ID
+ */
+export const getAttendance = async (attendanceId) => {
+  try {
+    const attendanceDoc = await getDoc(doc(db, 'attendance', attendanceId));
+    if (attendanceDoc.exists()) {
+      return { id: attendanceDoc.id, ...attendanceDoc.data() };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting attendance:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get all attendance records for a team
+ */
+export const getTeamAttendance = async (teamId) => {
+  try {
+    const q = query(
+      collection(db, 'attendance'),
+      where('teamId', '==', teamId),
+      orderBy('date', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.error('Error getting team attendance:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get attendance by date
+ */
+export const getAttendanceByDate = async (teamId, date) => {
+  try {
+    const q = query(
+      collection(db, 'attendance'),
+      where('teamId', '==', teamId),
+      where('date', '==', date)
+    );
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) return null;
+    const doc = snapshot.docs[0];
+    return { id: doc.id, ...doc.data() };
+  } catch (error) {
+    console.error('Error getting attendance by date:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update attendance record
+ */
+export const updateAttendance = async (attendanceId, data) => {
+  try {
+    await updateDoc(doc(db, 'attendance', attendanceId), {
+      ...data,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error updating attendance:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete attendance record
+ */
+export const deleteAttendance = async (attendanceId) => {
+  try {
+    await deleteDoc(doc(db, 'attendance', attendanceId));
+  } catch (error) {
+    console.error('Error deleting attendance:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get attendance statistics for a team
+ */
+export const getTeamAttendanceStats = async (teamId, startDate = null, endDate = null) => {
+  try {
+    let q = query(
+      collection(db, 'attendance'),
+      where('teamId', '==', teamId)
+    );
+
+    if (startDate && endDate) {
+      q = query(q, 
+        where('date', '>=', startDate),
+        where('date', '<=', endDate)
+      );
+    }
+
+    const snapshot = await getDocs(q);
+    const records = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    // Calculate statistics
+    const totalSessions = records.length;
+    let totalPresent = 0;
+    let totalAbsent = 0;
+    const userStats = {};
+
+    records.forEach(record => {
+      totalPresent += record.statistics?.present || 0;
+      totalAbsent += record.statistics?.absent || 0;
+
+      // Per-user stats
+      record.records.forEach(r => {
+        if (!userStats[r.userId]) {
+          userStats[r.userId] = { present: 0, absent: 0, total: 0 };
+        }
+        userStats[r.userId].total++;
+        if (r.present) {
+          userStats[r.userId].present++;
+        } else {
+          userStats[r.userId].absent++;
+        }
+      });
+    });
+
+    return {
+      totalSessions,
+      totalPresent,
+      totalAbsent,
+      averageAttendance: totalSessions > 0 ? (totalPresent / (totalPresent + totalAbsent) * 100).toFixed(1) : 0,
+      userStats
+    };
+  } catch (error) {
+    console.error('Error getting attendance stats:', error);
+    throw error;
+  }
+};
+
 export default {
   // Users
   createUser,
@@ -1217,6 +1369,15 @@ export default {
   validateVoucher,
   redeemVoucher,
   deleteVoucher,
-  getVoucherByCode
+  getVoucherByCode,
+
+    // Attendance functions
+  createAttendance,
+  getAttendance,
+  getTeamAttendance,
+  getAttendanceByDate,
+  updateAttendance,
+  deleteAttendance,
+  getTeamAttendanceStats,
   
 };

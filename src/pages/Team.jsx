@@ -455,6 +455,16 @@ const handleCreateTeamChat = async () => {
           Chat
         </button>
         <button
+          onClick={() => setActiveTab('attendance')}
+          className={`px-6 py-3 font-medium transition-all ${
+            activeTab === 'attendance'
+              ? 'text-primary border-b-2 border-primary'
+              : 'text-light/60 hover:text-light'
+          }`}
+        >
+          📋 Attendance
+        </button>
+        <button
           onClick={() => setActiveTab('members')}
           className={`px-6 py-3 font-medium transition-all ${
             activeTab === 'members'
@@ -931,6 +941,30 @@ const handleCreateTeamChat = async () => {
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Attendance Tab */}
+        {activeTab === 'attendance' && (
+          <div className="bg-mid-dark rounded-lg p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold text-light">📋 Attendance</h3>
+              <button
+                onClick={() => navigate(`/team/${clubId}/${teamId}/attendance`)}
+                className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium"
+              >
+                Take Attendance
+              </button>
+            </div>
+            <p className="text-light/60 mb-4">
+              Track team attendance for trainings, games, and tournaments. View attendance history and statistics.
+            </p>
+            <button
+              onClick={() => navigate(`/team/${clubId}/${teamId}/attendance/history`)}
+              className="px-6 py-3 bg-white/10 hover:bg-white/20 text-light rounded-lg transition font-medium"
+            >
+              View Attendance History
+            </button>
           </div>
         )}
 

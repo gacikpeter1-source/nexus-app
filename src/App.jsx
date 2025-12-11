@@ -33,6 +33,8 @@ import VoucherGenerator from './components/VoucherGenerator';
 import { ChatProvider } from './contexts/ChatContext';
 import Chats from './pages/Chats';
 import ChatRoom from './pages/ChatRoom';
+import AttendanceEntry from './pages/AttendanceEntry';
+import AttendanceHistory from './pages/AttendanceHistory';
 
 function App() {
   return (
@@ -123,6 +125,22 @@ function App() {
                         element={
                           <ProtectedRoute>
                             <Team />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/team/:clubId/:teamId/attendance"
+                        element={
+                          <ProtectedRoute>
+                            <AttendanceEntry />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/team/:clubId/:teamId/attendance/history"
+                        element={
+                          <ProtectedRoute>
+                            <AttendanceHistory />
                           </ProtectedRoute>
                         }
                       />

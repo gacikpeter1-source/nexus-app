@@ -218,6 +218,22 @@ export default function TeamStatistics() {
         ))}
       </div>
 
+      {/* Attendance Button */}
+      <div className="mb-8 animate-fade-in" style={{ animationDelay: '0.15s' }}>
+        <button
+          onClick={() => navigate(`/team/${id.split('/')[0]}/${id.split('/')[1]}/attendance/history`)}
+          className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl p-6 transition-all shadow-lg hover:shadow-xl"
+        >
+          <div className="flex items-center justify-between">
+            <div className="text-left">
+              <div className="text-2xl font-bold mb-1">📋 View Attendance Records</div>
+              <div className="text-sm opacity-90">Track team member attendance and statistics</div>
+            </div>
+            <div className="text-4xl">→</div>
+          </div>
+        </button>
+      </div>
+
       {/* Filters */}
       <div className="mb-6 animate-fade-in" style={{ animationDelay: '0.2s' }}>
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
