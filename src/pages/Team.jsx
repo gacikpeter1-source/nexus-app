@@ -49,7 +49,7 @@ export default function Team() {
   const [attendanceFilterType, setAttendanceFilterType] = useState('all');
   const [loadingAttendance, setLoadingAttendance] = useState(false);
 
-
+      // Return to one level up when clicking back to club
       const location = useLocation();
       useEffect(() => {
         if (location.state?.activeTab) {

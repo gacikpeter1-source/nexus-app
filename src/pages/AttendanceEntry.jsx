@@ -8,7 +8,8 @@ import {
   getAllUsers,
   createAttendance,
   getAttendanceByDate,
-  updateAttendance
+  updateAttendance,
+  getTeamEvents
 } from '../firebase/firestore';
 
 export default function AttendanceEntry() {
@@ -28,6 +29,11 @@ export default function AttendanceEntry() {
   const [existingAttendanceId, setExistingAttendanceId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  
+  // Event linking state
+  const [dayEvents, setDayEvents] = useState([]);
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [loadingEvents, setLoadingEvents] = useState(false);
 
   // Load club and team data
   useEffect(() => {
@@ -89,6 +95,72 @@ export default function AttendanceEntry() {
 
     loadData();
   }, [clubId, teamId, selectedDate]);
+
+  // Load events for selected date
+  useEffect(() => {
+    const loadDayEvents = async () => {
+      if (!team || !selectedDate) return;
+      
+      try {
+        setLoadingEvents(true);
+        const allTeamEvents = await getTeamEvents(team.id);
+        
+        // Filter events for selected date
+        const eventsOnDate = allTeamEvents.filter(event => {
+          const eventDate = new Date(event.date).toISOString().split('T')[0];
+          return eventDate === selectedDate;
+        });
+        
+        setDayEvents(eventsOnDate);
+        
+        // Auto-select if only one event
+        if (eventsOnDate.length === 1) {
+          handleEventSelect(eventsOnDate[0]);
+        } else if (eventsOnDate.length === 0) {
+          setSelectedEvent(null);
+        }
+      } catch (error) {
+        console.error('Error loading events:', error);
+      } finally {
+        setLoadingEvents(false);
+      }
+    };
+
+    loadDayEvents();
+  }, [team, selectedDate]);
+
+  // Handle event selection and pre-fill from responses
+  const handleEventSelect = (event) => {
+    setSelectedEvent(event);
+    setEventType(event.type || 'training');
+    
+    // Pre-fill attendance based on event responses
+    if (event.responses) {
+      setAttendanceRecords(prev => {
+        return prev.map(record => {
+          const response = event.responses[record.userId];
+          if (response) {
+            // Auto-check users who confirmed
+            if (response.status === 'confirmed') {
+              return { ...record, present: true };
+            }
+            // Add response status as comment
+            const statusText = {
+              'confirmed': 'Said Yes',
+              'declined': 'Said No',
+              'tentative': 'Said Maybe'
+            }[response.status] || '';
+            
+            return { 
+              ...record, 
+              comment: record.comment || statusText 
+            };
+          }
+          return record;
+        });
+      });
+    }
+  };
 
   // Filter records by search
   const filteredRecords = useMemo(() => {
@@ -152,12 +224,37 @@ export default function AttendanceEntry() {
     try {
       setSaving(true);
 
+      // Calculate cross-check statistics if event is selected
+      let crossCheck = null;
+      if (selectedEvent && selectedEvent.responses) {
+        const responses = selectedEvent.responses;
+        const confirmed = Object.keys(responses).filter(uid => responses[uid].status === 'confirmed');
+        const declined = Object.keys(responses).filter(uid => responses[uid].status === 'declined');
+        const tentative = Object.keys(responses).filter(uid => responses[uid].status === 'tentative');
+        
+        const present = attendanceRecords.filter(r => r.present).map(r => r.userId);
+        const absent = attendanceRecords.filter(r => !r.present).map(r => r.userId);
+        
+        crossCheck = {
+          saidYesCame: confirmed.filter(uid => present.includes(uid)).length,
+          saidYesDidntCome: confirmed.filter(uid => absent.includes(uid)).length,
+          saidNoCame: declined.filter(uid => present.includes(uid)).length,
+          saidNoDidntCome: declined.filter(uid => absent.includes(uid)).length,
+          saidMaybeCame: tentative.filter(uid => present.includes(uid)).length,
+          saidMaybeDidntCome: tentative.filter(uid => absent.includes(uid)).length,
+          noResponseCame: present.filter(uid => !responses[uid]).length,
+          noResponseDidntCome: absent.filter(uid => !responses[uid]).length
+        };
+      }
+
       const attendanceData = {
         teamId,
         clubId,
         date: selectedDate,
         type: eventType,
         customType: eventType === 'custom' ? customType.trim() : '',
+        eventId: selectedEvent?.id || null,
+        eventTitle: selectedEvent?.title || null,
         records: attendanceRecords,
         createdBy: user.id,
         statistics: {
@@ -165,7 +262,8 @@ export default function AttendanceEntry() {
           present: statistics.present,
           absent: statistics.absent,
           percentage: parseFloat(statistics.percentage)
-        }
+        },
+        crossCheck: crossCheck
       };
 
       if (existingAttendanceId) {
@@ -261,6 +359,47 @@ export default function AttendanceEntry() {
 
       {/* Controls */}
       <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
+        {/* Event Selector - NEW */}
+        {dayEvents.length > 0 && (
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-light/80 mb-2">
+              Select Event ({dayEvents.length} event{dayEvents.length > 1 ? 's' : ''} on this day)
+            </label>
+            <select
+              value={selectedEvent?.id || ''}
+              onChange={(e) => {
+                const event = dayEvents.find(ev => ev.id === e.target.value);
+                handleEventSelect(event);
+              }}
+              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+            >
+              <option value="">No event (manual entry)</option>
+              {dayEvents.map(event => {
+                const time = event.time || '';
+                const responseCount = event.responses ? Object.keys(event.responses).length : 0;
+                return (
+                  <option key={event.id} value={event.id}>
+                    {event.title} {time && `- ${time}`} ({responseCount} responses)
+                  </option>
+                );
+              })}
+            </select>
+            {selectedEvent && selectedEvent.responses && (
+              <div className="mt-2 flex gap-4 text-sm">
+                <span className="text-green-400">
+                  ✓ {Object.values(selectedEvent.responses).filter(r => r.status === 'confirmed').length} Yes
+                </span>
+                <span className="text-yellow-400">
+                  ? {Object.values(selectedEvent.responses).filter(r => r.status === 'tentative').length} Maybe
+                </span>
+                <span className="text-red-400">
+                  ✗ {Object.values(selectedEvent.responses).filter(r => r.status === 'declined').length} No
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+        
         <div className="grid md:grid-cols-3 gap-4 mb-4">
           {/* Date Selector */}
           <div>
@@ -281,12 +420,16 @@ export default function AttendanceEntry() {
               value={eventType}
               onChange={(e) => setEventType(e.target.value)}
               className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+              disabled={!!selectedEvent}
             >
               <option value="training">🏋️ Training</option>
               <option value="game">⚽ Game</option>
               <option value="tournament">🏆 Tournament</option>
               <option value="custom">✏️ Custom</option>
             </select>
+            {selectedEvent && (
+              <p className="text-xs text-light/50 mt-1">Auto-filled from event</p>
+            )}
           </div>
 
           {/* Custom Type */}
