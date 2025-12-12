@@ -17,6 +17,8 @@ import {
   deleteAttendance
 } from '../firebase/firestore';
 import { getTeamChats, createChat } from '../firebase/chats';
+import TeamMemberCards from '../components/TeamMemberCards';
+import { updateTeamCardSettings, getUserStats } from '../firebase/firestore';
 
 
 export default function Team() {
@@ -797,38 +799,18 @@ const handleCreateTeamChat = async () => {
         )}
 
         {activeTab === 'members' && (
-          <div className="animate-fade-in">
-            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-              <h2 className="font-title text-2xl text-light mb-4">Team Members ({members.length})</h2>
-              
-              {members.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="text-4xl mb-2">👥</div>
-                  <p className="text-light/60">No members yet</p>
-                </div>
-              ) : (
-                <div className="grid gap-3">
-                  {members.map((member, idx) => (
-                    <div
-                      key={member.id || idx}
-                      className="bg-white/5 border border-white/10 rounded-lg p-4 flex items-center gap-4 hover:bg-white/10 transition-all"
-                    >
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold text-lg">
-                        {member.username?.charAt(0).toUpperCase() || '?'}
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-semibold text-light text-lg">{member.username || 'Unknown User'}</div>
-                        <div className="text-sm text-light/60">{member.email || 'No email'}</div>
-                      </div>
-                      <div className="px-3 py-1 bg-white/10 rounded-full text-xs text-light/70">
-                        Member
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          <TeamMemberCards
+            team={team}
+            members={[...team.trainers, ...team.assistants, ...team.members]}
+            allUsers={allUsers}
+            userSubscription={user.subscription || 'free'}
+            onUpdateTeamSettings={async (settings) => {
+              await updateTeamCardSettings(clubId, teamId, settings);
+              await loadTeamData();
+            }}
+            onMessage={(member) => console.log('Message:', member)}
+            onViewProfile={(member) => navigate(`/profile/${member.id}`)}
+          />
         )}
 
         {activeTab === 'staff' && (

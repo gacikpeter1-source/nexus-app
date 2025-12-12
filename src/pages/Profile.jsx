@@ -8,6 +8,8 @@ import { updateSubscription } from '../firebase/firestore';
 import NotificationSettings from '../components/NotificationSettings';
 import SubscriptionPlans from '../components/SubscriptionPlans';
 import InvoiceGenerator from '../components/InvoiceGenerator';
+import MemberProfileFields from '../components/MemberProfileFields';
+import { updateUserMemberProfile } from '../firebase/firestore';
 
 export default function Profile() {
   const { user } = useAuth();
@@ -361,6 +363,16 @@ export default function Profile() {
                 />
               </div>
             </div>
+
+            {/* ADD HERE - Member Card Information */}
+            <MemberProfileFields
+              userData={user}
+              onUpdate={async (profileData) => {
+                await updateUserMemberProfile(user.id, profileData);
+                alert('Profile updated successfully!');
+                window.location.reload();
+              }}
+            />
 
             {/* Save Button */}
             <div className="flex gap-4">

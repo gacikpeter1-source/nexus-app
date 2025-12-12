@@ -1287,6 +1287,104 @@ export const getTeamAttendanceStats = async (teamId, startDate = null, endDate =
   }
 };
 
+// Update team card settings
+export const updateTeamCardSettings = async (clubId, teamId, settings) => {
+  try {
+    const clubRef = doc(db, 'clubs', clubId);
+    const clubDoc = await getDoc(clubRef);
+    
+    if (!clubDoc.exists()) {
+      throw new Error('Club not found');
+    }
+
+    const clubData = clubDoc.data();
+    const teams = clubData.teams || [];
+    const teamIndex = teams.findIndex(t => t.id === teamId);
+
+    if (teamIndex === -1) {
+      throw new Error('Team not found');
+    }
+
+    teams[teamIndex] = {
+      ...teams[teamIndex],
+      cardSettings: settings.cardSettings || teams[teamIndex].cardSettings,
+      customStats: settings.customStats || teams[teamIndex].customStats,
+      updatedAt: serverTimestamp()
+    };
+
+    await updateDoc(clubRef, { teams });
+    return true;
+  } catch (error) {
+    console.error('Error updating team card settings:', error);
+    throw error;
+  }
+};
+
+// Update user member profile fields
+export const updateUserMemberProfile = async (userId, profileData) => {
+  try {
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, {
+      jerseyNumber: profileData.jerseyNumber || null,
+      position: profileData.position || null,
+      handedness: profileData.handedness || null,
+      age: profileData.age || null,
+      phone: profileData.phone || null,
+      updatedAt: serverTimestamp()
+    });
+    return true;
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    throw error;
+  }
+};
+
+// Get user stats for card display
+export const getUserStats = async (userId, teamId) => {
+  try {
+    // Get attendance records for this user in this team
+    const attendanceQuery = query(
+      collection(db, 'attendance'),
+      where('teamId', '==', teamId)
+    );
+    
+    const attendanceSnap = await getDocs(attendanceQuery);
+    let totalSessions = 0;
+    let present = 0;
+
+    attendanceSnap.forEach(doc => {
+      const data = doc.data();
+      const userRecord = data.records?.find(r => r.userId === userId);
+      if (userRecord) {
+        totalSessions++;
+        if (userRecord.present) present++;
+      }
+    });
+
+    const attendanceRate = totalSessions > 0 
+      ? Math.round((present / totalSessions) * 100) 
+      : 0;
+
+    // You can add more stat calculations here
+    return {
+      games: totalSessions,
+      attendance: attendanceRate,
+      years: 1, // Calculate based on join date
+      // Add custom stats as needed
+      goals: 0,
+      assists: 0,
+      points: 0
+    };
+  } catch (error) {
+    console.error('Error getting user stats:', error);
+    return {
+      games: 0,
+      attendance: 0,
+      years: 0
+    };
+  }
+};
+
 export default {
   // Users
   createUser,
@@ -1379,5 +1477,10 @@ export default {
   updateAttendance,
   deleteAttendance,
   getTeamAttendanceStats,
+
+  // Team card settings/
+  updateTeamCardSettings,
+  updateUserMemberProfile,
+  getUserStats
   
 };

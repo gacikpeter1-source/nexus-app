@@ -81,52 +81,6 @@ service cloud.firestore {
         isAdmin()
       );
       
-      // Allow delete only by creator or admin
-      allow delete: if isAuthenticated() && (
-        request.auth.uid == resource.data.createdBy ||
-        isAdmin()
-      );
-      
-      // Messages subcollection
-      match /messages/{messageId} {
-        // Allow read if user has access to parent chat
-        allow read: if isAuthenticated() && (
-          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.members ||
-          isAdmin()
-        );
-        
-        // Allow create if user is in chat
-        allow create: if isAuthenticated() &&
-          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.members &&
-          request.auth.uid == request.resource.data.senderId;
-        
-        // Allow update for reactions or by message sender
-        allow update: if isAuthenticated() && (
-          request.auth.uid == resource.data.senderId ||
-          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.members
-        );
-        
-        // Allow delete by sender or admin
-        allow delete: if isAuthenticated() && (
-          request.auth.uid == resource.data.senderId ||
-          isAdmin()
-        );
-      }
-    }
-    
-    // Join requests collection (if you have it)
-    match /joinRequests/{requestId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update, delete: if isAdmin();
-    }
-    
-    // Notifications collection (if you have it)
-    match /notifications/{notificationId} {
-      allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
-      allow create: if isAuthenticated();
-      allow update, delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
-    }
     // Subscriptions collection
     match /subscriptions/{subscriptionId} {
       allow read: if isAuthenticated() && (
