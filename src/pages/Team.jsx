@@ -564,7 +564,7 @@ const handleCreateTeamChat = async () => {
               : 'text-light/60 hover:text-light'
           }`}
         >
-          📋 Attendance
+        Attendance
         </button>
         <button
           onClick={() => setActiveTab('members')}

@@ -56,12 +56,19 @@ service cloud.firestore {
     // CHAT SYSTEM RULES
     // ============================================================================
     
-    match /chats/{chatId} {
-      // Allow read if user is a member or admin
-      allow read: if isAuthenticated() && (
-        request.auth.uid in resource.data.members ||
-        isAdmin()
-      );
+      match /chats/{chatId} {
+        // Allow read for authenticated users (needed for team chat discovery)
+        allow read: if isAuthenticated();
+        
+        // Allow create for authenticated users
+        allow create: if isAuthenticated();
+        
+        // Allow update/delete only for members or admins
+        allow update, delete: if isAuthenticated() && (
+          request.auth.uid in resource.data.members ||
+          isAdmin()
+        );
+      }
       
       // Allow create if user is authenticated
       allow create: if isAuthenticated() &&
