@@ -19,7 +19,7 @@ import {
 import { getTeamChats, createChat } from '../firebase/chats';
 import TeamMemberCards from '../components/TeamMemberCards';
 import { updateTeamCardSettings, getUserStats } from '../firebase/firestore';
-
+import { updateTeamMemberData } from '../firebase/firestore';
 
 export default function Team() {
   const { clubId, teamId } = useParams();
@@ -803,13 +803,21 @@ const handleCreateTeamChat = async () => {
             team={team}
             members={[...team.trainers, ...team.assistants, ...team.members]}
             allUsers={allUsers}
-            userSubscription={user.subscription || 'free'}
+            currentUser={user}
+            userSubscription={user.isSuperAdmin ? 'full' : (user.subscription || 'free')}
             onUpdateTeamSettings={async (settings) => {
               await updateTeamCardSettings(clubId, teamId, settings);
               await loadTeamData();
+              showToast('Settings saved', 'success');
             }}
-            onMessage={(member) => console.log('Message:', member)}
-            onViewProfile={(member) => navigate(`/profile/${member.id}`)}
+            onUpdateMemberData={async (memberId, memberData) => {          
+              await updateTeamMemberData(clubId, teamId, memberId, memberData);
+              await loadTeamData(); // Reload to show changes
+              console.log('✅ Team.jsx - Data reloaded');
+              showToast('Card updated successfully', 'success');
+            }}
+            onMessage={(member) => {console.log('Message:', member);}}
+            onViewProfile={(member) => {navigate(`/profile/${member.id}`);}}
           />
         )}
 

@@ -1287,7 +1287,30 @@ export const getTeamAttendanceStats = async (teamId, startDate = null, endDate =
   }
 };
 
-// Update team card settings
+/* ===========================
+   USER PROFILE
+   =========================== */
+
+// Update user member profile
+export const updateUserMemberProfile = async (userId, profileData) => {
+  try {
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, {
+      ...profileData,
+      updatedAt: serverTimestamp()
+    });
+    return true;
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    throw error;
+  }
+};
+
+/* ===========================
+   TEAM MEMBER CARDS & BADGES
+   =========================== */
+
+// Update team card settings (colors, stats, images)
 export const updateTeamCardSettings = async (clubId, teamId, settings) => {
   try {
     const clubRef = doc(db, 'clubs', clubId);
@@ -1305,12 +1328,27 @@ export const updateTeamCardSettings = async (clubId, teamId, settings) => {
       throw new Error('Team not found');
     }
 
-    teams[teamIndex] = {
+    // Build update object, only including defined values
+    const updates = {
       ...teams[teamIndex],
-      cardSettings: settings.cardSettings || teams[teamIndex].cardSettings,
-      customStats: settings.customStats || teams[teamIndex].customStats,
-      updatedAt: serverTimestamp()
+      updatedAt: new Date().toISOString()
     };
+
+    // Only add fields if they're actually provided (not undefined)
+    if (settings.cardSettings !== undefined) {
+      updates.cardSettings = settings.cardSettings;
+    }
+    if (settings.customStats !== undefined) {
+      updates.customStats = settings.customStats;
+    }
+    if (settings.customFields !== undefined) {
+      updates.customFields = settings.customFields;
+    }
+    if (settings.badgeSettings !== undefined) {
+      updates.badgeSettings = settings.badgeSettings;
+    }
+
+    teams[teamIndex] = updates;
 
     await updateDoc(clubRef, { teams });
     return true;
@@ -1320,21 +1358,40 @@ export const updateTeamCardSettings = async (clubId, teamId, settings) => {
   }
 };
 
-// Update user member profile fields
-export const updateUserMemberProfile = async (userId, profileData) => {
+// Update team member data (team-specific profile)
+export const updateTeamMemberData = async (clubId, teamId, userId, memberData) => {
   try {
-    const userRef = doc(db, 'users', userId);
-    await updateDoc(userRef, {
-      jerseyNumber: profileData.jerseyNumber || null,
-      position: profileData.position || null,
-      handedness: profileData.handedness || null,
-      age: profileData.age || null,
-      phone: profileData.phone || null,
-      updatedAt: serverTimestamp()
-    });
+    const clubRef = doc(db, 'clubs', clubId);
+    const clubDoc = await getDoc(clubRef);
+    
+    if (!clubDoc.exists()) {
+      throw new Error('Club not found');
+    }
+
+    const clubData = clubDoc.data();
+    const teams = clubData.teams || [];
+    const teamIndex = teams.findIndex(t => t.id === teamId);
+
+    if (teamIndex === -1) {
+      throw new Error('Team not found');
+    }
+
+    if (!teams[teamIndex].memberData) {
+      teams[teamIndex].memberData = {};
+    }
+
+    teams[teamIndex].memberData[userId] = {
+      ...teams[teamIndex].memberData[userId],
+      ...memberData,
+      updatedAt: new Date().toISOString()
+    };
+
+    teams[teamIndex].updatedAt = new Date().toISOString();
+
+    await updateDoc(clubRef, { teams });
     return true;
   } catch (error) {
-    console.error('Error updating user profile:', error);
+    console.error('Error updating team member data:', error);
     throw error;
   }
 };
@@ -1342,7 +1399,6 @@ export const updateUserMemberProfile = async (userId, profileData) => {
 // Get user stats for card display
 export const getUserStats = async (userId, teamId) => {
   try {
-    // Get attendance records for this user in this team
     const attendanceQuery = query(
       collection(db, 'attendance'),
       where('teamId', '==', teamId)
@@ -1365,12 +1421,10 @@ export const getUserStats = async (userId, teamId) => {
       ? Math.round((present / totalSessions) * 100) 
       : 0;
 
-    // You can add more stat calculations here
     return {
       games: totalSessions,
       attendance: attendanceRate,
-      years: 1, // Calculate based on join date
-      // Add custom stats as needed
+      years: 1,
       goals: 0,
       assists: 0,
       points: 0
@@ -1385,6 +1439,118 @@ export const getUserStats = async (userId, teamId) => {
   }
 };
 
+// Update team badge settings
+export const updateTeamBadgeSettings = async (clubId, teamIndex, badgeSettings) => {
+  try {
+    const clubRef = doc(db, 'clubs', clubId);
+    const clubDoc = await getDoc(clubRef);
+    
+    if (!clubDoc.exists()) {
+      throw new Error('Club not found');
+    }
+
+    const clubData = clubDoc.data();
+    const teams = clubData.teams || [];
+    
+    if (teamIndex < 0 || teamIndex >= teams.length) {
+      throw new Error('Team not found');
+    }
+
+    teams[teamIndex] = {
+      ...teams[teamIndex],
+      badgeSettings: {
+        ...badgeSettings,
+        updatedAt: new Date().toISOString()
+      },
+      updatedAt: new Date().toISOString()
+    };
+
+    await updateDoc(clubRef, { teams });
+    return true;
+  } catch (error) {
+    console.error('Error updating badge settings:', error);
+    throw error;
+  }
+};
+
+// Get team badge settings
+export const getTeamBadgeSettings = async (clubId, teamIndex) => {
+  try {
+    const clubRef = doc(db, 'clubs', clubId);
+    const clubDoc = await getDoc(clubRef);
+    
+    if (!clubDoc.exists()) {
+      throw new Error('Club not found');
+    }
+
+    const clubData = clubDoc.data();
+    const teams = clubData.teams || [];
+    
+    if (teamIndex < 0 || teamIndex >= teams.length) {
+      throw new Error('Team not found');
+    }
+
+    return teams[teamIndex].badgeSettings || {
+      enabled: false,
+      displayDuration: 'permanent',
+      rules: []
+    };
+  } catch (error) {
+    console.error('Error getting badge settings:', error);
+    throw error;
+  }
+};
+
+// Calculate member badges based on stats and rules
+export const calculateMemberBadges = (memberStats, badgeSettings) => {
+  if (!badgeSettings?.enabled || !badgeSettings?.rules?.length) {
+    return [];
+  }
+
+  const earnedBadges = [];
+  const badgeOrder = ['iron', 'bronze', 'silver', 'gold', 'platinum'];
+
+  badgeSettings.rules.forEach(rule => {
+    const statValue = memberStats[rule.criteria.stat];
+    const ruleValue = parseFloat(rule.criteria.value);
+    
+    if (statValue === undefined || isNaN(ruleValue)) return;
+
+    let qualifies = false;
+    
+    switch (rule.criteria.operator) {
+      case 'gte':
+        qualifies = statValue >= ruleValue;
+        break;
+      case 'lte':
+        qualifies = statValue <= ruleValue;
+        break;
+      case 'eq':
+        qualifies = statValue === ruleValue;
+        break;
+      default:
+        break;
+    }
+
+    if (qualifies) {
+      earnedBadges.push({
+        name: rule.name,
+        badge: rule.badge,
+        earnedAt: new Date().toISOString(),
+        displayDuration: badgeSettings.displayDuration
+      });
+    }
+  });
+
+  earnedBadges.sort((a, b) => {
+    const aIndex = badgeOrder.indexOf(a.badge);
+    const bIndex = badgeOrder.indexOf(b.badge);
+    return bIndex - aIndex;
+  });
+
+  return earnedBadges.slice(0, 3);
+};
+
 export default {
   // Users
   createUser,
@@ -1394,6 +1560,7 @@ export default {
   getAllUsers,
   getUsersByIds,
   deleteUser,
+  updateUserMemberProfile,
   
   // Clubs
   createClub,
@@ -1477,10 +1644,13 @@ export default {
   updateAttendance,
   deleteAttendance,
   getTeamAttendanceStats,
-
-  // Team card settings/
+  
+  // Team Member Cards & Badges
   updateTeamCardSettings,
-  updateUserMemberProfile,
-  getUserStats
+  updateTeamMemberData,
+  getUserStats,
+  updateTeamBadgeSettings,
+  getTeamBadgeSettings,
+  calculateMemberBadges,
   
 };

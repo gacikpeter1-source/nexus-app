@@ -1,5 +1,5 @@
 // Add these fields to your UserProfile or Settings page
-
+import { useState } from 'react';
 // src/components/MemberProfileFields.jsx
 export default function MemberProfileFields({ userData, onUpdate }) {
   const [formData, setFormData] = useState({

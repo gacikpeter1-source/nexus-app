@@ -1,10 +1,15 @@
-// src/components/MemberCard.jsx
+// src/components/MemberCard.jsx - FULLY ENHANCED - FIXED
 import { useState } from 'react';
 
 export default function MemberCard({ 
   member, 
   teamStats = [], 
   cardSettings = {},
+  badgeSettings = {},
+  teamMemberData = {},
+  currentUserId,
+  canEdit = false,
+  onEdit,
   onMessage,
   onViewProfile 
 }) {
@@ -12,31 +17,86 @@ export default function MemberCard({
 
   // Default card settings
   const {
-    primaryColor = '#2563eb', // blue-600
-    secondaryColor = '#1e40af', // blue-700
-    accentColor = '#eab308', // yellow-500
-    backgroundLayers = [], // Array of {type: 'image', url: '...'} or {type: 'badge', url: '...'}
-    showBackgroundLayers = false
+    primaryColor = '#2563eb',
+    secondaryColor = '#1e40af',
+    accentColor = '#eab308',
+    backgroundLayers = [],
+    showBackgroundLayers = false,
+    jerseyBackgroundImage = null
   } = cardSettings;
 
-  // Get member details with fallbacks
+  // Get member details with team-specific overrides
   const {
     id,
     username = 'Player',
     email = '',
     profileImage,
     role = 'member',
-    
-    // User-defined fields
-    jerseyNumber,
-    position,
-    handedness, // 'left' or 'right'
-    age,
-    phone,
-    
-    // Stats (calculated or stored)
     stats = {}
   } = member;
+
+  // Team-specific data
+  const jerseyNumber = teamMemberData.jerseyNumber || member.jerseyNumber;
+  const position = teamMemberData.position || member.position;
+  const handedness = teamMemberData.handedness || member.handedness;
+  const age = teamMemberData.age || member.age;
+  const phone = teamMemberData.phone || member.phone;
+  const teamProfileImage = teamMemberData.profileImage;
+  const useMainProfile = teamMemberData.useMainProfile !== false;
+
+  // Determine which image to use
+  const displayImage = teamProfileImage || (useMainProfile ? profileImage : null);
+
+  // Calculate badges
+  const calculateBadges = () => {
+    if (!badgeSettings || !badgeSettings.enabled || !badgeSettings.rules) return [];
+
+    const earnedBadges = [];
+    
+    badgeSettings.rules.forEach(rule => {
+      const statValue = parseFloat(stats[rule.criteria.stat]) || 0;
+      const ruleValue = parseFloat(rule.criteria.value);
+      
+      let qualifies = false;
+      switch (rule.criteria.operator) {
+        case 'gte':
+          qualifies = statValue >= ruleValue;
+          break;
+        case 'lte':
+          qualifies = statValue <= ruleValue;
+          break;
+        case 'eq':
+          qualifies = statValue === ruleValue;
+          break;
+      }
+      
+      if (qualifies) {
+        earnedBadges.push(rule);
+      }
+    });
+
+    // Sort by tier (highest first)
+    const tierOrder = ['platinum', 'gold', 'silver', 'bronze', 'iron'];
+    earnedBadges.sort((a, b) => 
+      tierOrder.indexOf(a.badge) - tierOrder.indexOf(b.badge)
+    );
+
+    return earnedBadges;
+  };
+
+  const badges = calculateBadges();
+
+  // Badge icon and color
+  const getBadgeDisplay = (badgeType) => {
+    const badgeMap = {
+      iron: { icon: '⚪', color: '#71717a', name: 'Iron' },
+      bronze: { icon: '🥉', color: '#cd7f32', name: 'Bronze' },
+      silver: { icon: '🥈', color: '#c0c0c0', name: 'Silver' },
+      gold: { icon: '🥇', color: '#ffd700', name: 'Gold' },
+      platinum: { icon: '💎', color: '#e5e4e2', name: 'Platinum' }
+    };
+    return badgeMap[badgeType] || badgeMap.bronze;
+  };
 
   // Role display
   const getRoleBadge = () => {
@@ -78,24 +138,24 @@ export default function MemberCard({
           background: `linear-gradient(to bottom right, #1e293b, #0f172a)`
         }}
       >
-        {/* Background Layers (Full Subscription Only) */}
+        {/* Background Layers */}
         {showBackgroundLayers && backgroundLayers.length > 0 && (
-          <div className="absolute inset-0 opacity-10 overflow-hidden">
+          <div className="absolute inset-0 opacity-80 overflow-hidden">
             {backgroundLayers.map((layer, idx) => (
               <div key={idx} className="absolute inset-0">
-                {layer.type === 'image' && (
+                {layer.type === 'image' && layer.data && (
                   <img 
-                    src={layer.url} 
+                    src={layer.data} 
                     alt="" 
                     className="w-full h-full object-cover"
                   />
                 )}
-                {layer.type === 'badge' && (
+                {layer.type === 'badge' && layer.data && (
                   <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64">
                     <img 
-                      src={layer.url} 
+                      src={layer.data} 
                       alt="" 
-                      className="w-full h-full object-contain opacity-30"
+                      className="w-full h-full object-contain opacity-80"
                     />
                   </div>
                 )}
@@ -116,12 +176,33 @@ export default function MemberCard({
             background: `linear-gradient(to right, ${primaryColor}, ${secondaryColor}, ${primaryColor})` 
           }}
         >
-          <div 
-            className="absolute top-2 right-2 text-slate-900 font-bold text-xs px-2 py-1 rounded"
-            style={{ backgroundColor: accentColor }}
-          >
-            {roleBadge.label}
-          </div>
+          {/* Badges - Top Right */}
+          {badges.length > 0 && (
+            <div className="absolute top-2 right-2 flex gap-1">
+              {badges.slice(0, 3).map((badge, idx) => {
+                const badgeDisplay = getBadgeDisplay(badge.badge);
+                return (
+                  <div 
+                    key={idx}
+                    className="relative group/badge"
+                    title={`${badge.name} - ${badgeDisplay.name}`}
+                  >
+                    <div 
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-lg border-2 border-white/30"
+                      style={{ backgroundColor: `${badgeDisplay.color}30` }}
+                    >
+                      {badgeDisplay.icon}
+                    </div>
+                    {/* Tooltip */}
+                    <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-black/90 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/badge:opacity-100 transition-opacity pointer-events-none">
+                      {badge.name}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          
           <div className="text-white font-bold text-lg tracking-wider">TEAM MEMBER</div>
           <div className="text-white/80 text-sm">2024-2025 SEASON</div>
         </div>
@@ -133,18 +214,34 @@ export default function MemberCard({
             background: `linear-gradient(to bottom, #334155, #1e293b)` 
           }}
         >
-          {/* Jersey Number Background */}
-          {jerseyNumber && (
-            <div className="absolute top-0 right-0 text-[120px] font-black text-white/5 leading-none pr-4">
-              {jerseyNumber}
+            {console.log('🐝 Rendering section:', {
+    hasJerseyBg: !!jerseyBackgroundImage,
+    jerseyNumber
+  })}
+          {/* Photo Section Background (Layer 3) - FIXED: Removed duplicate jersey number */}
+          {(jerseyNumber || jerseyBackgroundImage) && (
+            <div className="absolute top-0 right-0 w-full h-full overflow-hidden">
+              {jerseyBackgroundImage ? (
+                <div className="absolute top-0 right-0 w-full h-full opacity-80">
+                  <img 
+                    src={jerseyBackgroundImage} 
+                    alt="" 
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="absolute top-0 right-0 text-[120px] font-black text-white/5 leading-none pr-4">
+                  {jerseyNumber}
+                </div>
+              )}
             </div>
           )}
           
           {/* Player Photo */}
           <div className="relative z-10 mx-auto w-40 h-40 mb-4">
-            {profileImage && !imageError ? (
+            {displayImage && !imageError ? (
               <img
-                src={profileImage}
+                src={displayImage}
                 alt={username}
                 onError={() => setImageError(true)}
                 className="w-full h-full rounded-full object-cover shadow-xl border-4"
@@ -162,12 +259,15 @@ export default function MemberCard({
               </div>
             )}
             
-            {/* Verified Badge */}
-            <div className="absolute bottom-0 right-0 bg-green-500 rounded-full p-2 border-4 border-slate-800">
-              <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
-              </svg>
-            </div>
+            {/* Star Badge (Top Badge) */}
+            {badges.length > 0 && (
+              <div 
+                className="absolute -bottom-2 -right-2 rounded-full p-2 border-4 border-slate-800 shadow-lg"
+                style={{ backgroundColor: getBadgeDisplay(badges[0].badge).color }}
+              >
+                <span className="text-2xl">⭐</span>
+              </div>
+            )}
           </div>
 
           {/* Player Name & Number */}
@@ -186,7 +286,7 @@ export default function MemberCard({
                   <div className="text-sm font-bold uppercase">{position}</div>
                   {handedness && (
                     <div className="text-xs text-white/60">
-                      {handedness === 'left' ? '🏒 Left' : '🏒 Right'}
+                      {handedness === 'left' ? '👈 Left' : '👉 Right'}
                     </div>
                   )}
                 </div>
@@ -245,7 +345,19 @@ export default function MemberCard({
 
           {/* Actions */}
           <div className="flex gap-2">
-            {onMessage && (
+            {canEdit && onEdit && (
+              <button 
+                onClick={() => onEdit(member)}
+                className="flex-1 text-white py-2 px-3 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2 hover:opacity-90"
+                style={{ backgroundColor: primaryColor }}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Edit Card
+              </button>
+            )}
+            {onMessage && !canEdit && (
               <button 
                 onClick={() => onMessage(member)}
                 className="flex-1 text-white py-2 px-3 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2 hover:opacity-90"
@@ -256,14 +368,6 @@ export default function MemberCard({
                   <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/>
                 </svg>
                 Message
-              </button>
-            )}
-            {onViewProfile && (
-              <button 
-                onClick={() => onViewProfile(member)}
-                className="bg-slate-700 hover:bg-slate-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition"
-              >
-                Profile
               </button>
             )}
           </div>
