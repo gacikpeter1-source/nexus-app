@@ -204,7 +204,7 @@ export default function Profile() {
           >
             ← Back
           </button>
-          <h1 className="font-display text-5xl md:text-6xl text-light tracking-wider">
+          <h1 className="font-display text-3xl md:text-5xl lg:text-6xl text-light tracking-wider">
             👤 {t('userMenu.profile')}
           </h1>
           <p className="text-light/60 text-lg mt-2">
@@ -218,7 +218,7 @@ export default function Profile() {
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-6 py-3 font-medium transition-all ${
+              className={`px-3 py-2 md:px-6 md:py-3 text-sm md:text-base font-medium transition-all ${
                 activeTab === tab
                   ? 'text-primary border-b-2 border-primary'
                   : 'text-light/60 hover:text-light'
@@ -250,7 +250,7 @@ export default function Profile() {
                       className="w-32 h-32 rounded-full object-cover border-4 border-primary shadow-lg"
                     />
                   ) : (
-                    <div className="w-32 h-32 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-6xl font-bold text-white shadow-lg">
+                    <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-4xl md:text-6xl font-bold text-white shadow-lg">
                       {(form.displayName || user.username || user.email).charAt(0).toUpperCase()}
                     </div>
                   )}
@@ -308,7 +308,7 @@ export default function Profile() {
                   value={form.displayName}
                   onChange={(e) => setForm(f => ({ ...f, displayName: e.target.value }))}
                   placeholder="Enter your display name"
-                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                  className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 md:px-4 md:py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                   required
                 />
               </div>
@@ -328,7 +328,7 @@ export default function Profile() {
                     type="email"
                     value={user.email}
                     disabled
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-light/50 cursor-not-allowed"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 md:px-4 md:py-3 text-light/50 cursor-not-allowed"
                   />
                   <p className="text-xs text-light/50 mt-1">Email cannot be changed</p>
                 </div>
@@ -340,7 +340,7 @@ export default function Profile() {
                     value={form.phone}
                     onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))}
                     placeholder="+421 XXX XXX XXX"
-                    className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                    className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 md:px-4 md:py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                   />
                 </div>
               </div>
@@ -359,7 +359,7 @@ export default function Profile() {
                   onChange={(e) => setForm(f => ({ ...f, bio: e.target.value }))}
                   placeholder="Write a short bio..."
                   rows={4}
-                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none"
+                  className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 md:px-4 md:py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none"
                 />
               </div>
             </div>
@@ -378,14 +378,14 @@ export default function Profile() {
             <div className="flex gap-4">
               <button
                 type="submit"
-                className="flex-1 btn-primary py-4 text-lg font-semibold"
+                className="flex-1 btn-primary py-2 md:py-4 text-base md:text-lg font-semibold"
               >
                 💾 Save Changes
               </button>
               <button
                 type="button"
                 onClick={() => navigate(-1)}
-                className="px-6 py-4 bg-white/10 hover:bg-white/20 text-light rounded-lg transition-colors"
+                className="px-4 py-2 md:px-6 md:py-4 bg-white/10 hover:bg-white/20 text-light rounded-lg text-sm md:text-base transition-colors"
               >
                 Cancel
               </button>
@@ -408,7 +408,7 @@ export default function Profile() {
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <h3 className="text-2xl font-bold text-light mb-2">Current Plan</h3>
-                  <p className="text-3xl font-bold text-accent">{planFeatures.name}</p>
+                  <p className="text-2xl md:text-3xl font-bold text-accent">{planFeatures.name}</p>
                   <p className="text-light/70 mt-1">{planFeatures.description}</p>
                   {userSubscription && isSubscriptionActive() && (
                     <p className="text-sm text-success mt-2">
@@ -525,14 +525,14 @@ export default function Profile() {
                   <div className="flex gap-3">
                     <button
                       onClick={() => setShowCancelModal(false)}
-                      className="flex-1 px-4 py-3 bg-dark hover:bg-dark/80 text-light rounded-lg transition"
+                      className="flex-1 px-3 py-2 md:px-4 md:py-3 text-sm md:text-base bg-dark hover:bg-dark/80 text-light rounded-lg transition"
                       disabled={busy}
                     >
                       Keep Subscription
                     </button>
                     <button
                       onClick={handleCancelSubscription}
-                      className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition disabled:opacity-50"
+                      className="flex-1 px-3 py-2 md:px-4 md:py-3 text-sm md:text-base bg-red-600 hover:bg-red-700 text-white rounded-lg transition disabled:opacity-50"
                       disabled={busy}
                     >
                       {busy ? 'Cancelling...' : 'Yes, Cancel'}
@@ -579,14 +579,14 @@ export default function Profile() {
                         setShowChangeModal(false);
                         setChangingToPlan(null);
                       }}
-                      className="flex-1 px-4 py-3 bg-dark hover:bg-dark/80 text-light rounded-lg transition"
+                      className="flex-1 px-3 py-2 md:px-4 md:py-3 text-sm md:text-base bg-dark hover:bg-dark/80 text-light rounded-lg transition"
                       disabled={busy}
                     >
                       Cancel
                     </button>
                     <button
                       onClick={confirmChangePlan}
-                      className="flex-1 px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition disabled:opacity-50"
+                      className="flex-1 px-3 py-2 md:px-4 md:py-3 text-sm md:text-base bg-primary hover:bg-primary-dark text-white rounded-lg transition disabled:opacity-50"
                       disabled={busy}
                     >
                       {busy ? 'Processing...' : 'Confirm Change'}

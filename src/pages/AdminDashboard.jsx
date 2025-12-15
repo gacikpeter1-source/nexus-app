@@ -49,7 +49,7 @@ export default function AdminDashboard() {
     <div className="max-w-7xl mx-auto px-4 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-4xl font-bold text-light mb-2">👑 Admin Dashboard</h1>
+        <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-light mb-2">👑 Admin Dashboard</h1>
         <p className="text-light/60">Manage users, clubs, teams, and requests</p>
       </div>
 
@@ -60,7 +60,7 @@ export default function AdminDashboard() {
           className="bg-gradient-to-r from-accent to-accent/80 hover:from-accent/90 hover:to-accent/70 text-white rounded-xl p-6 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-between group"
         >
           <div className="flex items-center gap-4">
-            <div className="text-4xl">🎫</div>
+            <div className="text-3xl md:text-4xl">🎫</div>
             <div className="text-left">
               <h3 className="font-bold text-lg">Manage Vouchers</h3>
               <p className="text-sm text-white/80">Generate and manage trial codes</p>
@@ -74,7 +74,7 @@ export default function AdminDashboard() {
           className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white rounded-xl p-6 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-between group"
         >
           <div className="flex items-center gap-4">
-            <div className="text-4xl">💳</div>
+            <div className="text-3xl md:text-4xl">💳</div>
             <div className="text-left">
               <h3 className="font-bold text-lg">Manage Subscriptions</h3>
               <p className="text-sm text-white/80">Verify payments and invoices</p>
@@ -132,7 +132,7 @@ function TabButton({ active, onClick, icon, label }) {
   return (
     <button
       onClick={onClick}
-      className={`px-6 py-4 font-medium transition flex items-center gap-2 whitespace-nowrap ${
+      className={`px-3 py-2 md:px-6 md:py-4 text-sm md:text-base font-medium transition flex items-center gap-2 whitespace-nowrap ${
         active
           ? 'bg-primary text-white border-b-2 border-primary'
           : 'text-light/60 hover:text-light hover:bg-white/5'
@@ -315,7 +315,7 @@ function UsersTab() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <StatCard label="Total Users" value={users.length} icon="👥" />
         <StatCard label="Admins" value={users.filter(u => u.role === 'admin').length} icon="👑" />
         <StatCard label="Trainers" value={users.filter(u => u.role === 'trainer').length} icon="⚽" />
@@ -676,7 +676,7 @@ function ClubsTab() {
         </div>
         <button
           onClick={() => setCreateModal({ open: true, name: '' })}
-          className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium"
+          className="px-3 py-2 md:px-6 md:py-3 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm md:text-base transition font-medium"
         >
         Create Club
         </button>
@@ -969,7 +969,7 @@ function TeamsTab() {
       {/* Teams Display */}
       {filteredTeams.length === 0 ? (
         <div className="bg-mid-dark rounded-lg p-12 border border-white/10 text-center">
-          <div className="text-6xl mb-4">⚽</div>
+          <div className="text-4xl md:text-6xl mb-4">⚽</div>
           <h3 className="text-xl font-bold text-light mb-2">No Teams Found</h3>
           <p className="text-light/60">
             {allTeams.length === 0 
@@ -1156,7 +1156,7 @@ function StatCard({ label, value, icon }) {
     <div className="bg-mid-dark rounded-lg p-4 border border-white/10">
       <div className="flex items-center justify-between mb-2">
         <span className="text-2xl">{icon}</span>
-        <span className="text-3xl font-bold text-light">{value}</span>
+        <span className="text-2xl md:text-3xl font-bold text-light">{value}</span>
       </div>
       <p className="text-light/60 text-sm">{label}</p>
     </div>

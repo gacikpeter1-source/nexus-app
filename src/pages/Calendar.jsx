@@ -177,10 +177,10 @@ export default function Calendar() {
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="font-title text-5xl text-light">📅 Calendar</h1>
+          <h1 className="font-title text-2xl md:text-4xl lg:text-5xl text-light">📅 Calendar</h1>
           <Link
             to="/new-event"
-            className="px-6 py-3 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
+            className="px-3 py-2 md:px-6 md:py-3 bg-primary hover:bg-primary/80 text-white rounded-lg text-sm md:text-base font-medium transition-all"
           >
             + New Event
           </Link>
@@ -304,7 +304,7 @@ export default function Calendar() {
             
             {upcomingEvents.length === 0 ? (
               <div className="bg-white/5 border border-white/10 rounded-xl p-12 text-center">
-                <div className="text-6xl mb-4">📅</div>
+                <div className="text-4xl md:text-6xl mb-4">📅</div>
                 <h3 className="font-title text-2xl text-light mb-2">No Upcoming Events</h3>
                 <p className="text-light/60">Create your first event to get started!</p>
               </div>
@@ -447,7 +447,7 @@ export default function Calendar() {
           </div>
 
           {/* Calendar Grid */}
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-7 gap-1 md:gap-2">
             {/* Day Headers */}
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
               <div key={day} className="text-center font-medium text-light/60 py-2">

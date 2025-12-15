@@ -305,7 +305,7 @@ async function handleSubmitOrderResponse(status) {
                 )}
 
                 {/* Stats */}
-                <div className="flex gap-6">
+                <div className="flex gap-3 md:gap-6">
                   <div>
                     <div className="text-2xl font-bold text-primary">{clubTeams.length}</div>
                     <div className="text-xs text-light/50 uppercase tracking-wider">
@@ -348,7 +348,7 @@ async function handleSubmitOrderResponse(status) {
             ←
           </button>
           <div>
-            <h2 className="font-title text-3xl text-light">{selectedClub.name}</h2>
+            <h2 className="font-title text-xl md:text-3xl text-light">{selectedClub.name}</h2>
           </div>
         </div>
 
@@ -425,7 +425,7 @@ async function handleSubmitOrderResponse(status) {
     <div className="min-h-screen">
       {/* Hero Section */}
       <div className="mb-8 animate-fade-in">
-        <h1 className="font-display text-6xl md:text-7xl text-light mb-2 tracking-wider">
+        <h1 className="font-display text-3xl md:text-5xl lg:text-7xl text-light mb-2 tracking-wider">
           MY <span className="text-primary">CLUBS</span>
         </h1>
         <p className="text-light/60 text-lg">
@@ -481,7 +481,7 @@ async function handleSubmitOrderResponse(status) {
               placeholder="Type to search clubs..."
               value={clubSearchQuery}
               onChange={(e) => setClubSearchQuery(e.target.value)}
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all mb-2"
+              className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 md:px-4 md:py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all mb-2"
             />
             
             {/* Club Dropdown */}
@@ -492,7 +492,7 @@ async function handleSubmitOrderResponse(status) {
                 setSelectedTeam(''); 
                 setTeamSearchQuery('');
               }}
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+              className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 md:px-4 md:py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
             >
               <option value="" className="bg-mid-dark">-- Select a club --</option>
               {filteredClubsForRequest.map(c => (
@@ -522,14 +522,14 @@ async function handleSubmitOrderResponse(status) {
                 placeholder="Type to search teams..."
                 value={teamSearchQuery}
                 onChange={(e) => setTeamSearchQuery(e.target.value)}
-                className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all mb-2"
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 md:px-4 md:py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all mb-2"
               />
               
               {/* Team Dropdown */}
               <select
                 value={selectedTeam}
                 onChange={(e) => setSelectedTeam(e.target.value)}
-                className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 md:px-4 md:py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
               >
                 <option value="" className="bg-mid-dark">-- Select a team (optional) --</option>
                 {filteredTeams.map(t => (
@@ -677,14 +677,14 @@ async function handleSubmitOrderResponse(status) {
             <div className="flex gap-3">
               <button
                 onClick={() => handleSubmitOrderResponse('accepted')}
-                className="flex-1 px-4 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-all disabled:opacity-50"
+                className="flex-1 px-3 py-2 md:px-4 md:py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm md:text-base font-medium transition-all disabled:opacity-50"
                 disabled={respondingToOrder}
               >
                 {respondingToOrder ? 'Submitting...' : '✓ Accept & Submit'}
               </button>
               <button
                 onClick={() => handleSubmitOrderResponse('declined')}
-                className="px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-all disabled:opacity-50"
+                className="px-3 py-2 md:px-4 md:py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm md:text-base font-medium transition-all disabled:opacity-50"
                 disabled={respondingToOrder}
               >
                 ✗ Decline

@@ -242,7 +242,7 @@ export default function Teams() {
   if (!user) {
     return (
       <div className="min-h-screen p-6">
-        <h1 className="font-display text-4xl text-light mb-4">{t('nav.myTeams')}</h1>
+        <h1 className="font-display text-2xl md:text-4xl text-light mb-4">{t('nav.myTeams')}</h1>
         <p className="text-light/60">Please sign in to see your teams.</p>
       </div>
     );
@@ -252,7 +252,7 @@ export default function Teams() {
     <div className="min-h-screen">
       {/* Header */}
       <div className="mb-8 animate-fade-in">
-        <h1 className="font-display text-6xl md:text-7xl text-light mb-2 tracking-wider">
+        <h1 className="font-display text-3xl md:text-5xl lg:text-7xl text-light mb-2 tracking-wider">
           MY <span className="text-primary">TEAMS</span>
         </h1>
         <p className="text-light/60 text-lg">
@@ -265,7 +265,7 @@ export default function Teams() {
         <div className="mb-8 animate-fade-in" style={{ animationDelay: '0.05s' }}>
           <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-6 mb-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="text-3xl">📋</div>
+              <div className="text-2xl md:text-3xl">📋</div>
               <div>
                 <h2 className="font-title text-2xl text-light">Pending Orders</h2>
                 <p className="text-sm text-light/60">
@@ -405,7 +405,7 @@ export default function Teams() {
       <section className="animate-fade-in" style={{ animationDelay: '0.2s' }}>
         {filteredTeams.length === 0 ? (
           <div className="rounded-xl border border-dashed border-white/10 bg-white/5 backdrop-blur-sm p-8 text-center max-w-2xl mx-auto">
-            <div className="text-4xl mb-3">⚽</div>
+            <div className="text-3xl md:text-4xl mb-3">⚽</div>
             <h3 className="font-title text-xl text-light/80 mb-2">
               {userTeams.length === 0 ? 'No Teams Yet' : 'No Teams Found'}
             </h3>
@@ -424,7 +424,7 @@ export default function Teams() {
             )}
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4 lg:grid-cols-3">
             {filteredTeams.map((team) => {
               const totalMembers = (team.trainers || []).length + 
                                  (team.assistants || []).length + 
@@ -443,7 +443,7 @@ export default function Teams() {
 
                   <div className="relative z-10">
                     {/* Team Icon */}
-                    <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-accent to-primary flex items-center justify-center text-3xl mb-4">
+                    <div className="w-12 h-12 md:w-16 md:h-16 rounded-xl bg-gradient-to-br from-accent to-primary flex items-center justify-center text-2xl md:text-3xl mb-4">
                       {team.sport === 'Football' ? '⚽' :
                        team.sport === 'Basketball' ? '🏀' :
                        team.sport === 'Volleyball' ? '🏐' :
@@ -590,14 +590,14 @@ export default function Teams() {
             <div className="flex gap-3">
               <button
                 onClick={() => handleSubmitOrderResponse('accepted')}
-                className="flex-1 px-4 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-all disabled:opacity-50"
+                className="flex-1 px-3 py-2 md:px-4 md:py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm md:text-base font-medium transition-all disabled:opacity-50"
                 disabled={respondingToOrder}
               >
                 {respondingToOrder ? 'Submitting...' : '✓ Accept & Submit'}
               </button>
               <button
                 onClick={() => handleSubmitOrderResponse('declined')}
-                className="px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-all disabled:opacity-50"
+                className="px-3 py-2 md:px-4 md:py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm md:text-base font-medium transition-all disabled:opacity-50"
                 disabled={respondingToOrder}
               >
                 ✗ Decline

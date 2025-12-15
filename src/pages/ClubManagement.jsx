@@ -1984,7 +1984,7 @@ const filteredOrderResponses = useMemo(() => {
                       <span className="text-2xl md:text-3xl">👥</span>
                       <h3 className="font-semibold text-light">Teams</h3>
                     </div>
-                    <div className="text-4xl font-bold text-primary">
+                    <div className="text-2xl md:text-4xl font-bold">
                       {(() => {
                         const club = clubs.find(c => c.id === selectedClubId);
                         if (!club) return 0;
@@ -2004,7 +2004,7 @@ const filteredOrderResponses = useMemo(() => {
                       <span className="text-2xl md:text-3xl">⚽</span>
                       <h3 className="font-semibold text-light">Games</h3>
                     </div>
-                    <div className="text-4xl font-bold text-success">0</div>
+                    <div className="text-2xl md:text-4xl font-bold">0</div>
                     <p className="text-light/50 text-sm mt-1">Games attended</p>
                   </div>
 
@@ -2014,7 +2014,7 @@ const filteredOrderResponses = useMemo(() => {
                       <span className="text-2xl md:text-3xl">🏋️</span>
                       <h3 className="font-semibold text-light">Training</h3>
                     </div>
-                    <div className="text-4xl font-bold text-accent">0</div>
+                    <div className="text-2xl md:text-4xl font-bold">0</div>
                     <p className="text-light/50 text-sm mt-1">Extra trainings</p>
                   </div>
 
@@ -2024,7 +2024,7 @@ const filteredOrderResponses = useMemo(() => {
                       <span className="text-2xl md:text-3xl">🏆</span>
                       <h3 className="font-semibold text-light">Tournaments</h3>
                     </div>
-                    <div className="text-4xl font-bold text-secondary">0</div>
+                    <div className="text-2xl md:text-4xl font-bold">0</div>
                     <p className="text-light/50 text-sm mt-1">Tournaments attended</p>
                   </div>
                 </div>

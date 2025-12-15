@@ -157,7 +157,7 @@ export default function Chats() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-light">Chats</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-light">Chats</h1>
             <p className="text-light/60 mt-1">
               {isSuperAdmin(user)
                 ? 'All conversations (Admin View)'
@@ -166,7 +166,7 @@ export default function Chats() {
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium flex items-center gap-2"
+            className="px-3 py-2 md:px-6 md:py-3 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm md:text-base transition font-medium flex items-center gap-2"
           >
             <svg
               className="w-5 h-5"
@@ -193,7 +193,7 @@ export default function Chats() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search chats by title, club, or team..."
-              className="w-full px-4 py-3 pl-12 bg-mid-dark border border-white/10 rounded-lg text-light placeholder-light/40 focus:outline-none focus:border-primary transition"
+              className="w-full px-3 py-2 md:px-4 md:py-3 pl-10 md:pl-12 bg-mid-dark border border-white/10 rounded-lg text-sm md:text-base text-light placeholder-light/40 focus:outline-none focus:border-primary transition"
             />
             <svg
               className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-light/40"
@@ -245,7 +245,7 @@ export default function Chats() {
               return (
                 <div
                   key={chat.id}
-                  className="bg-mid-dark hover:bg-mid-dark/80 border border-white/10 rounded-lg p-4 cursor-pointer transition group"
+                  className="bg-mid-dark hover:bg-mid-dark/80 border border-white/10 rounded-lg p-3 md:p-4 cursor-pointer transition group"
                 >
                   <div className="flex items-start justify-between">
                     <div 
@@ -253,7 +253,7 @@ export default function Chats() {
                       onClick={() => handleChatClick(chat.id)}
                     >
                       {/* Title */}
-                      <h3 className="text-lg font-semibold text-light group-hover:text-primary transition truncate">
+                      <h3 className="text-base md:text-lg font-semibold text-light group-hover:text-primary transition truncate">
                         {chat.title}
                       </h3>
 
@@ -285,19 +285,19 @@ export default function Chats() {
                         <div className="flex gap-2">
                           <button
                             onClick={(e) => handleManageChat(chat, e)}
-                            className="p-2 hover:bg-blue-500/20 text-blue-400 rounded-lg transition"
+                            className="p-1.5 md:p-2 hover:bg-blue-500/20 text-blue-400 rounded-lg transition"
                             title="Manage members"
                           >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                             </svg>
                           </button>
                           <button
                             onClick={(e) => handleDeleteChat(chat, e)}
-                            className="p-2 hover:bg-red-500/20 text-red-400 rounded-lg transition"
+                            className="p-1.5 md:p-2 hover:bg-red-500/20 text-red-400 rounded-lg transition"
                             title="Delete chat"
                           >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
                           </button>
@@ -525,7 +525,7 @@ function ManageChatModal({ chat, user, onClose }) {
         <div className="p-6 border-t border-white/10">
           <button
             onClick={onClose}
-            className="w-full px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium"
+            className="w-full px-4 py-2 md:px-6 md:py-3 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm md:text-base transition font-medium"
           >
             Close
           </button>
@@ -738,7 +738,7 @@ function CreateChatModal({ user, onClose, onCreate }) {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Enter chat title"
-              className="w-full px-4 py-3 bg-dark border border-white/10 rounded-lg text-light placeholder-light/40 focus:outline-none focus:border-primary transition"
+              className="w-full px-3 py-2 md:px-4 md:py-3 text-sm md:text-base bg-dark border border-white/10 rounded-lg text-light placeholder-light/40 focus:outline-none focus:border-primary transition"
               required
             />
           </div>
@@ -755,7 +755,7 @@ function CreateChatModal({ user, onClose, onCreate }) {
                   setSelectedTeam('');
                   setSelectedMembers([]);
                 }}
-                className="w-full px-4 py-3 bg-dark border border-white/10 rounded-lg text-light focus:outline-none focus:border-primary transition"
+                className="w-full px-3 py-2 md:px-4 md:py-3 text-sm md:text-base bg-dark border border-white/10 rounded-lg text-light focus:outline-none focus:border-primary transition"
               >
                 <option value="">No club</option>
                 {clubs.map((club) => (
@@ -778,7 +778,7 @@ function CreateChatModal({ user, onClose, onCreate }) {
                   setSelectedTeam(e.target.value);
                   setSelectedMembers([]);
                 }}
-                className="w-full px-4 py-3 bg-dark border border-white/10 rounded-lg text-light focus:outline-none focus:border-primary transition"
+                className="w-full px-3 py-2 md:px-4 md:py-3 text-sm md:text-base bg-dark border border-white/10 rounded-lg text-light focus:outline-none focus:border-primary transition"
               >
                 <option value="">No team</option>
                 {teams.map((team) => (
@@ -894,14 +894,14 @@ function CreateChatModal({ user, onClose, onCreate }) {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-6 py-3 bg-mid-dark hover:bg-dark border border-white/10 text-light rounded-lg transition font-medium"
+              className="flex-1 px-4 py-2 md:px-6 md:py-3 bg-mid-dark hover:bg-dark border border-white/10 text-light rounded-lg text-sm md:text-base transition font-medium"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!title.trim() || selectedMembers.length === 0}
-              className="flex-1 px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2 md:px-6 md:py-3 bg-mid-dark hover:bg-dark border border-white/10 text-light rounded-lg text-sm md:text-base transition font-medium"
             >
               Create Chat
             </button>
