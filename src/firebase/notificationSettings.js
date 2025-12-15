@@ -36,10 +36,10 @@ export const getNotificationSettings = async (clubId, teamId = null) => {
     
     // Return default settings if not found
     return getDefaultNotificationSettings();
-  } catch (error) {
-    console.error('Error getting notification settings:', error);
-    throw error;
-  }
+    } catch (error) {
+      console.error('Error getting notification settings:', error);
+      return getDefaultNotificationSettings();  // ← ADD
+    }
 };
 
 /**
