@@ -1287,10 +1287,10 @@ const filteredOrderResponses = useMemo(() => {
     <div className="flex flex-col min-h-screen p-6">
       <div className="flex-1 overflow-auto">
         <div className="mb-8 animate-fade-in">
-          <h1 className="font-display text-6xl md:text-7xl text-light mb-2 tracking-wider">
+          <h1 className="font-display text-3xl md:text-5xl lg:text-7xl text-light mb-2 tracking-wider">
             <span className="text-primary">CLUB</span> MANAGEMENT
           </h1>
-          <p className="text-light/60 text-lg">Manage your club members and teams</p>
+          <p className="text-light/60 text-sm md:text-lg">Manage your club members and teams</p>
         </div>
 
         {/* Club selector */}
@@ -1396,7 +1396,7 @@ const filteredOrderResponses = useMemo(() => {
               <button
                 onClick={() => setActiveTab('management')}
                 className={`
-                  px-6 py-2 rounded-lg transition-all duration-200 font-medium
+                  px-3 py-2 md:px-6 rounded-lg transition-all duration-200 font-medium text-xs md:text-sm
                   ${activeTab === 'management'
                     ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg'
                     : 'bg-white/5 text-light/70 hover:bg-white/10 hover:text-light'}
@@ -1408,7 +1408,7 @@ const filteredOrderResponses = useMemo(() => {
               <button
                 onClick={() => setActiveTab('statistics')}
                 className={`
-                  px-6 py-2 rounded-lg transition-all duration-200 font-medium
+                  px-3 py-2 md:px-6 rounded-lg transition-all duration-200 font-medium text-xs md:text-sm
                   ${activeTab === 'statistics'
                     ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg'
                     : 'bg-white/5 text-light/70 hover:bg-white/10 hover:text-light'}
@@ -1420,7 +1420,7 @@ const filteredOrderResponses = useMemo(() => {
               <button
                 onClick={() => setActiveTab('requests')}
                 className={`
-                  px-6 py-2 rounded-lg transition-all duration-200 font-medium
+                  px-3 py-2 md:px-6 rounded-lg transition-all duration-200 font-medium text-xs md:text-sm
                   ${activeTab === 'requests'
                     ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg'
                     : 'bg-white/5 text-light/70 hover:bg-white/10 hover:text-light'}
@@ -1432,7 +1432,7 @@ const filteredOrderResponses = useMemo(() => {
               <button
                 onClick={() => setActiveTab('orders')}
                 className={`
-                  px-6 py-2 rounded-lg transition-all duration-200 font-medium
+                  px-3 py-2 md:px-6 rounded-lg transition-all duration-200 font-medium text-xs md:text-sm
                   ${activeTab === 'orders'
                     ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg'
                     : 'bg-white/5 text-light/70 hover:bg-white/10 hover:text-light'}
@@ -1444,7 +1444,7 @@ const filteredOrderResponses = useMemo(() => {
               <button
                 onClick={() => setActiveTab('notifications')}
                 className={`
-                  px-6 py-2 rounded-lg transition-all duration-200 font-medium
+                  px-3 py-2 md:px-6 rounded-lg transition-all duration-200 font-medium text-xs md:text-sm
                   ${activeTab === 'notifications'
                     ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg'
                     : 'bg-white/5 text-light/70 hover:bg-white/10 hover:text-light'}
@@ -1461,7 +1461,7 @@ const filteredOrderResponses = useMemo(() => {
             {/* Teams List - Enhanced */}
             {selectedClubId && clubTeams.length > 0 && (
               <div className="mb-6 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-                <h2 className="font-title text-2xl text-light mb-4">Teams in this Club</h2>
+                <h2 className="font-title text-xl md:text-2xl text-light mb-4">Teams in this Club</h2>
                 
                 {/* Filter by Trainer/Assistant */}
 <div className="mb-4">
@@ -1545,7 +1545,7 @@ const filteredOrderResponses = useMemo(() => {
                             <div className="flex-1">
                               <h3 
                                 onClick={() => navigate(`/team/${selectedClubId}/${t.id}`)}
-                                className="font-semibold text-light text-lg mb-2 cursor-pointer hover:text-primary transition-colors"
+                                className="font-semibold text-light text-base md:text-lg mb-2 cursor-pointer hover:text-primary transition-colors"
                               >
                                 {t.name}
                               </h3>
@@ -1794,7 +1794,7 @@ const filteredOrderResponses = useMemo(() => {
         {/* Pending Requests Tab */}
         {selectedClubId && activeTab === 'requests' && (
           <div className="animate-fade-in">
-            <h2 className="font-title text-3xl text-light mb-6">Pending Join Requests</h2>
+            <h2 className="font-title text-xl md:text-3xl text-light mb-4 md:mb-6">Pending Join Requests</h2>
             
             {loadingRequests ? (
               <div className="text-center py-12">
@@ -1802,8 +1802,8 @@ const filteredOrderResponses = useMemo(() => {
               </div>
             ) : pendingRequests.length === 0 ? (
               <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-12 text-center">
-                <div className="text-6xl mb-4">✅</div>
-                <h3 className="font-title text-2xl text-light mb-2">All Caught Up!</h3>
+                <div className="text-4xl md:text-6xl mb-4">✅</div>
+                <h3 className="font-title text-lg md:text-2xl text-light mb-2">All Caught Up!</h3>
                 <p className="text-light/60">No pending join requests at the moment.</p>
               </div>
             ) : (
@@ -1832,7 +1832,7 @@ const filteredOrderResponses = useMemo(() => {
                               {(requester.username || requester.email).charAt(0).toUpperCase()}
                             </div>
                             <div>
-                              <div className="font-semibold text-light text-lg">
+                              <div className="font-semibold text-light text-base md:text-lg">
                                 {requester.username || requester.email}
                               </div>
                               <div className="text-xs text-light/50">
@@ -1886,9 +1886,9 @@ const filteredOrderResponses = useMemo(() => {
             {/* Stats */}
             {pendingRequests.length > 0 && (
               <div className="mt-8 text-center">
-                <div className="inline-block bg-white/5 border border-white/10 rounded-lg px-6 py-3">
+                <div className="inline-block bg-white/5 border border-white/10 rounded-lg px-4 py-2 md:px-6 md:py-3">
                   <span className="text-light/60 text-sm">Total Pending: </span>
-                  <span className="font-bold text-secondary text-lg">{pendingRequests.length}</span>
+                  <span className="font-bold text-secondary text-base md:text-lg">{pendingRequests.length}</span>
                 </div>
               </div>
             )}
@@ -1898,7 +1898,7 @@ const filteredOrderResponses = useMemo(() => {
         {/* Statistics Tab */}
         {selectedClubId && activeTab === 'statistics' && (
           <div className="animate-fade-in">
-            <h2 className="font-title text-3xl text-light mb-6">Trainer Statistics</h2>
+            <h2 className="font-title text-xl md:text-3xl text-light mb-4 md:mb-6">Trainer Statistics</h2>
             
             {!selectedTrainer ? (
               <>
@@ -1915,7 +1915,7 @@ const filteredOrderResponses = useMemo(() => {
 
                 {/* Trainers List */}
                 <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-                  <h3 className="font-semibold text-light text-lg mb-4">Select Trainer</h3>
+                  <h3 className="font-semibold text-light text-base md:text-lg mb-4">Select Trainer</h3>
                   <div className="space-y-2">
                     {(() => {
                       const trainers = clubMembers.filter(m => 
@@ -1965,11 +1965,11 @@ const filteredOrderResponses = useMemo(() => {
                 {/* Trainer Info */}
                 <div className="mb-6 bg-gradient-to-r from-primary/20 to-accent/20 border border-white/10 rounded-xl p-6">
                   <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center font-bold text-white text-2xl">
+                    <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center font-bold text-white text-lg md:text-2xl">
                       {selectedTrainer.username.charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <h3 className="font-title text-2xl text-light">{selectedTrainer.username}</h3>
+                      <h3 className="font-title text-lg md:text-2xl text-light">{selectedTrainer.username}</h3>
                       <p className="text-light/60">{selectedTrainer.email}</p>
                       <p className="text-sm text-light/50 mt-1">Role: {selectedTrainer.role}</p>
                     </div>
@@ -1981,7 +1981,7 @@ const filteredOrderResponses = useMemo(() => {
                   {/* Teams Count */}
                   <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
                     <div className="flex items-center gap-3 mb-2">
-                      <span className="text-3xl">👥</span>
+                      <span className="text-2xl md:text-3xl">👥</span>
                       <h3 className="font-semibold text-light">Teams</h3>
                     </div>
                     <div className="text-4xl font-bold text-primary">
@@ -2001,7 +2001,7 @@ const filteredOrderResponses = useMemo(() => {
                   {/* Games Attended */}
                   <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
                     <div className="flex items-center gap-3 mb-2">
-                      <span className="text-3xl">⚽</span>
+                      <span className="text-2xl md:text-3xl">⚽</span>
                       <h3 className="font-semibold text-light">Games</h3>
                     </div>
                     <div className="text-4xl font-bold text-success">0</div>
@@ -2011,7 +2011,7 @@ const filteredOrderResponses = useMemo(() => {
                   {/* Extra Trainings */}
                   <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
                     <div className="flex items-center gap-3 mb-2">
-                      <span className="text-3xl">🏋️</span>
+                      <span className="text-2xl md:text-3xl">🏋️</span>
                       <h3 className="font-semibold text-light">Training</h3>
                     </div>
                     <div className="text-4xl font-bold text-accent">0</div>
@@ -2021,7 +2021,7 @@ const filteredOrderResponses = useMemo(() => {
                   {/* Tournaments */}
                   <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
                     <div className="flex items-center gap-3 mb-2">
-                      <span className="text-3xl">🏆</span>
+                      <span className="text-2xl md:text-3xl">🏆</span>
                       <h3 className="font-semibold text-light">Tournaments</h3>
                     </div>
                     <div className="text-4xl font-bold text-secondary">0</div>
@@ -2031,7 +2031,7 @@ const filteredOrderResponses = useMemo(() => {
 
                 {/* Manual Entry Form */}
                 <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-                  <h3 className="font-title text-2xl text-light mb-4">Add Manual Entry</h3>
+                  <h3 className="font-title text-xl md:text-2xl text-light mb-4">Add Manual Entry</h3>
                   
                   <div className="grid gap-4">
                     <div>
@@ -2076,7 +2076,7 @@ const filteredOrderResponses = useMemo(() => {
   <div className="space-y-6">
     {/* Header */}
     <div className="flex items-center justify-between">
-      <h2 className="font-title text-2xl text-light">Order Management</h2>
+      <h2 className="font-title text-lg md:text-2xl text-light">Order Management</h2>
       <button
         onClick={() => setShowCreateOrderModal(true)}
         className="px-4 py-2 text-sm bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
@@ -2194,7 +2194,7 @@ const filteredOrderResponses = useMemo(() => {
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
         <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="font-title text-2xl text-light">Create Order Template</h3>
+            <h3 className="font-title text-lg md:text-2xl text-light">Create Order Template</h3>
             <button
               onClick={() => {
                 setShowCreateOrderModal(false);
@@ -2435,7 +2435,7 @@ const filteredOrderResponses = useMemo(() => {
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="font-title text-2xl text-light">{selectedOrder.title} - Responses</h3>
+            <h3 className="font-title text-lg md:text-2xl text-light">{selectedOrder.title} - Responses</h3>
             <p className="text-sm text-light/60 mt-1">
               {orderResponses.filter(r => r.status === 'accepted').length} Accepted • 
               {orderResponses.filter(r => r.status === 'declined').length} Declined • 
@@ -3083,7 +3083,7 @@ const filteredOrderResponses = useMemo(() => {
       {showEditClubModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-mid-dark border border-white/10 rounded-xl p-6 max-w-md w-full">
-            <h3 className="font-title text-2xl text-light mb-4">Edit Club</h3>
+            <h3 className="font-title text-xl md:text-2xl text-light mb-4">Edit Club</h3>
             
             <div className="space-y-4 mb-6">
               <div>
@@ -3151,7 +3151,7 @@ const filteredOrderResponses = useMemo(() => {
       {showLogoUpload && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-mid-dark border border-white/10 rounded-xl p-6 max-w-md w-full">
-            <h3 className="font-title text-2xl text-light mb-4">
+            <h3 className="font-title text-xl md:text-2xl text-light mb-4">
               Change {logoUploadType === 'club' ? 'Club' : 'Team'} Logo
             </h3>
             
