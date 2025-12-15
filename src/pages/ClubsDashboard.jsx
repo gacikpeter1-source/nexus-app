@@ -278,7 +278,7 @@ async function handleSubmitOrderResponse(status) {
             <div
               key={club.id}
               onClick={() => setSelectedClubId(club.id)}
-              className="group relative cursor-pointer bg-white/5 backdrop-blur-sm border border-white/10 p-6 rounded-xl hover:bg-white/10 hover:border-primary/50 transition-all duration-300 card-hover overflow-hidden"
+              className="group relative cursor-pointer bg-white/5 backdrop-blur-sm border border-white/10 p-3 md:p-6 rounded-xl hover:bg-white/10 hover:border-primary/50 transition-all duration-300 card-hover overflow-hidden"
               style={{ 
                 animationDelay: `${idx * 0.05}s`,
                 ...(club.logoUrl && {
@@ -385,7 +385,7 @@ async function handleSubmitOrderResponse(status) {
                 <div className="relative z-10 flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     {/* Team Icon */}
-                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-2xl font-bold text-white">
+                    <div className="w-8 h-8 md:w-14 md:h-14 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-base md:text-2xl font-bold text-white">
                       {team.name.charAt(0).toUpperCase()}
                     </div>
 
@@ -400,7 +400,7 @@ async function handleSubmitOrderResponse(status) {
                   </div>
 
                   <div className="text-right">
-                    <div className="text-2xl font-bold text-primary">
+                    <div className="text-base md:text-2xl font-bold text-primary">
                       {(team.members || []).length}
                     </div>
                     <div className="text-xs text-light/50 uppercase tracking-wider">
@@ -438,14 +438,14 @@ async function handleSubmitOrderResponse(status) {
         <div className="flex gap-3 mb-8 animate-fade-in" style={{ animationDelay: '0.1s' }}>
           <button
             onClick={() => setOpenCreateModal(true)}
-            className="btn-primary flex items-center gap-2 px-2 py-1 md:px-4 md:py-2 text-xs md:text-sm"
+            className="btn-primary flex items-center gap-1 px-2 py-0.5 md:px-2 md:py-1 text-xs md:text-sm"
           >
             <span>+</span>
             <span>Create Club</span>
           </button>
           <button
             onClick={() => setOpenRequestModal(true)}
-            className="btn-secondary flex items-center gap-2 px-2 py-1 md:px-4 md:py-2 text-xs md:text-sm"
+            className="btn-secondary flex items-center gap-1 px-2 py-0.5 md:px-2 md:py-1 text-xs md:text-sm"
           >
             <span>+</span>
             <span>Request to Join</span>
