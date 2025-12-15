@@ -1314,7 +1314,7 @@ const filteredOrderResponses = useMemo(() => {
             <div className="mt-3 flex gap-2">
               <button
                 onClick={() => setShowCreateTeamModal(true)}
-                className="px-4 py-2 bg-primary/80 hover:bg-primary text-white rounded-lg text-sm font-medium transition-all inline-flex items-center gap-2"
+                className="px-1 py-0.5 md:px-2 md:py-0.8 md:px-4 md:py-2 bg-primary/80 hover:bg-primary text-white rounded-lg text-sm font-medium transition-all inline-flex items-center gap-2"
               >
                 <span>Create Team</span>
               </button>
@@ -1327,7 +1327,7 @@ const filteredOrderResponses = useMemo(() => {
                   setEditCustomClubType('');
                   setShowEditClubModal(true);
                 }}
-                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-all inline-flex items-center gap-2"
+                className="px-1 py-0.5 md:px-2 md:py-0.8 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-all inline-flex items-center gap-2"
               >
                 <span>Edit Club</span>
               </button>
@@ -1337,7 +1337,7 @@ const filteredOrderResponses = useMemo(() => {
                   setLogoUploadType('club');
                   setShowLogoUpload(true);
                 }}
-                className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg text-sm font-medium transition-all inline-flex items-center gap-2"
+                className="px-1 py-0.5 md:px-2 md:py-0.8 bg-purple-500 hover:bg-purple-600 text-white rounded-lg text-sm font-medium transition-all inline-flex items-center gap-2"
               >
                  <span>Change Logo</span>
               </button>
@@ -1396,7 +1396,7 @@ const filteredOrderResponses = useMemo(() => {
               <button
                 onClick={() => setActiveTab('management')}
                 className={`
-                  px-3 py-2 md:px-6 rounded-lg transition-all duration-200 font-medium text-xs md:text-sm
+                  px-1 py-0.5 md:px-2 md:py-0.8 rounded-lg transition-all duration-200 font-medium text-xs md:text-sm
                   ${activeTab === 'management'
                     ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg'
                     : 'bg-white/5 text-light/70 hover:bg-white/10 hover:text-light'}
@@ -1408,7 +1408,7 @@ const filteredOrderResponses = useMemo(() => {
               <button
                 onClick={() => setActiveTab('statistics')}
                 className={`
-                  px-3 py-2 md:px-6 rounded-lg transition-all duration-200 font-medium text-xs md:text-sm
+                  px-1 py-0.5 md:px-2 md:py-0.8 rounded-lg transition-all duration-200 font-medium text-xs md:text-sm
                   ${activeTab === 'statistics'
                     ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg'
                     : 'bg-white/5 text-light/70 hover:bg-white/10 hover:text-light'}
@@ -1420,7 +1420,7 @@ const filteredOrderResponses = useMemo(() => {
               <button
                 onClick={() => setActiveTab('requests')}
                 className={`
-                  px-3 py-2 md:px-6 rounded-lg transition-all duration-200 font-medium text-xs md:text-sm
+                  px-1 py-0.5 md:px-2 md:py-0.8 rounded-lg transition-all duration-200 font-medium text-xs md:text-sm
                   ${activeTab === 'requests'
                     ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg'
                     : 'bg-white/5 text-light/70 hover:bg-white/10 hover:text-light'}
@@ -1432,7 +1432,7 @@ const filteredOrderResponses = useMemo(() => {
               <button
                 onClick={() => setActiveTab('orders')}
                 className={`
-                  px-3 py-2 md:px-6 rounded-lg transition-all duration-200 font-medium text-xs md:text-sm
+                  px-1 py-0.5 md:px-2 md:py-0.8 rounded-lg transition-all duration-200 font-medium text-xs md:text-sm
                   ${activeTab === 'orders'
                     ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg'
                     : 'bg-white/5 text-light/70 hover:bg-white/10 hover:text-light'}
@@ -1444,7 +1444,7 @@ const filteredOrderResponses = useMemo(() => {
               <button
                 onClick={() => setActiveTab('notifications')}
                 className={`
-                  px-3 py-2 md:px-6 rounded-lg transition-all duration-200 font-medium text-xs md:text-sm
+                  px-1 py-0.5 md:px-2 md:py-0.8 rounded-lg transition-all duration-200 font-medium text-xs md:text-sm
                   ${activeTab === 'notifications'
                     ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg'
                     : 'bg-white/5 text-light/70 hover:bg-white/10 hover:text-light'}
