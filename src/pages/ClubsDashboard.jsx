@@ -294,7 +294,7 @@ async function handleSubmitOrderResponse(status) {
               </div>
 
               <div className="relative z-10">
-                <h3 className="font-title text-2xl text-light group-hover:text-primary transition-colors mb-1">
+                <h3 className="font-title text-lg md:text-2xl text-light group-hover:text-primary transition-colors mb-1">
                   {club.name}
                 </h3>
                 
@@ -307,13 +307,13 @@ async function handleSubmitOrderResponse(status) {
                 {/* Stats */}
                 <div className="flex gap-3 md:gap-6">
                   <div>
-                    <div className="text-2xl font-bold text-primary">{clubTeams.length}</div>
+                    <div className="text-lg md:text-2xl font-bold text-primary">{clubTeams.length}</div>
                     <div className="text-xs text-light/50 uppercase tracking-wider">
                       {clubTeams.length === 1 ? 'Team' : 'Teams'}
                     </div>
                   </div>
                   <div>
-                    <div className="text-2xl font-bold text-accent">{totalMembers}</div>
+                    <div className="text-lg md:text-2xl font-bold text-accent">{totalMembers}</div>
                     <div className="text-xs text-light/50 uppercase tracking-wider">
                       {totalMembers === 1 ? 'Member' : 'Members'}
                     </div>
@@ -438,14 +438,14 @@ async function handleSubmitOrderResponse(status) {
         <div className="flex gap-3 mb-8 animate-fade-in" style={{ animationDelay: '0.1s' }}>
           <button
             onClick={() => setOpenCreateModal(true)}
-            className="btn-primary flex items-center gap-2"
+            className="btn-primary flex items-center gap-2 px-2 py-1 md:px-4 md:py-2 text-xs md:text-sm"
           >
             <span>+</span>
             <span>Create Club</span>
           </button>
           <button
             onClick={() => setOpenRequestModal(true)}
-            className="btn-secondary flex items-center gap-2"
+            className="btn-secondary flex items-center gap-2 px-2 py-1 md:px-4 md:py-2 text-xs md:text-sm"
           >
             <span>+</span>
             <span>Request to Join</span>
