@@ -437,7 +437,7 @@ const handleCreateTeamChat = async () => {
         <p className="text-light/60 mb-6">This team doesn't exist or has been deleted.</p>
         <button
           onClick={() => navigate('/dashboard')}
-          className="px-6 py-3 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
+          className="px-4 py-2 md:px-6 md:py-3 bg-primary hover:bg-primary/80 text-white rounded-lg text-sm md:text-base font-medium transition-all"
         >
           Back to Dashboard
         </button>
@@ -531,7 +531,7 @@ const handleCreateTeamChat = async () => {
           {/* Leave Team Button */}
           <button
             onClick={handleLeaveTeam}
-            className="px-1 py-1 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-all flex items-center gap-2"
+            className="px-2 py-1 md:px-4 md:py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs md:text-sm font-medium transition-all flex items-center gap-1 md:gap-2"
           >
             <span>🚪</span>
             <span>Leave Team</span>
@@ -539,67 +539,67 @@ const handleCreateTeamChat = async () => {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 mb-6 border-b border-white/10">
+      {/* Tabs - Horizontal Scrollable */}
+      <div className="flex gap-1 mb-6 border-b border-white/10 overflow-x-auto pb-2 scrollbar-hide">
         <button
           onClick={() => setActiveTab('overview')}
-          className={`px-6 py-3 font-medium transition-all ${
+          className={`px-2 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-all whitespace-nowrap rounded-t ${
             activeTab === 'overview'
-              ? 'text-primary border-b-2 border-primary'
-              : 'text-light/60 hover:text-light'
+              ? 'text-primary border-b-2 border-primary bg-primary/10'
+              : 'text-light/60 hover:text-light hover:bg-white/5'
           }`}
         >
           Overview
         </button>
         <button
           onClick={() => setActiveTab('chat')}
-          className={`px-6 py-3 font-medium transition-all ${
+          className={`px-2 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-all whitespace-nowrap rounded-t ${
             activeTab === 'chat'
-              ? 'text-primary border-b-2 border-primary'
-              : 'text-light/60 hover:text-light'
+              ? 'text-primary border-b-2 border-primary bg-primary/10'
+              : 'text-light/60 hover:text-light hover:bg-white/5'
           }`}
         >
           Chat
         </button>
         <button
           onClick={() => setActiveTab('attendance')}
-          className={`px-6 py-3 font-medium transition-all ${
+          className={`px-2 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-all whitespace-nowrap rounded-t ${
             activeTab === 'attendance'
-              ? 'text-primary border-b-2 border-primary'
-              : 'text-light/60 hover:text-light'
+              ? 'text-primary border-b-2 border-primary bg-primary/10'
+              : 'text-light/60 hover:text-light hover:bg-white/5'
           }`}
         >
-        Attendance
+          Attend
         </button>
         <button
           onClick={() => setActiveTab('members')}
-          className={`px-6 py-3 font-medium transition-all ${
+          className={`px-2 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-all whitespace-nowrap rounded-t ${
             activeTab === 'members'
-              ? 'text-primary border-b-2 border-primary'
-              : 'text-light/60 hover:text-light'
+              ? 'text-primary border-b-2 border-primary bg-primary/10'
+              : 'text-light/60 hover:text-light hover:bg-white/5'
           }`}
         >
           Members ({members.length})
         </button>
         <button
           onClick={() => setActiveTab('staff')}
-          className={`px-6 py-3 font-medium transition-all ${
+          className={`px-2 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-all whitespace-nowrap rounded-t ${
             activeTab === 'staff'
-              ? 'text-primary border-b-2 border-primary'
-              : 'text-light/60 hover:text-light'
+              ? 'text-primary border-b-2 border-primary bg-primary/10'
+              : 'text-light/60 hover:text-light hover:bg-white/5'
           }`}
         >
-          Trainers & Staff ({trainers.length + assistants.length})
+          Staff ({trainers.length + assistants.length})
         </button>
         <button
           onClick={() => setActiveTab('statistics')}
-          className={`px-6 py-3 font-medium transition-all ${
+          className={`px-2 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-all whitespace-nowrap rounded-t ${
             activeTab === 'statistics'
-              ? 'text-primary border-b-2 border-primary'
-              : 'text-light/60 hover:text-light'
+              ? 'text-primary border-b-2 border-primary bg-primary/10'
+              : 'text-light/60 hover:text-light hover:bg-white/5'
           }`}
         >
-          Statistics
+          Stats
         </button>
       </div>
 
@@ -609,11 +609,11 @@ const handleCreateTeamChat = async () => {
           <div className="space-y-6 animate-fade-in">
             {/* Upcoming Events */}
             <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-              <h2 className="font-title text-2xl text-light mb-4">Upcoming Events</h2>
+              <h2 className="font-title text-lg md:text-2xl text-light mb-4">Upcoming Events</h2>
               
               {upcomingEvents.length === 0 ? (
                 <div className="text-center py-12">
-                  <div className="text-4xl mb-2">📅</div>
+                  <div className="text-2xl md:text-4xl mb-2">📅</div>
                   <p className="text-light/60">No upcoming events</p>
                   <p className="text-light/40 text-sm mt-1">Events will appear here</p>
                 </div>
@@ -717,7 +717,7 @@ const handleCreateTeamChat = async () => {
               
               {orders.length === 0 ? (
                 <div className="text-center py-12">
-                  <div className="text-4xl mb-2">📋</div>
+                  <div className="text-2xl md:text-4xl mb-2">📋</div>
                   <p className="text-light/60">No orders yet</p>
                   <p className="text-light/40 text-sm mt-1">Orders will appear here</p>
                 </div>
@@ -842,7 +842,7 @@ onUpdateTeamSettings={async (settings) => {
               
               {trainers.length === 0 ? (
                 <div className="text-center py-8">
-                  <div className="text-3xl mb-2">👨‍🏫</div>
+                  <div className="text-2xl md:text-3xl mb-2">👨‍🏫</div>
                   <p className="text-light/60">No trainers assigned</p>
                 </div>
               ) : (
@@ -887,7 +887,7 @@ onUpdateTeamSettings={async (settings) => {
               
               {assistants.length === 0 ? (
                 <div className="text-center py-8">
-                  <div className="text-3xl mb-2">👨‍💼</div>
+                  <div className="text-2xl md:text-3xl mb-2">👨‍💼</div>
                   <p className="text-light/60">No assistants assigned</p>
                 </div>
               ) : (
@@ -1101,7 +1101,7 @@ onUpdateTeamSettings={async (settings) => {
               </div>
             ) : filteredAttendanceRecords.length === 0 ? (
               <div className="bg-white/5 border border-white/10 rounded-xl p-12 text-center">
-                <div className="text-6xl mb-4">📋</div>
+                <div className="text-2xl md:text-3xl md:text-6xl mb-4">📋</div>
                 <h3 className="font-title text-2xl text-light mb-2">No Attendance Records</h3>
                 <p className="text-light/60 mb-4">
                   {attendanceSearchQuery || attendanceFilterType !== 'all' 
@@ -1132,7 +1132,7 @@ onUpdateTeamSettings={async (settings) => {
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex items-start gap-4 flex-1">
-                          <div className="text-4xl">{getAttendanceTypeIcon(record.type)}</div>
+                          <div className="text-2xl md:text-4xl">{getAttendanceTypeIcon(record.type)}</div>
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
                               <h3 className="font-title text-xl text-light capitalize">
