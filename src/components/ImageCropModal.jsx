@@ -21,6 +21,11 @@ export default function ImageCropModal({
 
   const handleApply = async () => {
     try {
+          // Validate crop area
+    if (!croppedAreaPixels || croppedAreaPixels.width === 0 || croppedAreaPixels.height === 0) {
+      alert('Please adjust the crop area before applying');
+      return;
+    }
       setProcessing(true);
       const croppedImage = await getCroppedImg(image, croppedAreaPixels);
       onComplete(croppedImage);
@@ -64,9 +69,17 @@ export default function ImageCropModal({
             onCropChange={setCrop}
             onZoomChange={setZoom}
             onCropComplete={onCropComplete}
+            restrictPosition={false}
+            cropShape="rect"
+            showGrid={true} 
+            cropSize={{ width: 400, height: 400 }} // ADD THIS - makes crop box bigger
             style={{
               containerStyle: {
                 backgroundColor: '#000'
+              },
+              cropAreaStyle: {  // ADD THIS
+                border: '2px solid #fff',
+                color: 'rgba(255, 255, 255, 0.5)'
               }
             }}
           />

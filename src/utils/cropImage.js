@@ -84,6 +84,20 @@ export async function getCroppedImg(
   canvas.width = pixelCrop.width;
   canvas.height = pixelCrop.height;
 
+// Resize if too large
+const MAX_SIZE = 800;
+if (canvas.width > MAX_SIZE || canvas.height > MAX_SIZE) {
+  const ratio = Math.min(MAX_SIZE / canvas.width, MAX_SIZE / canvas.height);
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = canvas.width * ratio;
+  tempCanvas.height = canvas.height * ratio;
+  const tempCtx = tempCanvas.getContext('2d');
+  tempCtx.drawImage(canvas, 0, 0, tempCanvas.width, tempCanvas.height);
+  canvas.width = tempCanvas.width;
+  canvas.height = tempCanvas.height;
+  ctx.drawImage(tempCanvas, 0, 0);
+}
+
   // Paste generated rotate image at the top left corner
   ctx.putImageData(data, 0, 0);
 
@@ -102,7 +116,7 @@ export async function getCroppedImg(
       };
       reader.onerror = reject;
       reader.readAsDataURL(blob);
-    }, 'image/jpeg', 0.9); // JPEG at 90% quality
+    }, 'image/jpeg', 0.6); // JPEG at 90% quality
   });
 }
 

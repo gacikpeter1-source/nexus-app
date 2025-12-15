@@ -42,6 +42,7 @@ export default function Team() {
   const [showOrdersDropdown, setShowOrdersDropdown] = useState(false);
   const [teamChat, setTeamChat] = useState(null);
   
+  
   // Attendance state
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [attendanceStats, setAttendanceStats] = useState(null);
@@ -73,6 +74,8 @@ export default function Team() {
       if (clubData) {
         setClub(clubData);
       }
+      
+
 
       // Load all users for name lookup
       const users = await getAllUsers();
@@ -805,11 +808,21 @@ const handleCreateTeamChat = async () => {
             allUsers={allUsers}
             currentUser={user}
             userSubscription={user.isSuperAdmin ? 'full' : (user.subscription || 'free')}
-            onUpdateTeamSettings={async (settings) => {
-              await updateTeamCardSettings(clubId, teamId, settings);
-              await loadTeamData();
-              showToast('Settings saved', 'success');
-            }}
+onUpdateTeamSettings={async (settings) => {
+  console.log('🔧 Team.jsx updating settings:', settings);
+  try {
+    await updateTeamCardSettings(clubId, teamId, settings);
+    console.log('💾 Settings saved to Firestore');
+    
+    await loadTeamData();
+    console.log('🔄 Team data reloaded');
+    
+    showToast('Settings saved', 'success');
+  } catch (error) {
+    console.error('❌ Error in onUpdateTeamSettings:', error);
+    showToast('Failed to save settings', 'error');
+  }
+}}
             onUpdateMemberData={async (memberId, memberData) => {          
               await updateTeamMemberData(clubId, teamId, memberId, memberData);
               await loadTeamData(); // Reload to show changes

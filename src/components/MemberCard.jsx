@@ -1,12 +1,15 @@
 // src/components/MemberCard.jsx - FULLY ENHANCED - FIXED
 import { useState } from 'react';
+import SlidingStatsPanel from './SlidingStatsPanel';
 
 export default function MemberCard({ 
   member, 
   teamStats = [], 
   cardSettings = {},
   badgeSettings = {},
+  statsTemplate = {},
   teamMemberData = {},
+  customFields = [],
   currentUserId,
   canEdit = false,
   onEdit,
@@ -14,6 +17,7 @@ export default function MemberCard({
   onViewProfile 
 }) {
   const [imageError, setImageError] = useState(false);
+  const [showStatsPanel, setShowStatsPanel] = useState(false);
 
   // Default card settings
   const {
@@ -37,12 +41,18 @@ export default function MemberCard({
 
   // Team-specific data
   const jerseyNumber = teamMemberData.jerseyNumber || member.jerseyNumber;
-  const position = teamMemberData.position || member.position;
-  const handedness = teamMemberData.handedness || member.handedness;
+  const position = teamMemberData.post || teamMemberData.position || member.position;
+  const handedness = teamMemberData.handednes || teamMemberData.handedness || member.handedness;
   const age = teamMemberData.age || member.age;
   const phone = teamMemberData.phone || member.phone;
   const teamProfileImage = teamMemberData.profileImage;
   const useMainProfile = teamMemberData.useMainProfile !== false;
+
+console.log('🔍 customFields type check:', {
+  customFields: customFields,
+  type: typeof customFields,
+  isArray: Array.isArray(customFields)
+});
 
   // Determine which image to use
   const displayImage = teamProfileImage || (useMainProfile ? profileImage : null);
@@ -176,6 +186,17 @@ export default function MemberCard({
             background: `linear-gradient(to right, ${primaryColor}, ${secondaryColor}, ${primaryColor})` 
           }}
         >
+          {/* Stats Panel Button - Top Left */}
+            {statsTemplate?.enabled && (
+              <button
+                onClick={() => setShowStatsPanel(true)}
+                className="absolute top-2 left-2 w-8 h-8 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white font-bold transition"
+                title="View detailed stats"
+              >
+                →
+              </button>
+            )}
+
           {/* Badges - Top Right */}
           {badges.length > 0 && (
             <div className="absolute top-2 right-2 flex gap-1">
@@ -203,7 +224,7 @@ export default function MemberCard({
             </div>
           )}
           
-          <div className="text-white font-bold text-lg tracking-wider">TEAM MEMBER</div>
+          <div className="text-white font-bold text-lg tracking-wider">{username}</div>
           <div className="text-white/80 text-sm">2024-2025 SEASON</div>
         </div>
 
@@ -214,11 +235,7 @@ export default function MemberCard({
             background: `linear-gradient(to bottom, #334155, #1e293b)` 
           }}
         >
-            {console.log('🐝 Rendering section:', {
-    hasJerseyBg: !!jerseyBackgroundImage,
-    jerseyNumber
-  })}
-          {/* Photo Section Background (Layer 3) - FIXED: Removed duplicate jersey number */}
+          {/* Photo Section Background (Layer 3) */}
           {(jerseyNumber || jerseyBackgroundImage) && (
             <div className="absolute top-0 right-0 w-full h-full overflow-hidden">
               {jerseyBackgroundImage ? (
@@ -237,69 +254,68 @@ export default function MemberCard({
             </div>
           )}
           
-          {/* Player Photo */}
-          <div className="relative z-10 mx-auto w-40 h-40 mb-4">
-            {displayImage && !imageError ? (
-              <img
-                src={displayImage}
-                alt={username}
-                onError={() => setImageError(true)}
-                className="w-full h-full rounded-full object-cover shadow-xl border-4"
-                style={{ borderColor: accentColor }}
-              />
-            ) : (
-              <div 
-                className="w-full h-full rounded-full flex items-center justify-center text-6xl font-bold text-white shadow-xl border-4"
-                style={{ 
-                  background: `linear-gradient(to bottom right, ${primaryColor}, ${secondaryColor})`,
-                  borderColor: accentColor
-                }}
-              >
-                {getInitials()}
-              </div>
-            )}
-            
-            {/* Star Badge (Top Badge) */}
-            {badges.length > 0 && (
-              <div 
-                className="absolute -bottom-2 -right-2 rounded-full p-2 border-4 border-slate-800 shadow-lg"
-                style={{ backgroundColor: getBadgeDisplay(badges[0].badge).color }}
-              >
-                <span className="text-2xl">⭐</span>
-              </div>
-            )}
-          </div>
-
-          {/* Player Name & Number */}
-          <div className="text-center relative z-10">
-            <div className="text-3xl font-black text-white mb-1 tracking-tight uppercase">
-              {username}
-            </div>
-            
-            <div className="flex items-center justify-center gap-3" style={{ color: accentColor }}>
-              {jerseyNumber && (
-                <span className="text-5xl font-black">#{jerseyNumber}</span>
-              )}
-              {position && (
-                <div className="text-left">
-                  <div className="text-xs" style={{ color: `${secondaryColor}dd` }}>POSITION</div>
-                  <div className="text-sm font-bold uppercase">{position}</div>
-                  {handedness && (
-                    <div className="text-xs text-white/60">
-                      {handedness === 'left' ? '👈 Left' : '👉 Right'}
+          {/* LAYOUT: Left (Custom Fields) + Right (Photo) */}
+          <div className="flex gap-3 items-start relative z-10">
+            {/* LEFT SIDE - Custom Fields */}
+            <div className="flex-1 space-y-1.5 text-xs max-h-40 overflow-y-auto pr-1">
+              {(customFields || [])
+                .map((field) => {
+                  const value = teamMemberData[field.key] || '-';  // ← Show '-' if empty
+                  
+                  return (
+                    <div key={field.key} className="flex items-center justify-between bg-slate-700/80 rounded px-2 py-1.5">
+                      <span className="text-slate-200 font-medium">{field.label}:</span>
+                      <span className="text-white font-bold">{value}</span>
                     </div>
-                  )}
-                </div>
-              )}
+                  );
+                })
+              }
             </div>
 
-            {/* Age */}
-            {age && (
-              <div className="text-sm text-white/60 mt-2">
-                Age: {age}
+            {/* RIGHT SIDE - Player Photo */}
+            <div className="flex-shrink-0 relative">
+              <div className="w-32 h-32">
+                {displayImage && !imageError ? (
+                  <img
+                    src={displayImage}
+                    alt={username}
+                    onError={() => setImageError(true)}
+                    className="w-full h-full rounded-full object-cover shadow-xl border-4"
+                    style={{ borderColor: accentColor }}
+                  />
+                ) : (
+                  <div 
+                    className="w-full h-full rounded-full flex items-center justify-center text-5xl font-bold text-white shadow-xl border-4"
+                    style={{ 
+                      background: `linear-gradient(to bottom right, ${primaryColor}, ${secondaryColor})`,
+                      borderColor: accentColor
+                    }}
+                  >
+                    {getInitials()}
+                  </div>
+                )}
+                
+                {/* Star Badge */}
+                {badges.length > 0 && (
+                  <div 
+                    className="absolute -bottom-2 -right-2 rounded-full p-2 border-4 border-slate-800 shadow-lg"
+                    style={{ backgroundColor: getBadgeDisplay(badges[0].badge).color }}
+                  >
+                    <span className="text-2xl">⭐</span>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
+
+          {/* Position & Jersey Number - Below Photo */}
+          <div className="text-center relative z-10 mt-3">
+          {jerseyNumber && (
+            <div className="flex items-center justify-center" style={{ color: accentColor }}>
+              <span className="text-4xl font-black">#{jerseyNumber}</span>
+            </div>
+          )}
+        </div>
         </div>
 
         {/* Stats Section */}
@@ -343,6 +359,26 @@ export default function MemberCard({
             )}
           </div>
 
+          {/* Custom Fields Display */}
+            {customFields && customFields.length > 0 && (
+              <div className="mb-4 space-y-2">
+                {customFields
+                  .filter(field => field.key !== 'position' && field.key !== 'post' && field.key !== 'handedness')
+                  .map((field) => {
+                    const value = teamMemberData[field.key];
+                    if (!value) return null;
+                    
+                    return (
+                      <div key={field.key} className="flex items-center justify-between text-sm bg-slate-800/30 rounded px-3 py-2">
+                        <span className="text-slate-400">{field.label}:</span>
+                        <span className="text-light font-medium">{value}</span>
+                      </div>
+                    );
+                  })
+                }
+              </div>
+            )}
+
           {/* Actions */}
           <div className="flex gap-2">
             {canEdit && onEdit && (
@@ -381,6 +417,17 @@ export default function MemberCard({
           }}
         ></div>
       </div>
+
+      {/* Sliding Stats Panel */}
+      {showStatsPanel && (
+        <SlidingStatsPanel
+          member={member}
+          statsTemplate={statsTemplate}
+          teamMemberData={teamMemberData}
+          onClose={() => setShowStatsPanel(false)}
+        />
+      )}
+
     </div>
   );
 }

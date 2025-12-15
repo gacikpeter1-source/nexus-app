@@ -64,6 +64,7 @@ export default function TeamMemberCards({
   const isTrainer = team.trainers?.includes(currentUser?.id);
   const isAssistant = team.assistants?.includes(currentUser?.id);
   const canEditCards = isAdmin || isTrainer || isAssistant;
+  const customFields = Array.isArray(team.customFields) ? team.customFields : [];
 
   const enrichedMembers = members.map(memberId => {
     const userData = allUsers.find(u => u.id === memberId);
@@ -504,7 +505,9 @@ const handleLayerImageUpload = async (e, idx) => {
               teamStats={teamStats}
               cardSettings={cardSettings}
               badgeSettings={team.badgeSettings}
+              statsTemplate={team.statsTemplate}
               teamMemberData={member.teamMemberData}
+              customFields={customFields}
               currentUserId={currentUser?.id}
               canEdit={member.canEdit || canEditCards}
               onEdit={handleEditMember}
@@ -529,17 +532,19 @@ const handleLayerImageUpload = async (e, idx) => {
           }}
         />
       )}
-
-      {showFieldsManager && (
-        <TeamFieldsManager
-          team={team}
-          onClose={() => setShowFieldsManager(false)}
-          onSave={async (updatedFields) => {
-            await onUpdateTeamSettings({ customFields: updatedFields });
-            setShowFieldsManager(false);
-          }}
-        />
-      )}
+      
+{showFieldsManager && (
+  <TeamFieldsManager
+    team={team}
+    onSave={async (settings) => {
+      console.log('📥 TeamMemberCards received:', settings);
+      await onUpdateTeamSettings(settings);
+      console.log('✅ Saved to Firestore');
+      setShowFieldsManager(false);
+    }}
+    onClose={() => setShowFieldsManager(false)}
+  />
+)}
 
       {showBadgeConfig && (
         <BadgeConfigurationModal
@@ -567,6 +572,8 @@ const handleLayerImageUpload = async (e, idx) => {
           aspectRatio={null}
         />
       )}
+
+
     </div>
   );
 }

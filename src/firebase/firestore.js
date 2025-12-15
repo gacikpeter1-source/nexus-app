@@ -1347,6 +1347,12 @@ export const updateTeamCardSettings = async (clubId, teamId, settings) => {
     if (settings.badgeSettings !== undefined) {
       updates.badgeSettings = settings.badgeSettings;
     }
+    if (settings.positions !== undefined) {
+      updates.positions = settings.positions;
+    }
+    if (settings.statsTemplate !== undefined) {
+      updates.statsTemplate = settings.statsTemplate;
+    }
 
     teams[teamIndex] = updates;
 

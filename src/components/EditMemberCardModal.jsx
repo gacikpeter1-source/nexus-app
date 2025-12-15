@@ -1,6 +1,7 @@
-// src/components/EditMemberCardModal.jsx - FINAL with Image Upload
+// src/components/EditMemberCardModal.jsx - FINAL with Image Upload & Crop
 import { useState, useEffect } from 'react';
 import { handleImageUpload } from '../utils/imageUpload';
+import ImageCropModal from './ImageCropModal';
 
 export default function EditMemberCardModal({ 
   member, 
@@ -17,9 +18,13 @@ export default function EditMemberCardModal({
   // Image upload states
   const [imagePreview, setImagePreview] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [useMainProfile, setUseMainProfile] = useState(true);
+  const [useMainProfile, setUseMainProfile] = useState(false); // Changed to false!
+  
+  // Crop modal states
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [cropImageSrc, setCropImageSrc] = useState(null);
 
-  const customFields = team.customFields || [];
+  const customFields = Array.isArray(team.customFields) ? team.customFields : [];
 
   useEffect(() => {
     const initialData = {};
@@ -27,19 +32,23 @@ export default function EditMemberCardModal({
       initialData[field.key] = teamMemberData[field.key] || '';
     });
     
-    // Set image preferences
+    // Set image preferences - FIXED
     if (teamMemberData.profileImage) {
+      // User has uploaded a team-specific image
       setImagePreview(teamMemberData.profileImage);
       setUseMainProfile(false);
+    } else if (member.profileImage) {
+      // Use main profile image as default
+      setImagePreview(member.profileImage);
+      setUseMainProfile(true);
     } else {
-      setUseMainProfile(teamMemberData.useMainProfile !== false);
-      if (useMainProfile && member.profileImage) {
-        setImagePreview(member.profileImage);
-      }
+      // No image at all
+      setImagePreview(null);
+      setUseMainProfile(false);
     }
     
     setFormData(initialData);
-  }, []);
+  }, [customFields, teamMemberData, member.profileImage]);
 
   const handleImageChange = async (e) => {
     const file = e.target.files[0];
@@ -47,14 +56,25 @@ export default function EditMemberCardModal({
 
     try {
       setUploadingImage(true);
-      const base64 = await handleImageUpload(file);
-      setImagePreview(base64);
-      setUseMainProfile(false);
+      
+      const reader = new FileReader();
+      reader.onload = () => {
+        setCropImageSrc(reader.result);
+        setShowCropModal(true);
+      };
+      reader.readAsDataURL(file);
     } catch (error) {
       alert(error.message);
-    } finally {
       setUploadingImage(false);
     }
+  };
+
+  const handleCropComplete = (croppedBase64) => {
+    setImagePreview(croppedBase64);
+    setUseMainProfile(false);
+    setShowCropModal(false);
+    setCropImageSrc(null);
+    setUploadingImage(false);
   };
 
   const validateForm = () => {
@@ -310,8 +330,9 @@ export default function EditMemberCardModal({
               </p>
             </div>
           ) : (
-            customFields.map(field => renderField(field))
+            (customFields || []).map(field => renderField(field))
           )}
+
 
           {/* Info Box */}
           <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
@@ -339,6 +360,22 @@ export default function EditMemberCardModal({
               Cancel
             </button>
           </div>
+
+          {/* Image Crop Modal */}
+          {showCropModal && cropImageSrc && (
+            <ImageCropModal
+              image={cropImageSrc}
+              onComplete={handleCropComplete}
+              onCancel={() => {
+                setShowCropModal(false);
+                setCropImageSrc(null);
+                setUploadingImage(false);
+              }}
+              title="Adjust Profile Picture"
+              aspectRatio={1}
+            />
+          )}
+
         </form>
       </div>
     </div>
