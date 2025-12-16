@@ -8,7 +8,8 @@ import NotificationsTab from '../components/NotificationsTab';
 import { 
   getUserClubs, 
   getClub, 
-  getAllUsers, 
+  getAllUsers,
+  getUser, 
   updateClub, 
   updateUser, 
   getPendingRequests, 
