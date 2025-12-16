@@ -169,8 +169,14 @@ export const updateClub = async (clubId, updates) => {
 // This function cannot work with security rules that require user membership
 // Get all clubs - Used by admin/manager pages only
 // Get all clubs - Admins see all, others see only their clubs
-export const getAllClubs = async (userId, isAdmin) => {
+export const getAllClubs = async (userId = null, isAdmin = false) => {
   try {
+    // If no userId provided, try to get all clubs (admin only)
+    if (!userId) {
+      const snapshot = await getDocs(collection(db, 'clubs'));
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
+    
     if (isAdmin) {
       // Admin: get all clubs
       const snapshot = await getDocs(collection(db, 'clubs'));

@@ -132,6 +132,17 @@ service cloud.firestore {
       allow update, delete: if isAuthenticated() && 
         (resource.data.createdBy == request.auth.uid || isAdmin());
     }
+
+    // After attendance section, add:
+    match /clubSubscriptions/{subscriptionId} {
+      allow read: if isAuthenticated() && (
+        request.auth.token.isSuperAdmin == true ||
+        request.auth.token.role == 'admin' ||
+        request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.trainers ||
+        request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.assistants
+      );
+      allow write: if isAuthenticated();
+    }
     
     // Request to join Clubs & team - UPDATED to allow trainers/assistants
     match /requests/{requestId} {

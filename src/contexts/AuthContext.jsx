@@ -16,6 +16,7 @@ import {
   getUserByEmail,
   updateUser,
   deleteUser as deleteUserFromFirestore,
+  setUserCustomClaims
 } from '../firebase/firestore';
 
 // Role constants
@@ -105,12 +106,16 @@ export const AuthProvider = ({ children }) => {
       const loginUpdates = {
         lastLoginAt: now
       };
-    
       try {
         await setUserCustomClaims(userCredential.user.uid, userDoc.role, userDoc.isSuperAdmin);
+        // FORCE TOKEN REFRESH - This is critical!
+        await userCredential.user.getIdToken(true);
+        console.log('✅ Custom claims set and token refreshed');
       } catch (err) {
         console.error('Failed to set custom claims:', err);
       }
+    
+
 
       // Set firstLoginAt if this is the first login
       if (!userDoc.firstLoginAt) {
