@@ -199,6 +199,16 @@ export const getUserClubs = async (userId) => {
       return [];
     }
 
+        // Check if user is admin - if so, return ALL clubs
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    if (userDoc.exists()) {
+      const userData = userDoc.data();
+      if (userData.isSuperAdmin === true || userData.role === 'admin') {
+        const snapshot = await getDocs(collection(db, 'clubs'));
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      }
+    }
+
     const clubsRef = collection(db, 'clubs');
     const clubs = [];
     

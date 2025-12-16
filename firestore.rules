@@ -37,26 +37,27 @@ service cloud.firestore {
     }
     
     // Clubs collection - UPDATED to allow trainers/assistants
-    match /clubs/{clubId} {
-      allow read: if isAuthenticated() && (
-        isAdmin() ||
-        isClubMember(resource.data)
-      );
-      
-      allow create: if isAuthenticated();
-      
-      allow update: if isAuthenticated() && (
-        isAdmin() ||
-        resource.data.ownerId == request.auth.uid ||
-        resource.data.createdBy == request.auth.uid ||
-        isTrainerOrAssistant(resource.data)
-      );
-      
-      allow delete: if isAuthenticated() && (
-        isAdmin() ||
-        resource.data.createdBy == request.auth.uid
-      );
-    }
+match /clubs/{clubId} {
+  // TEMPORARY - allow all authenticated users
+  allow read: if isAuthenticated();
+  
+  allow create: if isAuthenticated();
+  
+  allow update: if isAuthenticated() && (
+    request.auth.token.isSuperAdmin == true ||
+    request.auth.token.role == 'admin' ||
+    resource.data.ownerId == request.auth.uid ||
+    resource.data.createdBy == request.auth.uid ||
+    request.auth.uid in resource.data.trainers ||
+    request.auth.uid in resource.data.assistants
+  );
+  
+  allow delete: if isAuthenticated() && (
+    request.auth.token.isSuperAdmin == true ||
+    request.auth.token.role == 'admin' ||
+    resource.data.createdBy == request.auth.uid
+  );
+}
     
     // Events collection
     match /events/{eventId} {
@@ -135,13 +136,11 @@ service cloud.firestore {
 
     // After attendance section, add:
     match /clubSubscriptions/{subscriptionId} {
-      allow read: if isAuthenticated() && (
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (
         request.auth.token.isSuperAdmin == true ||
-        request.auth.token.role == 'admin' ||
-        request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.trainers ||
-        request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.assistants
+        request.auth.token.role == 'admin'
       );
-      allow write: if isAuthenticated();
     }
     
     // Request to join Clubs & team - UPDATED to allow trainers/assistants
