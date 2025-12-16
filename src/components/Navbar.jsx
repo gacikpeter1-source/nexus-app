@@ -360,7 +360,7 @@ export default function Navbar() {
                     : 'text-light hover:bg-white/10'
                 }`}
               >
-                💬 Chats
+              Chats
               </Link>
               
               {isSuperAdminOrAdmin() && (
