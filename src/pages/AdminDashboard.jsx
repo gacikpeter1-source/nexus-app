@@ -46,41 +46,35 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
+    <div className="max-w-7xl mx-auto px-2 py-0.5">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-1">
         <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-light mb-2">👑 Admin Dashboard</h1>
         <p className="text-light/60">Manage users, clubs, teams, and requests</p>
       </div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      {/* Quick Actions - UPDATED WITH COMPACT BUTTONS */}
+      <div className="flex flex-wrap gap-3 mb-3 max-w-2xl">
         <button
           onClick={() => navigate('/admin/vouchers')}
-          className="bg-gradient-to-r from-accent to-accent/80 hover:from-accent/90 hover:to-accent/70 text-white rounded-xl p-6 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-between group"
+          className="bg-gradient-to-r from-accent to-accent/80 hover:from-accent/90 hover:to-accent/70 text-white rounded-lg px-2 py-1 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 flex-1"
         >
-          <div className="flex items-center gap-4">
-            <div className="text-3xl md:text-4xl">🎫</div>
-            <div className="text-left">
-              <h3 className="font-bold text-lg">Manage Vouchers</h3>
-              <p className="text-sm text-white/80">Generate and manage trial codes</p>
-            </div>
+          <span className="text-2xl">🎫</span>
+          <div className="text-left">
+            <h3 className="font-bold text-base">Manage Vouchers</h3>
+            <p className="text-xs text-white/80">Generate trial codes</p>
           </div>
-          <div className="text-2xl group-hover:translate-x-1 transition-transform">→</div>
         </button>
 
         <button
           onClick={() => navigate('/admin/subscriptions')}
-          className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white rounded-xl p-6 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-between group"
+          className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white rounded-lg px-2 py-1 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 flex-1"
         >
-          <div className="flex items-center gap-4">
-            <div className="text-3xl md:text-4xl">💳</div>
-            <div className="text-left">
-              <h3 className="font-bold text-lg">Manage Subscriptions</h3>
-              <p className="text-sm text-white/80">Verify payments and invoices</p>
-            </div>
+          <span className="text-2xl">💳</span>
+          <div className="text-left">
+            <h3 className="font-bold text-base">Manage Subscriptions</h3>
+            <p className="text-xs text-white/80">Verify payments</p>
           </div>
-          <div className="text-2xl group-hover:translate-x-1 transition-transform">→</div>
         </button>
       </div>
 

@@ -446,9 +446,9 @@ const handleCreateTeamChat = async () => {
   }
 
   return (
-    <div className="flex flex-col min-h-screen p-6">
+    <div className="flex flex-col min-h-screen p-0.5">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-2 md:mb-2">
         <button
           onClick={() => navigate('/', { state: { selectedClubId: clubId } })}
           className="mb-4 flex items-center gap-2 text-light/60 hover:text-light transition-colors"
@@ -463,7 +463,7 @@ const handleCreateTeamChat = async () => {
                 {team.name}
               </h1>
               <p className="text-light/60 text-lg">{team.clubName}</p>
-            </div>
+            </div>       
             
             {/* Compact Orders Badge */}
             {pendingOrdersCount > 0 && (
@@ -531,16 +531,17 @@ const handleCreateTeamChat = async () => {
           {/* Leave Team Button */}
           <button
             onClick={handleLeaveTeam}
-            className="px-2 py-1 md:px-4 md:py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs md:text-sm font-medium transition-all flex items-center gap-1 md:gap-2"
+            className="px-1 py-0.5 md:px-2 md:py-1 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs md:text-sm font-medium transition-all flex items-center gap-1 md:gap-2"
           >
             <span>🚪</span>
             <span>Leave Team</span>
           </button>
+
         </div>
       </div>
 
       {/* Tabs - Horizontal Scrollable */}
-      <div className="flex gap-1 mb-6 border-b border-white/10 overflow-x-auto pb-2 scrollbar-hide">
+      <div className="flex flex-wrap gap-1 mb-2 border-b border-white/10 pb-2">
         <button
           onClick={() => setActiveTab('overview')}
           className={`px-2 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-all whitespace-nowrap rounded-t ${

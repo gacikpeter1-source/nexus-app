@@ -1284,9 +1284,9 @@ const filteredOrderResponses = useMemo(() => {
   }
 
   return (
-    <div className="flex flex-col min-h-screen p-6">
+    <div className="flex flex-col min-h-screen p-1">
       <div className="flex-1 overflow-auto">
-        <div className="mb-8 animate-fade-in">
+        <div className="mb-2 animate-fade-in">
           <h1 className="font-display text-3xl md:text-5xl lg:text-7xl text-light mb-2 tracking-wider">
             <span className="text-primary">CLUB</span> MANAGEMENT
           </h1>

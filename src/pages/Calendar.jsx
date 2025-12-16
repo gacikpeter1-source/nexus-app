@@ -173,9 +173,9 @@ export default function Calendar() {
                       'July', 'August', 'September', 'October', 'November', 'December'];
 
   return (
-    <div className="p-6">
+    <div className="p-0.5">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-2">
         <div className="flex items-center justify-between mb-4">
           <h1 className="font-title text-2xl md:text-4xl lg:text-5xl text-light">📅 Calendar</h1>
           <Link

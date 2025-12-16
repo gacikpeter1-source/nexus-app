@@ -152,10 +152,10 @@ export default function Chats() {
   }
 
   return (
-    <div className="min-h-screen bg-dark text-light">
-      <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen text-light">
+      <div className="container mx-auto px-4 py-2 md:py-2 lg:py-2">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+        <div className="flex flex-row justify-between items-center gap-2 mb-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-light">Chats</h1>
             <p className="text-light/60 mt-1">
@@ -166,10 +166,10 @@ export default function Chats() {
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="px-3 py-2 md:px-6 md:py-3 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm md:text-base transition font-medium flex items-center gap-2"
+            className="px-3 py-0.5 md:px-6 md:py-3 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm md:text-base transition font-medium flex items-center gap-2"
           >
             <svg
-              className="w-5 h-5"
+              className="w-2 h-2 md:w-4 md:h-4"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
