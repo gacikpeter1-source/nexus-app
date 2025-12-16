@@ -164,7 +164,7 @@ function UsersTab() {
       setLoading(true);
       const [fetchedUsers, fetchedClubs] = await Promise.all([
         getAllUsers(),
-        getAllClubs()
+        getAllClubs(currentUser.id, currentUser.isSuperAdmin || currentUser.role === 'admin')
       ]);
       setUsers(fetchedUsers);
       setClubs(fetchedClubs);

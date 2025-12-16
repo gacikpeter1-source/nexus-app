@@ -105,7 +105,13 @@ export const AuthProvider = ({ children }) => {
       const loginUpdates = {
         lastLoginAt: now
       };
-      
+    
+      try {
+        await setUserCustomClaims(userCredential.user.uid, userDoc.role, userDoc.isSuperAdmin);
+      } catch (err) {
+        console.error('Failed to set custom claims:', err);
+      }
+
       // Set firstLoginAt if this is the first login
       if (!userDoc.firstLoginAt) {
         loginUpdates.firstLoginAt = now;

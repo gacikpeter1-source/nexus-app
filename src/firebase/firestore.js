@@ -16,8 +16,9 @@ import {
   orderBy,
   onSnapshot,
   limit,
-  serverTimestamp
+  serverTimestamp 
 } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 /* ===========================
    USERS COLLECTION
@@ -48,6 +49,12 @@ export const getUser = async (userId) => {
     console.error('Error getting user:', error);
     throw error;
   }
+};
+
+export const setUserRole = async (userId, role, isSuperAdmin = false) => {
+  const functions = getFunctions();
+  const setCustomClaims = httpsCallable(functions, 'setCustomClaims');
+  await setCustomClaims({ userId, role, isSuperAdmin });
 };
 
 export const getUserByEmail = async (email) => {
@@ -161,9 +168,21 @@ export const updateClub = async (clubId, updates) => {
 // DEPRECATED: Use getUserClubs() instead
 // This function cannot work with security rules that require user membership
 // Get all clubs - Used by admin/manager pages only
-export const getAllClubs = async () => {
-  const snapshot = await getDocs(collection(db, 'clubs'));
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+// Get all clubs - Admins see all, others see only their clubs
+export const getAllClubs = async (userId, isAdmin) => {
+  try {
+    if (isAdmin) {
+      // Admin: get all clubs
+      const snapshot = await getDocs(collection(db, 'clubs'));
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } else {
+      // Non-admin: get only user's clubs
+      return await getUserClubs(userId);
+    }
+  } catch (error) {
+    console.error('Error getting clubs:', error);
+    throw error;
+  }
 };
 
 // Get clubs for a specific user using proper queries
@@ -1556,6 +1575,13 @@ export const calculateMemberBadges = (memberStats, badgeSettings) => {
 
   return earnedBadges.slice(0, 3);
 };
+
+    export const setUserCustomClaims = async (userId, role, isSuperAdmin = false) => {
+      const functions = getFunctions();
+      const setCustomClaims = httpsCallable(functions, 'setCustomClaims');
+      const result = await setCustomClaims({ userId, role, isSuperAdmin });
+      return result.data;
+    };
 
 export default {
   // Users

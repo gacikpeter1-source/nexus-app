@@ -6,6 +6,12 @@ const admin = require('firebase-admin');
 
 admin.initializeApp();
 
+exports.setCustomClaims = functions.https.onCall(async (data, context) => {
+  const { userId, role, isSuperAdmin } = data;
+  await admin.auth().setCustomUserClaims(userId, { role, isSuperAdmin });
+  return { success: true };
+});
+
 // Add at top of file
 async function areNotificationsEnabled(clubId, teamId, notificationType) {
   try {
