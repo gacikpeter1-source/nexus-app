@@ -463,6 +463,34 @@ export const deleteMessage = async (chatId, messageId) => {
   }
 };
 
+export const markMessageAsImportant = async (chatId, messageId, isImportant = true) => {
+  try {
+    const messageRef = doc(db, 'chats', chatId, 'messages', messageId);
+    await updateDoc(messageRef, {
+      isImportant,
+      markedImportantAt: isImportant ? serverTimestamp() : null,
+    });
+    console.log('✅ Message importance updated');
+  } catch (error) {
+    console.error('❌ Error marking message as important:', error);
+    throw error;
+  }
+};
+
+// Add this to track who read important messages
+export const markImportantAsRead = async (chatId, messageId, userId) => {
+  try {
+    const messageRef = doc(db, 'chats', chatId, 'messages', messageId);
+    await updateDoc(messageRef, {
+      [`importantReadBy.${userId}`]: serverTimestamp(),
+    });
+    console.log('✅ Important message marked as read');
+  } catch (error) {
+    console.error('❌ Error marking as read:', error);
+    throw error;
+  }
+};
+
 /**
  * Add emoji reaction to message
  * @param {string} chatId - Chat ID

@@ -1,4 +1,4 @@
-// src/pages/ChatRoom.jsx
+// src/pages/ChatRoom.jsx - WITH COLORED MESSAGES AND IMPORTANT MESSAGE FEATURE
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -13,9 +13,22 @@ import {
   addChatMember,
   removeChatMember,
   closeChat,
+  markMessageAsImportant,
+  markImportantAsRead,
 } from '../firebase/chats';
 import { getUser, getClub } from '../firebase/firestore';
 import { isSuperAdmin } from '../utils/permissions';
+
+const MESSAGE_COLORS = [
+  'bg-blue-500',
+  'bg-green-500', 
+  'bg-purple-500',
+  'bg-pink-500',
+  'bg-yellow-500',
+  'bg-indigo-500',
+  'bg-red-500',
+  'bg-teal-500',
+];
 
 export default function ChatRoom() {
   const { chatId } = useParams();
@@ -30,12 +43,26 @@ export default function ChatRoom() {
   const [members, setMembers] = useState([]);
   const [clubInfo, setClubInfo] = useState(null);
   const [teamInfo, setTeamInfo] = useState(null);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(null); // messageId
+  const [showEmojiPicker, setShowEmojiPicker] = useState(null);
   const [showPollCreator, setShowPollCreator] = useState(false);
   const [showMemberList, setShowMemberList] = useState(false);
+  const [userColors, setUserColors] = useState({});
+  const [showImportantModal, setShowImportantModal] = useState(false);
+  const [selectedImportantMsg, setSelectedImportantMsg] = useState(null);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+
+  // Assign colors to users
+  useEffect(() => {
+    if (members.length > 0) {
+      const colors = {};
+      members.forEach((member, index) => {
+        colors[member.id] = MESSAGE_COLORS[index % MESSAGE_COLORS.length];
+      });
+      setUserColors(colors);
+    }
+  }, [members]);
 
   // Load chat and subscribe to messages
   useEffect(() => {
@@ -106,8 +133,6 @@ export default function ChatRoom() {
       await sendMessage(chatId, {
         senderId: user.id,
         text: messageText.trim(),
-        isPoll: false,
-        pollData: null,
       });
       setMessageText('');
       inputRef.current?.focus();
@@ -121,34 +146,32 @@ export default function ChatRoom() {
     try {
       await sendMessage(chatId, {
         senderId: user.id,
-        text: pollData.question,
+        text: `📊 Poll: ${pollData.question}`,
         isPoll: true,
         pollData: {
-          question: pollData.question,
-          options: pollData.options,
+          ...pollData,
           votes: {},
         },
       });
       setShowPollCreator(false);
     } catch (error) {
-      console.error('Error sending poll:', error);
-      alert('Failed to send poll');
+      console.error('Error creating poll:', error);
+      alert('Failed to create poll');
     }
   };
 
   const handleReaction = async (messageId, emoji) => {
     try {
       const message = messages.find((m) => m.id === messageId);
-      const currentReaction = message?.reactions?.[user.id];
+      if (!message) return;
+
+      const currentReaction = message.reactions?.[user.id];
 
       if (currentReaction === emoji) {
-        // Remove reaction
         await removeReaction(chatId, messageId, user.id);
       } else {
-        // Add or change reaction
         await addReaction(chatId, messageId, user.id, emoji);
       }
-      setShowEmojiPicker(null);
     } catch (error) {
       console.error('Error handling reaction:', error);
     }
@@ -158,13 +181,62 @@ export default function ChatRoom() {
     try {
       await voteOnPoll(chatId, messageId, user.id, optionIndex);
     } catch (error) {
-      console.error('Error voting:', error);
-      alert('Failed to vote');
+      console.error('Error voting on poll:', error);
     }
   };
 
+  const canManageImportant = () => {
+    if (isSuperAdmin(user)) return true;
+    if (user.role === 'admin') return true;
+    if (chat?.createdBy === user.id) return true;
+    
+    // Check if user is trainer or assistant in the club
+    if (clubInfo) {
+      if (clubInfo.trainers?.includes(user.id)) return true;
+      if (clubInfo.assistants?.includes(user.id)) return true;
+    }
+    
+    return false;
+  };
+
+  const handleMarkImportant = async (messageId) => {
+    try {
+      await markMessageAsImportant(chatId, messageId, true);
+    } catch (error) {
+      console.error('Error marking important:', error);
+    }
+  };
+
+  const handleMarkAsRead = async (messageId) => {
+    try {
+      await markImportantAsRead(chatId, messageId, user.id);
+      setShowImportantModal(false);
+      setSelectedImportantMsg(null);
+    } catch (error) {
+      console.error('Error marking as read:', error);
+    }
+  };
+
+  const handleMarkAsLater = () => {
+    setShowImportantModal(false);
+    setSelectedImportantMsg(null);
+  };
+
+  const getUnreadImportantMessages = () => {
+    return messages.filter(msg => 
+      msg.isImportant && 
+      !msg.importantReadBy?.[user.id]
+    );
+  };
+
+  const canCloseChat = () => {
+    if (isSuperAdmin(user)) return true;
+    if (chat?.createdBy === user.id) return true;
+    return false;
+  };
+
   const handleCloseChat = async () => {
-    if (!confirm('Are you sure you want to close this chat? This action cannot be undone.')) {
+    if (!window.confirm('Are you sure you want to close this chat? This action cannot be undone.')) {
       return;
     }
 
@@ -177,25 +249,13 @@ export default function ChatRoom() {
     }
   };
 
-  const canCloseChat = () => {
-    return isSuperAdmin(user) || chat?.createdBy === user.id;
-  };
-
-  const formatTimestamp = (timestamp) => {
+  const formatMessageTime = (timestamp) => {
     if (!timestamp) return '';
-
-    let date;
-    if (timestamp.toDate) {
-      date = timestamp.toDate();
-    } else if (timestamp instanceof Date) {
-      date = timestamp;
-    } else {
-      return '';
-    }
-
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const messageDate = new Date(date);
+    messageDate.setHours(0, 0, 0, 0);
 
     if (messageDate.getTime() === today.getTime()) {
       return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
@@ -208,7 +268,7 @@ export default function ChatRoom() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-dark text-light flex items-center justify-center">
+      <div className="fixed inset-0 bg-dark text-light flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
           <p className="mt-4 text-light/60">Loading chat...</p>
@@ -219,7 +279,7 @@ export default function ChatRoom() {
 
   if (!chat) {
     return (
-      <div className="min-h-screen bg-dark text-light flex items-center justify-center">
+      <div className="fixed inset-0 bg-dark text-light flex items-center justify-center">
         <div className="text-center">
           <p className="text-xl text-light/60">Chat not found</p>
           <button
@@ -233,12 +293,14 @@ export default function ChatRoom() {
     );
   }
 
+  const unreadImportant = getUnreadImportantMessages();
+
   return (
-    <div className="h-screen bg-dark text-light flex flex-col">
+    <div className="fixed inset-0 top-16 md:top-20 bg-dark text-light flex flex-col">
       {/* Header */}
-      <div className="bg-mid-dark border-b border-white/10 px-4 py-4">
+      <div className="bg-mid-dark border-b border-white/10 px-4 py-4 flex-shrink-0">
         <div className="container mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-1">
             <button
               onClick={() => navigate('/chats')}
               className="p-2 hover:bg-white/10 rounded-lg transition"
@@ -247,9 +309,9 @@ export default function ChatRoom() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            <div>
+            <div className="flex-1">
               <h1 className="text-xl font-bold">{chat.title}</h1>
-              <div className="flex gap-2 mt-1">
+              <div className="flex gap-2 mt-1 flex-wrap items-center">
                 {clubInfo && (
                   <span className="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded">
                     {clubInfo.name}
@@ -263,6 +325,19 @@ export default function ChatRoom() {
                 <span className="text-xs px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded">
                   {members.length} members
                 </span>
+                
+                {/* Important Messages Bubbles */}
+                {unreadImportant.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setSelectedImportantMsg(unreadImportant[0]);
+                      setShowImportantModal(true);
+                    }}
+                    className="relative px-3 py-1 bg-red-500/90 hover:bg-red-500 text-white rounded-full text-xs font-bold animate-pulse"
+                  >
+                    ⚠️ {unreadImportant.length} Important
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -293,7 +368,7 @@ export default function ChatRoom() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4 pb-safe">
         <div className="container mx-auto max-w-4xl space-y-4">
           {messages.length === 0 ? (
             <div className="text-center py-12">
@@ -303,39 +378,60 @@ export default function ChatRoom() {
             messages.map((message) => {
               const sender = members.find((m) => m.id === message.senderId);
               const isOwn = message.senderId === user.id;
+              const senderColor = userColors[message.senderId] || 'bg-gray-500';
 
               return (
                 <div key={message.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-md ${isOwn ? 'items-end' : 'items-start'} flex flex-col`}>
-                    {/* Sender name */}
+                    {/* Sender name with color dot */}
                     {!isOwn && (
-                      <p className="text-xs text-light/60 mb-1 px-2">
-                        {sender?.username || sender?.email || 'Unknown'}
-                      </p>
+                      <div className="flex items-center gap-2 mb-1 px-2">
+                        <div className={`w-2 h-2 rounded-full ${senderColor}`}></div>
+                        <p className="text-xs text-light/60">
+                          {sender?.username || sender?.email || 'Unknown'}
+                        </p>
+                        {sender?.role === 'trainer' && (
+                          <span className="text-xs px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded">Trainer</span>
+                        )}
+                        {sender?.role === 'assistant' && (
+                          <span className="text-xs px-1.5 py-0.5 bg-green-500/20 text-green-400 rounded">Assistant</span>
+                        )}
+                      </div>
                     )}
 
-                    {/* Message bubble */}
-                    <div
-                      className={`rounded-lg px-4 py-2 ${
-                        isOwn
-                          ? 'bg-primary text-white'
-                          : 'bg-mid-dark text-light'
-                      }`}
-                    >
-                      {message.isPoll ? (
-                        <PollMessage
-                          message={message}
-                          onVote={(optionIndex) => handleVote(message.id, optionIndex)}
-                          userId={user.id}
-                          members={members}
-                        />
-                      ) : (
-                        <p className="text-sm whitespace-pre-wrap break-words">{message.text}</p>
+                    {/* Message bubble with colored border */}
+                    <div className="relative w-full">
+                      {message.isImportant && (
+                        <div className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1 text-xs">
+                          ⚠️
+                        </div>
                       )}
+                      <div
+                        className={`rounded-lg px-4 py-2 ${
+                          message.isImportant
+                            ? 'bg-orange-500/30 border-2 border-orange-400 text-white'
+                            : message.isPoll
+                              ? 'bg-blue-500/20 border border-blue-400/30 text-white'
+                              : isOwn
+                                ? 'bg-primary text-white'
+                                : `bg-mid-dark text-light border-l-4 ${senderColor}`
+                        }`}
+                      >
+                        {message.isPoll ? (
+                          <PollMessage
+                            message={message}
+                            onVote={(optionIndex) => handleVote(message.id, optionIndex)}
+                            userId={user.id}
+                            members={members}
+                          />
+                        ) : (
+                          <p className="text-sm whitespace-pre-wrap break-words">{message.text}</p>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Reactions */}
-                    <div className="flex items-center gap-2 mt-1 px-2">
+                    {/* Reactions and actions */}
+                    <div className="flex items-center gap-2 mt-1 px-2 flex-wrap">
                       {message.reactions && Object.keys(message.reactions).length > 0 && (
                         <div className="flex gap-1">
                           {Object.entries(
@@ -354,29 +450,36 @@ export default function ChatRoom() {
                           ))}
                         </div>
                       )}
-
-                      {/* Add reaction button */}
                       <button
                         onClick={() => setShowEmojiPicker(showEmojiPicker === message.id ? null : message.id)}
-                        className="text-xs px-2 py-0.5 hover:bg-white/10 rounded-full transition"
+                        className="text-xs text-light/40 hover:text-light/60"
                       >
-                        ➕
+                        +
                       </button>
-
-                      {/* Timestamp */}
-                      <span className="text-xs text-light/40">
-                        {formatTimestamp(message.createdAt)}
-                      </span>
+                      
+                      {/* Mark as important button */}
+                      {canManageImportant() && !message.isImportant && (
+                        <button
+                          onClick={() => handleMarkImportant(message.id)}
+                          className="text-xs text-red-400/60 hover:text-red-400"
+                          title="Mark as important"
+                        >
+                          ⚠️
+                        </button>
+                      )}
                     </div>
 
-                    {/* Emoji Picker */}
+                    {/* Emoji picker */}
                     {showEmojiPicker === message.id && (
-                      <div className="mt-2 bg-mid-dark border border-white/10 rounded-lg p-2 shadow-lg flex gap-2">
-                        {['👍', '❤️', '😂', '😮', '😢', '🎉', '🔥', '👏'].map((emoji) => (
+                      <div className="flex gap-1 mt-1 px-2">
+                        {['👍', '❤️', '😂', '😮', '😢', '🎉'].map((emoji) => (
                           <button
                             key={emoji}
-                            onClick={() => handleReaction(message.id, emoji)}
-                            className="text-2xl hover:scale-125 transition"
+                            onClick={() => {
+                              handleReaction(message.id, emoji);
+                              setShowEmojiPicker(null);
+                            }}
+                            className="text-xl hover:scale-125 transition"
                           >
                             {emoji}
                           </button>
@@ -393,7 +496,7 @@ export default function ChatRoom() {
       </div>
 
       {/* Input */}
-      <div className="bg-mid-dark border-t border-white/10 p-4">
+      <div className="bg-mid-dark border-t border-white/10 p-4 flex-shrink-0">
         <div className="container mx-auto max-w-4xl">
           <form onSubmit={handleSendMessage} className="flex gap-2">
             <button
@@ -425,6 +528,50 @@ export default function ChatRoom() {
         </div>
       </div>
 
+      {/* Important Message Modal */}
+      {showImportantModal && selectedImportantMsg && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-mid-dark rounded-lg max-w-2xl w-full p-6 border-2 border-red-500">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="text-3xl">⚠️</div>
+              <div>
+                <h3 className="text-xl font-bold text-red-400">Important Message</h3>
+                <p className="text-sm text-light/60">
+                  From: {members.find(m => m.id === selectedImportantMsg.senderId)?.username || 'Unknown'}
+                </p>
+              </div>
+            </div>
+            
+            <div className="bg-dark p-4 rounded-lg mb-6 max-h-96 overflow-y-auto">
+              <p className="text-light whitespace-pre-wrap break-words">
+                {selectedImportantMsg.text}
+              </p>
+            </div>
+
+            {unreadImportant.length > 1 && (
+              <p className="text-sm text-light/60 mb-4">
+                {unreadImportant.length - 1} more important message(s) pending
+              </p>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => handleMarkAsRead(selectedImportantMsg.id)}
+                className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition font-medium"
+              >
+                ✓ Read
+              </button>
+              <button
+                onClick={handleMarkAsLater}
+                className="flex-1 px-6 py-3 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition font-medium"
+              >
+                Later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modals */}
       {showPollCreator && (
         <PollCreatorModal
@@ -451,7 +598,6 @@ function PollMessage({ message, onVote, userId, members }) {
   if (!pollData) return null;
 
   const totalVotes = Object.values(pollData.votes || {}).reduce((sum, votes) => sum + votes.length, 0);
-  const userVote = Object.entries(pollData.votes || {}).find(([_, votes]) => votes.includes(userId));
 
   return (
     <div className="space-y-3">
@@ -468,7 +614,7 @@ function PollMessage({ message, onVote, userId, members }) {
               onClick={() => onVote(index)}
               className={`w-full text-left p-3 rounded-lg border transition ${
                 hasVoted
-                  ? 'border-primary bg-primary/20'
+                  ? 'border-green-400 bg-green-500/20'
                   : 'border-white/10 hover:border-white/30'
               }`}
             >
@@ -480,7 +626,7 @@ function PollMessage({ message, onVote, userId, members }) {
               </div>
               <div className="w-full bg-white/10 rounded-full h-2">
                 <div
-                  className="bg-primary h-2 rounded-full transition-all"
+                  className="bg-green-500 h-full rounded-full transition-all"
                   style={{ width: `${percentage}%` }}
                 />
               </div>
@@ -488,7 +634,7 @@ function PollMessage({ message, onVote, userId, members }) {
           );
         })}
       </div>
-      <p className="text-xs text-light/60">{totalVotes} total votes</p>
+      <p className="text-xs text-light/60">Total votes: {totalVotes}</p>
     </div>
   );
 }
@@ -510,96 +656,80 @@ function PollCreatorModal({ onClose, onSubmit }) {
     }
   };
 
-  const handleOptionChange = (index, value) => {
-    const newOptions = [...options];
-    newOptions[index] = value;
-    setOptions(newOptions);
-  };
-
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!question.trim() || options.some((opt) => !opt.trim())) {
-      alert('Please fill in all fields');
+    const validOptions = options.filter((opt) => opt.trim());
+    if (!question.trim() || validOptions.length < 2) {
+      alert('Please enter a question and at least 2 options');
       return;
     }
-
-    onSubmit({
-      question: question.trim(),
-      options: options.map((opt) => opt.trim()),
-    });
+    onSubmit({ question: question.trim(), options: validOptions });
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-mid-dark rounded-lg max-w-md w-full">
-        <div className="p-6 border-b border-white/10">
-          <h2 className="text-xl font-bold text-light">Create Poll</h2>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-mid-dark rounded-lg max-w-md w-full p-6">
+        <h3 className="text-xl font-bold text-light mb-4">Create Poll</h3>
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-light mb-2">Question</label>
+            <label className="block text-sm text-light/80 mb-2">Question</label>
             <input
               type="text"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Enter your question"
-              className="w-full px-4 py-3 bg-dark border border-white/10 rounded-lg text-light placeholder-light/40 focus:outline-none focus:border-primary transition"
-              required
+              placeholder="What's your question?"
+              className="w-full px-4 py-3 bg-dark border border-white/10 rounded-lg text-light placeholder-light/40 focus:outline-none focus:border-primary"
             />
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-light mb-2">Options</label>
-            <div className="space-y-2">
-              {options.map((option, index) => (
-                <div key={index} className="flex gap-2">
-                  <input
-                    type="text"
-                    value={option}
-                    onChange={(e) => handleOptionChange(index, e.target.value)}
-                    placeholder={`Option ${index + 1}`}
-                    className="flex-1 px-4 py-2 bg-dark border border-white/10 rounded-lg text-light placeholder-light/40 focus:outline-none focus:border-primary transition"
-                    required
-                  />
-                  {options.length > 2 && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveOption(index)}
-                      className="p-2 hover:bg-red-500/20 text-red-400 rounded-lg transition"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
+            <label className="block text-sm text-light/80 mb-2">Options</label>
+            {options.map((option, index) => (
+              <div key={index} className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  value={option}
+                  onChange={(e) => {
+                    const newOptions = [...options];
+                    newOptions[index] = e.target.value;
+                    setOptions(newOptions);
+                  }}
+                  placeholder={`Option ${index + 1}`}
+                  className="flex-1 px-4 py-2 bg-dark border border-white/10 rounded-lg text-light placeholder-light/40 focus:outline-none focus:border-primary"
+                />
+                {options.length > 2 && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveOption(index)}
+                    className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
             {options.length < 6 && (
               <button
                 type="button"
                 onClick={handleAddOption}
-                className="mt-2 text-sm text-primary hover:text-primary-dark transition"
+                className="text-sm text-primary hover:text-primary-dark"
               >
                 + Add option
               </button>
             )}
           </div>
-
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-6 py-3 bg-dark hover:bg-mid-dark border border-white/10 text-light rounded-lg transition font-medium"
+              className="flex-1 px-4 py-2 bg-dark hover:bg-dark/80 text-light rounded-lg transition"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium"
+              className="flex-1 px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg transition"
             >
-              Create Poll
+              Create
             </button>
           </div>
         </form>
@@ -611,40 +741,27 @@ function PollCreatorModal({ onClose, onSubmit }) {
 // Member List Modal
 function MemberListModal({ members, chatCreatorId, currentUserId, onClose }) {
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-mid-dark rounded-lg max-w-md w-full max-h-[80vh] overflow-hidden flex flex-col">
-        <div className="p-6 border-b border-white/10">
-          <h2 className="text-xl font-bold text-light">Chat Members ({members.length})</h2>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="space-y-3">
-            {members.map((member) => (
-              <div key={member.id} className="flex items-center gap-3 p-3 bg-dark rounded-lg">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center font-bold text-white">
-                  {(member.username || member.email).charAt(0).toUpperCase()}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-light">
-                    {member.username || member.email}
-                    {member.id === currentUserId && ' (You)'}
-                    {member.id === chatCreatorId && ' 👑'}
-                  </p>
-                  <p className="text-xs text-light/60 capitalize">{member.role}</p>
-                </div>
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-mid-dark rounded-lg max-w-md w-full p-6">
+        <h3 className="text-xl font-bold text-light mb-4">Members ({members.length})</h3>
+        <div className="space-y-2">
+          {members.map((member) => (
+            <div key={member.id} className="flex items-center justify-between p-3 bg-dark rounded-lg">
+              <div>
+                <p className="text-light font-medium">{member.username || member.email}</p>
+                {member.id === chatCreatorId && (
+                  <span className="text-xs text-primary">Creator</span>
+                )}
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
-
-        <div className="p-6 border-t border-white/10">
-          <button
-            onClick={onClose}
-            className="w-full px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium"
-          >
-            Close
-          </button>
-        </div>
+        <button
+          onClick={onClose}
+          className="w-full mt-4 px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg transition"
+        >
+          Close
+        </button>
       </div>
     </div>
   );

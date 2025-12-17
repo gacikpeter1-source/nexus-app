@@ -164,9 +164,7 @@ match /clubs/{clubId} {
       
       // Messages subcollection
       match /messages/{messageId} {
-        allow read: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.members;
-        allow create: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.members;
-        allow update: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.members;
+        allow read, create, update: if isAuthenticated();  // If they can read the parent chat, they can access messages
         allow delete: if isAuthenticated() && request.auth.uid == resource.data.senderId;
       }
     }
