@@ -31,10 +31,16 @@ service cloud.firestore {
     }
     
     // Users collection
-    match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-    }
+      match /users/{userId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && (
+          request.auth.uid == userId || 
+          request.auth.token.isSuperAdmin == true ||
+          request.auth.token.role == 'admin' ||
+          request.auth.token.role == 'trainer' ||
+          request.auth.token.role == 'assistant'
+        );
+      }
     
     // Clubs collection - UPDATED to allow trainers/assistants
 match /clubs/{clubId} {
@@ -49,7 +55,8 @@ match /clubs/{clubId} {
     resource.data.ownerId == request.auth.uid ||
     resource.data.createdBy == request.auth.uid ||
     request.auth.uid in resource.data.trainers ||
-    request.auth.uid in resource.data.assistants
+    request.auth.uid in resource.data.assistants ||
+    request.auth.uid in resource.data.members
   );
   
   allow delete: if isAuthenticated() && (
@@ -62,14 +69,26 @@ match /clubs/{clubId} {
     // Events collection
     match /events/{eventId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (
-        request.auth.uid == resource.data.createdBy || 
-        isAdmin()
-      );
+      
+      allow create: if isAuthenticated();  // All can create events
+      
+      // Allow update for RSVPs OR event management
+      allow update: if isAuthenticated();  // All users can update for RSVP
+      
       allow delete: if isAuthenticated() && (
-        request.auth.uid == resource.data.createdBy || 
-        isAdmin()
+        // Admins can delete all
+        request.auth.token.isSuperAdmin == true ||
+        request.auth.token.role == 'admin' ||
+        // Event creator can delete
+        request.auth.uid == resource.data.createdBy ||
+        // Club owner can delete all club events
+        (resource.data.clubId != null && 
+        (get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.ownerId == request.auth.uid ||
+          get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.createdBy == request.auth.uid)) ||
+        // Trainers/assistants can delete team events
+        (resource.data.teamId != null &&
+        (request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.trainers ||
+          request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.assistants))
       );
     }
     
@@ -78,24 +97,78 @@ match /clubs/{clubId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     
+    // Team notification settings (nested in clubs)
+    match /clubs/{clubId}/teams/{teamId}/notificationSettings/{settingId} {
+      allow read, write: if isAuthenticated() && (
+        request.auth.token.isSuperAdmin == true ||
+        request.auth.token.role == 'admin' ||
+        request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.trainers ||
+        request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.assistants
+      );
+    }
+
+    // Club notification settings (nested in clubs)
+    match /clubs/{clubId}/notificationSettings/{settingId} {
+      allow read, write: if isAuthenticated() && (
+        request.auth.token.isSuperAdmin == true ||
+        request.auth.token.role == 'admin' ||
+        request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.trainers ||
+        request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.assistants
+      );
+    }
+
+
     // ============================================================================
     // CHAT SYSTEM RULES
     // ============================================================================
     
     match /chats/{chatId} {
-      // Allow read for authenticated users (needed for team chat discovery)
-      allow read: if isAuthenticated();
+      // Read: Users can see chats they're members of
+      allow read: if isAuthenticated() && (
+        request.auth.uid in resource.data.members ||
+        request.auth.token.isSuperAdmin == true ||
+        request.auth.token.role == 'admin'
+      );
       
-      // Allow create for authenticated users
+      // Create: All authenticated users can create chats
       allow create: if isAuthenticated() &&
         request.auth.uid == request.resource.data.createdBy &&
         request.auth.uid in request.resource.data.members;
       
-      // Allow update/delete only for members or admins
-      allow update, delete: if isAuthenticated() && (
+      // Update: Members can update (add/remove members), creator has full control
+      allow update: if isAuthenticated() && (
         request.auth.uid in resource.data.members ||
-        isAdmin()
+        request.auth.uid == resource.data.createdBy ||
+        request.auth.token.isSuperAdmin == true ||
+        request.auth.token.role == 'admin' ||
+        // Club owner can manage club chats
+        (resource.data.clubId != null &&
+        (get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.ownerId == request.auth.uid ||
+          get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.createdBy == request.auth.uid)) ||
+        // Trainers/assistants can manage team chats
+        (resource.data.teamId != null &&
+        (request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.trainers ||
+          request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.assistants))
       );
+      
+      // Delete: Only creator, club owner, or admin can delete
+      allow delete: if isAuthenticated() && (
+        request.auth.uid == resource.data.createdBy ||
+        request.auth.token.isSuperAdmin == true ||
+        request.auth.token.role == 'admin' ||
+        // Club owner can delete club chats
+        (resource.data.clubId != null &&
+        (get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.ownerId == request.auth.uid ||
+          get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.createdBy == request.auth.uid))
+      );
+      
+      // Messages subcollection
+      match /messages/{messageId} {
+        allow read: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.members;
+        allow create: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.members;
+        allow update: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.members;
+        allow delete: if isAuthenticated() && request.auth.uid == resource.data.senderId;
+      }
     }
     
     // Subscriptions collection
@@ -153,5 +226,21 @@ match /clubs/{clubId} {
         request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.assistants
       );
     }
+
+
+    // Vouchers
+    match /vouchers/{voucherId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (
+        request.auth.token.isSuperAdmin == true ||
+        request.auth.token.role == 'admin'
+      );
+      allow update: if isAuthenticated();  // All users can redeem
+      allow delete: if isAuthenticated() && (
+        request.auth.token.isSuperAdmin == true ||
+        request.auth.token.role == 'admin'
+      );
+    }
+
   }
 }

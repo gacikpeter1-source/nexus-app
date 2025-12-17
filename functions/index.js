@@ -329,6 +329,28 @@ exports.onEventCreated = functions.firestore
         });
       }
 
+      // Delete chats when club is deleted
+      exports.onClubDeleted = functions.firestore
+        .document('clubs/{clubId}')
+        .onDelete(async (snap, context) => {
+          const clubId = context.params.clubId;
+          
+          // Delete all chats for this club
+          const chatsSnapshot = await admin.firestore()
+            .collection('chats')
+            .where('clubId', '==', clubId)
+            .get();
+          
+          const batch = admin.firestore().batch();
+          chatsSnapshot.forEach(doc => {
+            batch.delete(doc.ref);
+          });
+          
+          await batch.commit();
+          console.log(`Deleted ${chatsSnapshot.size} chats for club ${clubId}`);
+        });
+
+
       // Convert Set to Array and remove event creator
       targetUserIds = Array.from(targetUserIds).filter(id => id !== event.createdBy);
 
