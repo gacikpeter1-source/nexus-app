@@ -36,6 +36,7 @@ export const sendNotificationToUsers = async (userIds, notification) => {
     const functions = getFunctions();
     const sendNotification = httpsCallable(functions, 'sendNotification');
 
+    
     const result = await sendNotification({
       tokens: tokens,
       notification: notification
