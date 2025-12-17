@@ -84,10 +84,6 @@ export const ChatProvider = ({ children }) => {
         createdBy: user.id,
       });
 
-      // Fetch the created chat
-      const newChat = await getChat(chatId);
-      setChats((prev) => [newChat, ...prev]);
-
       return { ok: true, chatId };
     } catch (error) {
       console.error('Error creating chat:', error);
