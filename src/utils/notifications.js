@@ -1,6 +1,7 @@
 // src/utils/notifications.js
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 /**
  * Send push notification to specific users
@@ -30,18 +31,19 @@ export const sendNotificationToUsers = async (userIds, notification) => {
       return;
     }
 
-    // Call Cloud Function to send notifications
-    // Note: You need to create this Cloud Function
-    const response = await fetch('/api/send-notification', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        tokens: tokens,
-        notification: notification
-      })
+    // Call Firebase Cloud Function to send notifications
+    const { getFunctions, httpsCallable } = await import('firebase/functions');
+    const functions = getFunctions();
+    const sendNotification = httpsCallable(functions, 'sendNotification');
+
+    const result = await sendNotification({
+      tokens: tokens,
+      notification: notification
     });
+
+    if (!result.data.success) {
+      throw new Error('Failed to send notification');
+    }
 
     if (!response.ok) {
       throw new Error('Failed to send notification');
