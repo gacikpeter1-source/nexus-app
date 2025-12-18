@@ -146,9 +146,13 @@ export default function EditEvent() {
 
       // ✅ Send notification about the update
       if (event.visibilityLevel !== 'personal') {
-        const updatedEvent = { ...event, ...updateData, id: eventId };
-        const affectedUsers = Object.keys(event.responses || {});
-        await notifyEventModified(updatedEvent, affectedUsers);
+        try {
+          const affectedUsers = await getNotificationRecipients(event.clubId, event.teamId);
+          const updatedEvent = { ...event, ...updateData, id: eventId };
+          await notifyEventModified(updatedEvent, affectedUsers);
+        } catch (err) {
+          console.log('Could not send notification:', err);
+        }
       }
 
       navigate(`/event/${eventId}`);

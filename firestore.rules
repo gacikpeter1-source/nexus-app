@@ -122,12 +122,13 @@ match /clubs/{clubId} {
     // CHAT SYSTEM RULES
     // ============================================================================
     
-    match /chats/{chatId} {
-      // Read: Users can see chats they're members of
       allow read: if isAuthenticated() && (
         request.auth.uid in resource.data.members ||
         request.auth.token.isSuperAdmin == true ||
-        request.auth.token.role == 'admin'
+        request.auth.token.role == 'admin' ||
+        // Allow if user is in the club/team that this chat belongs to
+        (resource.data.clubId != null && 
+        request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.members)
       );
       
       // Create: All authenticated users can create chats
@@ -187,7 +188,12 @@ match /clubs/{clubId} {
     // Order templates
     match /orderTemplates/{templateId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (
+        request.auth.token.isSuperAdmin == true ||
+        request.auth.token.role == 'admin' ||
+        request.auth.uid == resource.data.createdBy
+      );
     }
 
     // Order responses
@@ -239,6 +245,4 @@ match /clubs/{clubId} {
         request.auth.token.role == 'admin'
       );
     }
-
   }
-}
