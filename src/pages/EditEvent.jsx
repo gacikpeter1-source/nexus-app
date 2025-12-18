@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { getEvent, updateEvent } from '../firebase/firestore';
-import { notifyEventModified } from '../utils/notifications';
+import { notifyEventModified, getNotificationRecipients } from '../utils/notifications';
 
 export default function EditEvent() {
   const { eventId } = useParams();
