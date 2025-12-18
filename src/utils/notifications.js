@@ -32,7 +32,6 @@ export const sendNotificationToUsers = async (userIds, notification) => {
     }
 
     // Import and call Firebase Cloud Function
-    const { getFunctions, httpsCallable } = await import('firebase/functions');
     const functions = getFunctions();
     const sendNotificationFn = httpsCallable(functions, 'sendNotification');
 
