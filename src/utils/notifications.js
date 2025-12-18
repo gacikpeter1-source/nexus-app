@@ -28,33 +28,24 @@ export const sendNotificationToUsers = async (userIds, notification) => {
 
     if (tokens.length === 0) {
       console.log('No FCM tokens found for users');
-      return;
+      return { success: true, message: 'No tokens found' };
     }
 
-    // Call Firebase Cloud Function to send notifications
+    // Import and call Firebase Cloud Function
     const { getFunctions, httpsCallable } = await import('firebase/functions');
     const functions = getFunctions();
-    const sendNotification = httpsCallable(functions, 'sendNotification');
+    const sendNotificationFn = httpsCallable(functions, 'sendNotification');
 
-    
-    const result = await sendNotification({
+    const result = await sendNotificationFn({
       tokens: tokens,
       notification: notification
     });
 
-    if (!result.data.success) {
-      throw new Error('Failed to send notification');
-    }
-
-    if (!response.ok) {
-      throw new Error('Failed to send notification');
-    }
-
-    console.log('Notification sent successfully');
-    return true;
+    console.log('✅ Notification sent successfully');
+    return result.data;
   } catch (error) {
-    console.error('Error sending notification:', error);
-    return false;
+    console.error('❌ Error sending notification:', error);
+    throw error;
   }
 };
 
