@@ -162,17 +162,12 @@ export const notifyAttendancePromoted = async (userId, event) => {
  */
 export const getNotificationRecipients = async (clubId, teamId = null) => {
   try {
-    const clubQuery = query(
-      collection(db, 'clubs'),
-      where('__name__', '==', clubId)
-    );
-    const clubSnap = await getDocs(clubQuery);
+    const { getClub } = await import('../firebase/firestore');
+    const clubData = await getClub(clubId);
     
-    if (clubSnap.empty) {
+    if (!clubData) {
       return [];
     }
-
-    const clubData = clubSnap.docs[0].data();
     
     if (teamId) {
       // Get team members
