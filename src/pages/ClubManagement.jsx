@@ -1014,14 +1014,24 @@ async function handleCreateOrder() {
     }
 
     await createOrderTemplate(orderData);
+
+    // Send notification to club members
+    try {
+      const { notifyNewOrder, getNotificationRecipients } = await import('../utils/notifications');
+      const recipients = await getNotificationRecipients(selectedClubId);
+      await notifyNewOrder(orderData, recipients);
+    } catch (err) {
+      console.log('Could not send notification:', err);
+    }
+
     showToast('Order created successfully!', 'success');
     setShowCreateOrderModal(false);
     resetOrderForm();
     await loadOrders();
-  } catch (error) {
-    console.error('Error creating order:', error);
-    showToast('Failed to create order', 'error');
-  }
+    } catch (error) {
+      console.error('Error creating order:', error);
+      showToast('Failed to create order', 'error');
+    }
 }
 
 async function handleCloseOrder(orderId) {
