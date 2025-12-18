@@ -13,6 +13,7 @@ export const sendNotificationToUsers = async (userIds, notification) => {
     const tokens = [];
     
     for (const userId of userIds) {
+      console.log('🔍 Looking for user:', userId);
       const userQuery = query(
         collection(db, 'users'),
         where('__name__', '==', userId)
