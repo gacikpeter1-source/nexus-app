@@ -805,7 +805,7 @@ const handleCreateTeamChat = async () => {
         {activeTab === 'members' && (
           <TeamMemberCards
             team={team}
-            members={[...team.trainers, ...team.assistants, ...team.members]}
+            members={[...new Set([...team.trainers, ...team.assistants, ...team.members])]}
             allUsers={allUsers}
             currentUser={user}
             userSubscription={user.isSuperAdmin ? 'full' : (user.subscription || 'free')}
