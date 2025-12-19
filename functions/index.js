@@ -953,6 +953,13 @@ async function sendWaitlistNotification(eventId, userId, event) {
     await admin.messaging().sendEachForMulticast(message);
     console.log(`✅ Waitlist notification sent to user ${userId}`);
 
+        const eventRef = admin.firestore().collection('events').doc(eventId);
+    await eventRef.update({
+      [`responses.${userId}.waitlistNotified`]: true,
+      [`responses.${userId}.notifiedAt`]: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+
   } catch (error) {
     console.error('Error sending waitlist notification:', error);
   }

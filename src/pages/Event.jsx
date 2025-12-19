@@ -685,11 +685,11 @@ export default function EventPage() {
                               External
                             </span>
                           )}
-                          {isStandby && (
-                            <span className="px-2 py-1 bg-orange-500/20 text-orange-300 rounded text-xs font-medium">
-                              Standby
-                            </span>
-                          )}
+                            {isStandby && (
+                              <span className="px-2 py-1 bg-orange-500/20 text-orange-300 rounded text-xs font-medium">
+                                {response?.waitlistNotified ? '🔔 Notified' : '⏳ Standby'}
+                              </span>
+                            )}
                         </div>
                       </div>
                       <div>
