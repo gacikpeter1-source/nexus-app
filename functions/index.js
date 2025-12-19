@@ -863,9 +863,15 @@ async function processWaitlistQueue(eventId) {
     if (!eventDoc.exists) return;
 
     const event = eventDoc.data();
+
+console.log('📊 Processing queue for event:', eventId);
+console.log('📊 Participant limit:', event.participantLimit);
     
     // Only process if event has participant limit
-    if (!event.participantLimit) return;
+    if (!event.participantLimit) {
+console.log('⚠️ No participant limit set');
+      return;
+    }
 
     const responses = event.responses || {};
 
@@ -874,8 +880,13 @@ async function processWaitlistQueue(eventId) {
       .filter(([_, r]) => r.status === 'attending')
       .sort((a, b) => (a[1].timestamp?._seconds || 0) - (b[1].timestamp?._seconds || 0));
 
+console.log('📊 Total attending:', attendingList.length);
+console.log('📊 Active spots:', event.participantLimit);
+
     const activeCount = Math.min(attendingList.length, event.participantLimit);
     const waitlistUsers = attendingList.slice(event.participantLimit);
+
+console.log('📊 Waitlist users:', waitlistUsers.length);
 
     // Get pending notifications
     const pendingNotifications = await getPendingNotifications(eventId);
@@ -1084,3 +1095,5 @@ exports.onAttendanceChange = functions.firestore
 
     return null;
   });
+
+
