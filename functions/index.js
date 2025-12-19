@@ -767,3 +767,320 @@ exports.onOrderCreated = functions.firestore
       console.error('❌ Error sending order notification:', error);
     }
   });
+
+  // ============================================================================
+// WAITLIST NOTIFICATION SYSTEM
+// ============================================================================
+
+/**
+ * Handle Accept/Decline response from push notification
+ * Called when user taps action button on notification
+ */
+exports.handleAttendanceResponse = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be logged in');
+  }
+
+  const { eventId, response } = data; // response: 'accept' or 'decline'
+  const userId = context.auth.uid;
+
+  try {
+    const eventRef = admin.firestore().collection('events').doc(eventId);
+    const eventDoc = await eventRef.get();
+
+    if (!eventDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Event not found');
+    }
+
+    const event = eventDoc.data();
+    const responses = event.responses || {};
+
+    // Check if user is in waitlist
+    const attendingList = Object.entries(responses)
+      .filter(([_, r]) => r.status === 'attending')
+      .sort((a, b) => (a[1].timestamp?._seconds || 0) - (b[1].timestamp?._seconds || 0));
+
+    const userIndex = attendingList.findIndex(([id]) => id === userId);
+    const isInWaitlist = event.participantLimit && userIndex >= event.participantLimit;
+
+    if (!isInWaitlist) {
+      return { success: false, message: 'User not in waitlist' };
+    }
+
+    if (response === 'accept') {
+      // User accepted - they stay in attending list (already there)
+      // Mark as "confirmed from waitlist"
+      responses[userId] = {
+        ...responses[userId],
+        waitlistConfirmed: true,
+        waitlistConfirmedAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+
+      await eventRef.update({ responses });
+
+      // Remove pending notification for this user
+      await removePendingNotification(eventId, userId);
+
+      // Process queue - might notify next person if still spots available
+      await processWaitlistQueue(eventId);
+
+      return { success: true, message: 'Confirmed attendance' };
+
+    } else {
+      // User declined - remove from attending
+      responses[userId] = {
+        status: 'declined',
+        message: 'Declined from waitlist',
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      };
+
+      await eventRef.update({ responses });
+
+      // Remove pending notification
+      await removePendingNotification(eventId, userId);
+
+      // Immediately notify next person in queue
+      await processWaitlistQueue(eventId);
+
+      return { success: true, message: 'Declined attendance' };
+    }
+
+  } catch (error) {
+    console.error('Error handling attendance response:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Process waitlist queue - notify users when spots available
+ * Called after: cancel, decline, or accept
+ */
+async function processWaitlistQueue(eventId) {
+  try {
+    const eventRef = admin.firestore().collection('events').doc(eventId);
+    const eventDoc = await eventRef.get();
+
+    if (!eventDoc.exists) return;
+
+    const event = eventDoc.data();
+    
+    // Only process if event has participant limit
+    if (!event.participantLimit) return;
+
+    const responses = event.responses || {};
+
+    // Get sorted attending list
+    const attendingList = Object.entries(responses)
+      .filter(([_, r]) => r.status === 'attending')
+      .sort((a, b) => (a[1].timestamp?._seconds || 0) - (b[1].timestamp?._seconds || 0));
+
+    const activeCount = Math.min(attendingList.length, event.participantLimit);
+    const waitlistUsers = attendingList.slice(event.participantLimit);
+
+    // Get pending notifications
+    const pendingNotifications = await getPendingNotifications(eventId);
+    const alreadyNotified = new Set(pendingNotifications.map(n => n.userId));
+
+    // Calculate how many spots are available
+    const spotsAvailable = event.participantLimit - activeCount;
+
+    if (spotsAvailable <= 0 || waitlistUsers.length === 0) {
+      return; // No spots or no waitlist
+    }
+
+    // Notify users for available spots (excluding already notified)
+    const usersToNotify = waitlistUsers
+      .filter(([userId]) => !alreadyNotified.has(userId))
+      .slice(0, spotsAvailable);
+
+    for (const [userId, userData] of usersToNotify) {
+      await sendWaitlistNotification(eventId, userId, event);
+      await createPendingNotification(eventId, userId);
+      
+      // Schedule 5-minute timeout
+      await scheduleTimeout(eventId, userId);
+    }
+
+  } catch (error) {
+    console.error('Error processing waitlist queue:', error);
+  }
+}
+
+/**
+ * Send push notification to waitlist user
+ */
+async function sendWaitlistNotification(eventId, userId, event) {
+  try {
+    const userDoc = await admin.firestore().collection('users').doc(userId).get();
+    if (!userDoc.exists) return;
+
+    const userData = userDoc.data();
+    const tokens = userData.fcmTokens || [];
+
+    if (tokens.length === 0) return;
+
+    const message = {
+      notification: {
+        title: '🎉 Spot Available!',
+        body: `A spot opened up for ${event.title}. Accept within 5 minutes!`
+      },
+      data: {
+        type: 'waitlist_promotion',
+        eventId: eventId,
+        userId: userId,
+        requiresResponse: 'true'
+      },
+      tokens: tokens
+    };
+
+    await admin.messaging().sendEachForMulticast(message);
+    console.log(`✅ Waitlist notification sent to user ${userId}`);
+
+  } catch (error) {
+    console.error('Error sending waitlist notification:', error);
+  }
+}
+
+/**
+ * Create pending notification record
+ */
+async function createPendingNotification(eventId, userId) {
+  await admin.firestore().collection('pendingNotifications').add({
+    eventId,
+    userId,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 5 * 60 * 1000) // 5 min
+  });
+}
+
+/**
+ * Remove pending notification
+ */
+async function removePendingNotification(eventId, userId) {
+  const snapshot = await admin.firestore()
+    .collection('pendingNotifications')
+    .where('eventId', '==', eventId)
+    .where('userId', '==', userId)
+    .get();
+
+  const batch = admin.firestore().batch();
+  snapshot.docs.forEach(doc => batch.delete(doc.ref));
+  await batch.commit();
+}
+
+/**
+ * Get pending notifications for event
+ */
+async function getPendingNotifications(eventId) {
+  const snapshot = await admin.firestore()
+    .collection('pendingNotifications')
+    .where('eventId', '==', eventId)
+    .get();
+
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+/**
+ * Schedule 5-minute timeout using Firestore trigger
+ */
+async function scheduleTimeout(eventId, userId) {
+  // Create a scheduled task document
+  await admin.firestore().collection('scheduledTasks').add({
+    type: 'waitlist_timeout',
+    eventId,
+    userId,
+    scheduledFor: admin.firestore.Timestamp.fromMillis(Date.now() + 5 * 60 * 1000),
+    status: 'pending'
+  });
+}
+
+/**
+ * Process scheduled tasks (runs every minute)
+ */
+exports.processScheduledTasks = functions.pubsub
+  .schedule('every 1 minutes')
+  .onRun(async (context) => {
+    const now = admin.firestore.Timestamp.now();
+
+    const tasksSnapshot = await admin.firestore()
+      .collection('scheduledTasks')
+      .where('status', '==', 'pending')
+      .where('scheduledFor', '<=', now)
+      .get();
+
+    for (const taskDoc of tasksSnapshot.docs) {
+      const task = taskDoc.data();
+
+      if (task.type === 'waitlist_timeout') {
+        await handleWaitlistTimeout(task.eventId, task.userId);
+      }
+
+      // Mark as completed
+      await taskDoc.ref.update({ status: 'completed' });
+    }
+
+    return null;
+  });
+
+/**
+ * Handle timeout - user didn't respond in 5 minutes
+ */
+async function handleWaitlistTimeout(eventId, userId) {
+  try {
+    // Check if user already responded
+    const pendingSnapshot = await admin.firestore()
+      .collection('pendingNotifications')
+      .where('eventId', '==', eventId)
+      .where('userId', '==', userId)
+      .get();
+
+    if (pendingSnapshot.empty) {
+      return; // User already responded
+    }
+
+    // Remove pending notification
+    await removePendingNotification(eventId, userId);
+
+    // Notify next person in queue
+    await processWaitlistQueue(eventId);
+
+    console.log(`⏰ Waitlist timeout for user ${userId} on event ${eventId}`);
+
+  } catch (error) {
+    console.error('Error handling waitlist timeout:', error);
+  }
+}
+
+/**
+ * Trigger when someone cancels attendance
+ * Called from Event.jsx when user changes from attending to not attending
+ */
+exports.onAttendanceChange = functions.firestore
+  .document('events/{eventId}')
+  .onUpdate(async (change, context) => {
+    const eventId = context.params.eventId;
+    const before = change.before.data();
+    const after = change.after.data();
+
+    const beforeResponses = before.responses || {};
+    const afterResponses = after.responses || {};
+
+    // Check if someone cancelled (was attending, now not)
+    const beforeAttending = Object.entries(beforeResponses)
+      .filter(([_, r]) => r.status === 'attending')
+      .map(([id]) => id);
+
+    const afterAttending = Object.entries(afterResponses)
+      .filter(([_, r]) => r.status === 'attending')
+      .map(([id]) => id);
+
+    const cancelled = beforeAttending.filter(id => !afterAttending.includes(id));
+
+    if (cancelled.length > 0) {
+      console.log(`🔔 ${cancelled.length} user(s) cancelled attendance on event ${eventId}`);
+      // Process waitlist queue
+      await processWaitlistQueue(eventId);
+    }
+
+    return null;
+  });

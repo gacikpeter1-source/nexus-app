@@ -15,6 +15,7 @@ firebase.initializeApp({
 });
 
 const messaging = firebase.messaging();
+const functions = firebase.functions();
 
 // Handle background messages
 messaging.onBackgroundMessage((payload) => {
@@ -70,26 +71,19 @@ self.addEventListener('notificationclick', (event) => {
   }
   
   // Handle accept/decline for waitlist notifications
-  if (action === 'accept' || action === 'decline') {
-    event.waitUntil(
-      fetch(`${self.location.origin}/api/${action}-attendance`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
+    if (action === 'accept' || action === 'decline') {
+      event.waitUntil(
+        functions.httpsCallable('handleAttendanceResponse')({
           eventId: data.eventId,
-          userId: data.userId
+          response: action
+        }).then(() => {
+          return clients.openWindow(`/event/${data.eventId}`);
+        }).catch(error => {
+          console.error('Error handling attendance response:', error);
         })
-      }).then(() => {
-        // Open app to show confirmation
-        return clients.openWindow(`/event/${data.eventId}`);
-      }).catch(error => {
-        console.error('Error handling attendance response:', error);
-      })
-    );
-    return;
-  }
+      );
+      return;
+    }
   
   // Determine URL based on notification type
   let url = '/';

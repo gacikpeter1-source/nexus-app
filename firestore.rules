@@ -233,5 +233,15 @@ match /clubs/{clubId} {
         request.auth.token.role == 'admin'
       );
     }
+
+    // Pending notifications
+      match /pendingNotifications/{notificationId} {
+        allow read, write: if isAuthenticated();
+      }
+
+      // Scheduled tasks
+      match /scheduledTasks/{taskId} {
+        allow read, write: if isAuthenticated();
+      }
   }
 }
