@@ -890,10 +890,14 @@ console.log('📊 Waitlist users:', waitlistUsers.length);
 
     // Get pending notifications
     const pendingNotifications = await getPendingNotifications(eventId);
+console.log('📊 Pending notifications:', pendingNotifications.length);
+
     const alreadyNotified = new Set(pendingNotifications.map(n => n.userId));
+
 
     // Calculate how many spots are available
     const spotsAvailable = event.participantLimit - activeCount;
+console.log('📊 Spots available:', spotsAvailable);
 
     if (spotsAvailable <= 0 || waitlistUsers.length === 0) {
       return; // No spots or no waitlist
@@ -903,6 +907,8 @@ console.log('📊 Waitlist users:', waitlistUsers.length);
     const usersToNotify = waitlistUsers
       .filter(([userId]) => !alreadyNotified.has(userId))
       .slice(0, spotsAvailable);
+console.log('📊 Users to notify:', usersToNotify.length);
+console.log('📊 User IDs:', usersToNotify.map(([id]) => id));
 
     for (const [userId, userData] of usersToNotify) {
       await sendWaitlistNotification(eventId, userId, event);
