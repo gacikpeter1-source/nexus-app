@@ -386,6 +386,7 @@ export const updateEventResponse = async (eventId, userId, status, message = nul
   }
 };
 
+
 // Get all events for a user (where they're a member of the team/club OR invited)
 export const getUserEvents = async (userId) => {
   try {

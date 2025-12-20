@@ -781,7 +781,7 @@ exports.handleAttendanceResponse = functions.https.onCall(async (data, context) 
     throw new functions.https.HttpsError('unauthenticated', 'User must be logged in');
   }
 
-  const { eventId, response } = data; // response: 'accept' or 'decline'
+  const { eventId, response } = data;
   const userId = context.auth.uid;
 
   try {
@@ -795,39 +795,27 @@ exports.handleAttendanceResponse = functions.https.onCall(async (data, context) 
     const event = eventDoc.data();
     const responses = event.responses || {};
 
-    // Check if user is in waitlist
-    const attendingList = Object.entries(responses)
-      .filter(([_, r]) => r.status === 'attending')
-      .sort((a, b) => (a[1].timestamp?._seconds || 0) - (b[1].timestamp?._seconds || 0));
-
-    const userIndex = attendingList.findIndex(([id]) => id === userId);
-    const isInWaitlist = event.participantLimit && userIndex >= event.participantLimit;
-
-    if (!isInWaitlist) {
+    // Check if user is in waiting status
+    if (!responses[userId] || responses[userId].status !== 'waiting') {
       return { success: false, message: 'User not in waitlist' };
     }
 
     if (response === 'accept') {
-      // User accepted - they stay in attending list (already there)
-      // Mark as "confirmed from waitlist"
+      // Move user from waiting to attending
       responses[userId] = {
-        ...responses[userId],
-        waitlistConfirmed: true,
-        waitlistConfirmedAt: admin.firestore.FieldValue.serverTimestamp()
+        status: 'attending',
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        promotedFromWaitlist: true
       };
 
       await eventRef.update({ responses });
-
-      // Remove pending notification for this user
       await removePendingNotification(eventId, userId);
-
-      // Process queue - might notify next person if still spots available
       await processWaitlistQueue(eventId);
 
       return { success: true, message: 'Confirmed attendance' };
 
     } else {
-      // User declined - remove from attending
+      // User declined
       responses[userId] = {
         status: 'declined',
         message: 'Declined from waitlist',
@@ -835,11 +823,7 @@ exports.handleAttendanceResponse = functions.https.onCall(async (data, context) 
       };
 
       await eventRef.update({ responses });
-
-      // Remove pending notification
       await removePendingNotification(eventId, userId);
-
-      // Immediately notify next person in queue
       await processWaitlistQueue(eventId);
 
       return { success: true, message: 'Declined attendance' };
@@ -863,58 +847,51 @@ async function processWaitlistQueue(eventId) {
     if (!eventDoc.exists) return;
 
     const event = eventDoc.data();
-
-console.log('📊 Processing queue for event:', eventId);
-console.log('📊 Participant limit:', event.participantLimit);
     
-    // Only process if event has participant limit
+    console.log('📊 Processing queue for event:', eventId);
+    console.log('📊 Participant limit:', event.participantLimit);
+    
     if (!event.participantLimit) {
-console.log('⚠️ No participant limit set');
+      console.log('⚠️ No participant limit set');
       return;
     }
 
     const responses = event.responses || {};
 
-    // Get sorted attending list
-    const attendingList = Object.entries(responses)
+    // Get active attending users (not notified waitlist)
+    const activeAttending = Object.entries(responses)
       .filter(([_, r]) => r.status === 'attending')
+      .length;
+
+    // Get waiting users (sorted by timestamp)
+    const waitingUsers = Object.entries(responses)
+      .filter(([_, r]) => r.status === 'waiting')
       .sort((a, b) => (a[1].timestamp?._seconds || 0) - (b[1].timestamp?._seconds || 0));
 
-console.log('📊 Total attending:', attendingList.length);
-console.log('📊 Active spots:', event.participantLimit);
+    console.log('📊 Active attending:', activeAttending);
+    console.log('📊 Waiting users:', waitingUsers.length);
 
-    const activeCount = Math.min(attendingList.length, event.participantLimit);
-    const waitlistUsers = attendingList.slice(event.participantLimit);
+    const spotsAvailable = event.participantLimit - activeAttending;
+    console.log('📊 Spots available:', spotsAvailable);
 
-console.log('📊 Waitlist users:', waitlistUsers.length);
+    if (spotsAvailable <= 0 || waitingUsers.length === 0) {
+      return;
+    }
 
     // Get pending notifications
     const pendingNotifications = await getPendingNotifications(eventId);
-console.log('📊 Pending notifications:', pendingNotifications.length);
-
     const alreadyNotified = new Set(pendingNotifications.map(n => n.userId));
 
-
-    // Calculate how many spots are available
-    const spotsAvailable = event.participantLimit - activeCount;
-console.log('📊 Spots available:', spotsAvailable);
-
-    if (spotsAvailable <= 0 || waitlistUsers.length === 0) {
-      return; // No spots or no waitlist
-    }
-
-    // Notify users for available spots (excluding already notified)
-    const usersToNotify = waitlistUsers
+    // Notify users for available spots
+    const usersToNotify = waitingUsers
       .filter(([userId]) => !alreadyNotified.has(userId))
       .slice(0, spotsAvailable);
-console.log('📊 Users to notify:', usersToNotify.length);
-console.log('📊 User IDs:', usersToNotify.map(([id]) => id));
+
+    console.log('📊 Users to notify:', usersToNotify.length);
 
     for (const [userId, userData] of usersToNotify) {
       await sendWaitlistNotification(eventId, userId, event);
       await createPendingNotification(eventId, userId);
-      
-      // Schedule 5-minute timeout
       await scheduleTimeout(eventId, userId);
     }
 

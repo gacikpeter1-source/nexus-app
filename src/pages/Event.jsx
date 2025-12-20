@@ -580,8 +580,7 @@ export default function EventPage() {
       {/* Attendance Statistics */}
       <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 mb-6">
         <h2 className="font-title text-lg text-light mb-3">Attendance Statistics</h2>
-        
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-center">
             <div className="text-2xl font-bold text-green-400">
               {getResponseCount('attending')}
@@ -599,6 +598,12 @@ export default function EventPage() {
               {getResponseCount('maybe')}
             </div>
             <div className="text-xs text-yellow-300 mt-1">⚠️ Maybe</div>
+          </div>
+          <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 text-center">
+            <div className="text-2xl font-bold text-orange-400">
+              {getResponseCount('waiting')}
+            </div>
+            <div className="text-xs text-orange-300 mt-1">⏳ Waiting</div>
           </div>
           <div className="bg-white/5 border border-white/10 rounded-lg p-3 text-center">
             <div className="text-2xl font-bold text-light">
@@ -685,21 +690,18 @@ export default function EventPage() {
                               External
                             </span>
                           )}
-                            {isStandby && (
-                              <span className="px-2 py-1 bg-orange-500/20 text-orange-300 rounded text-xs font-medium">
-                                {response?.waitlistNotified ? '🔔 Notified' : '⏳ Standby'}
-                              </span>
-                            )}
                         </div>
                       </div>
                       <div>
                         {response ? (
                           <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                             response.status === 'attending' ? 'bg-green-500/20 text-green-300' :
+                            response.status === 'waiting' ? 'bg-orange-500/20 text-orange-300' :
                             response.status === 'declined' ? 'bg-red-500/20 text-red-300' :
                             'bg-yellow-500/20 text-yellow-300'
                           }`}>
-                            {response.status === 'attending' && (isStandby ? '⏳ Standby' : '✅ Attending')}
+                            {response.status === 'attending' && '✅ Attending'}
+                            {response.status === 'waiting' && (response.waitlistNotified ? '🔔 Notified' : '⏳ Waiting')}
                             {response.status === 'declined' && '❌ Not Attending'}
                             {response.status === 'maybe' && '⚠️ Maybe'}
                           </span>
