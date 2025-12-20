@@ -343,7 +343,7 @@ export const updateEventResponse = async (eventId, userId, status, message = nul
     }
 
     const eventData = eventDoc.data();
-    const currentResponses = eventDoc.data().responses || {};
+    const currentResponses = eventData.responses || {};
     
     // Check if user should go to waitlist
     let finalStatus = status;
@@ -358,13 +358,14 @@ export const updateEventResponse = async (eventId, userId, status, message = nul
         finalStatus = 'waiting';
       }
     }
+    
     // Build response object
     const responseData = {
       status: finalStatus,
       timestamp: serverTimestamp()
     };
     
-    // Only add message field if it exists (not null, not undefined, not empty)
+    // Only add message field if it exists
     if (message && message.trim()) {
       responseData.message = message.trim();
     }
@@ -373,6 +374,12 @@ export const updateEventResponse = async (eventId, userId, status, message = nul
       ...currentResponses,
       [userId]: responseData
     };
+
+    // Clear waitlistNotified if user is no longer waiting
+    if (finalStatus !== 'waiting' && currentResponses[userId]?.waitlistNotified) {
+      delete updatedResponses[userId].waitlistNotified;
+      delete updatedResponses[userId].notifiedAt;
+    }
 
     await updateDoc(eventRef, {
       responses: updatedResponses,
