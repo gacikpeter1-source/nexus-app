@@ -342,11 +342,25 @@ export const updateEventResponse = async (eventId, userId, status, message = nul
       throw new Error('Event not found');
     }
 
+    const eventData = eventDoc.data();
     const currentResponses = eventDoc.data().responses || {};
     
+    // Check if user should go to waitlist
+    let finalStatus = status;
+    if (status === 'attending' && eventData.participantLimit) {
+      // Count current attending users
+      const attendingCount = Object.values(currentResponses)
+        .filter(r => r.status === 'attending')
+        .length;
+      
+      // If event is full, set status to 'waiting' instead
+      if (attendingCount >= eventData.participantLimit) {
+        finalStatus = 'waiting';
+      }
+    }
     // Build response object
     const responseData = {
-      status, // 'attending', 'declined', 'maybe'
+      status: finalStatus,
       timestamp: serverTimestamp()
     };
     
