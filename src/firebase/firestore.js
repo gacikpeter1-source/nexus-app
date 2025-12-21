@@ -386,6 +386,21 @@ export const updateEventResponse = async (eventId, userId, status, message = nul
       updatedAt: serverTimestamp()
     });
 
+    // NEW: Clear pending notifications when status changes
+    if (currentResponses[userId]?.status !== finalStatus) {
+      // Status changed - clear any pending notifications
+      const pendingRef = collection(db, 'pendingNotifications');
+      const pendingQuery = query(
+        pendingRef,
+        where('eventId', '==', eventId),
+        where('userId', '==', userId)
+      );
+      const pendingSnap = await getDocs(pendingQuery);
+      
+      const deletePromises = pendingSnap.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(deletePromises);
+    }
+
     return { success: true };
   } catch (error) {
     console.error('Error updating event response:', error);
