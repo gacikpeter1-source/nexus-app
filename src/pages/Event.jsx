@@ -8,6 +8,7 @@ import { useIsAdmin } from '../hooks/usePermissions';
 import { isClubOwner } from '../firebase/privileges';
 import { ShowIf } from '../components/PermissionGuard';
 import { isEventLocked, canChangeEventStatus, getLockTimeText } from '../utils/eventLockUtils';
+import { requestSubstitute, trainerSwapUsers } from '../utils/substitutionUtils';
 
 export default function EventPage() {
   const { eventId } = useParams();
@@ -34,6 +35,16 @@ export default function EventPage() {
   // Invite state
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteSearch, setInviteSearch] = useState('');
+
+  // Substitution state
+  const [showSubstituteModal, setShowSubstituteModal] = useState(false);
+  const [substituteSearch, setSubstituteSearch] = useState('');
+  const [requestingSubstitute, setRequestingSubstitute] = useState(false);
+
+  // Trainer swap state
+  const [showSwapModal, setShowSwapModal] = useState(false);
+  const [swapUser1, setSwapUser1] = useState(null);
+  const [swapUser2, setSwapUser2] = useState(null);
 
   useEffect(() => {
     loadEventData();
@@ -333,6 +344,80 @@ export default function EventPage() {
     }
   }
 
+  // Request substitute
+  async function handleRequestSubstitute(substituteUser) {
+    if (!user || !substituteUser) return;
+    
+    try {
+      setRequestingSubstitute(true);
+      
+      // Check if substitute is from waitlist
+      const substituteResponse = event.responses?.[substituteUser.id];
+      const fromWaitlist = substituteResponse?.status === 'waitlist';
+      
+      const result = await requestSubstitute(eventId, user.id, substituteUser.id, fromWaitlist);
+      
+      if (result.autoAccepted) {
+        showToast('✅ Substitution completed! You are now on the waitlist.', 'success');
+      } else {
+        showToast(`📨 Substitution request sent to ${substituteUser.username}`, 'success');
+      }
+      
+      setShowSubstituteModal(false);
+      setSubstituteSearch('');
+      
+      // Reload event
+      await loadEventData();
+    } catch (error) {
+      console.error('Error requesting substitute:', error);
+      showToast(error.message || 'Failed to request substitute', 'error');
+    } finally {
+      setRequestingSubstitute(false);
+    }
+  }
+
+  // Trainer swap users
+  async function handleTrainerSwap() {
+    if (!swapUser1 || !swapUser2) {
+      showToast('Please select two users to swap', 'error');
+      return;
+    }
+    
+    try {
+      await trainerSwapUsers(eventId, swapUser1.id, swapUser2.id);
+      showToast('✅ Users swapped successfully', 'success');
+      setShowSwapModal(false);
+      setSwapUser1(null);
+      setSwapUser2(null);
+      
+      // Reload event
+      await loadEventData();
+    } catch (error) {
+      console.error('Error swapping users:', error);
+      showToast(error.message || 'Failed to swap users', 'error');
+    }
+  }
+
+  // Get potential substitutes (team members + waitlist)
+  function getPotentialSubstitutes() {
+    const allTeamMembers = getAllMembers();
+    return allTeamMembers.filter(member => {
+      // Exclude current user
+      if (member.id === user?.id) return false;
+      
+      // Include waitlist members (highest priority)
+      const memberResponse = event.responses?.[member.id];
+      if (memberResponse?.status === 'waitlist') return true;
+      
+      // Include team members who are not attending
+      if (!memberResponse || memberResponse.status === 'declined' || memberResponse.status === 'maybe') {
+        return true;
+      }
+      
+      return false;
+    });
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -495,8 +580,31 @@ export default function EventPage() {
               </div>
             )}
           </div>
+          
+          {/* Request Substitute Button - Show when locked and user is attending */}
+          {userResponse?.status === 'attending' && event.lockPeriod?.enabled && (
+            <button
+              onClick={() => setShowSubstituteModal(true)}
+              className="w-full px-3 py-2 mt-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg font-medium transition-all text-sm flex items-center justify-center gap-2"
+            >
+              🔄 Request Substitute
+            </button>
+          )}
         </div>
       )}
+      
+      {/* Trainer Swap Button - Show for trainers during lock */}
+      {isTrainerOrAdmin && eventIsLocked && event.visibilityLevel !== 'personal' && (
+        <div className="mb-4">
+          <button
+            onClick={() => setShowSwapModal(true)}
+            className="w-full px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-all text-sm flex items-center justify-center gap-2"
+          >
+            👨‍🏫 Trainer: Swap Users
+          </button>
+        </div>
+      )}
+      
         <div className="flex items-start justify-between gap-6 mb-4">
           <div className="flex-1">
             {/* 1. Event Title */}
@@ -885,6 +993,246 @@ export default function EventPage() {
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Substitute Request Modal */}
+      {showSubstituteModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-title text-2xl text-light">🔄 Request Substitute</h3>
+              <button
+                onClick={() => {
+                  setShowSubstituteModal(false);
+                  setSubstituteSearch('');
+                }}
+                className="text-light/60 hover:text-light transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-light/70 text-sm mb-4">
+              Select a substitute to take your spot. Users from the waitlist will be auto-accepted.
+            </p>
+
+            {/* Search Input */}
+            <div className="mb-4">
+              <input
+                type="text"
+                placeholder="Search by name..."
+                value={substituteSearch}
+                onChange={(e) => setSubstituteSearch(e.target.value)}
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                autoFocus
+              />
+            </div>
+
+            {/* Potential Substitutes List */}
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {getPotentialSubstitutes()
+                .filter(sub => {
+                  if (!substituteSearch) return true;
+                  return sub.username?.toLowerCase().includes(substituteSearch.toLowerCase());
+                })
+                .map(substitute => {
+                  const substituteResponse = event.responses?.[substitute.id];
+                  const isWaitlist = substituteResponse?.status === 'waitlist';
+                  
+                  return (
+                    <div
+                      key={substitute.id}
+                      onClick={() => handleRequestSubstitute(substitute)}
+                      className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 hover:border-primary/50 cursor-pointer transition-all group"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold shrink-0">
+                        {substitute.username?.charAt(0).toUpperCase() || '?'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-light group-hover:text-primary transition-colors truncate">
+                          {substitute.username}
+                        </div>
+                        <div className="text-xs text-light/60">
+                          {isWaitlist && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-500/20 text-orange-300 rounded-full">
+                              ⏳ Waitlist (Auto-accept)
+                            </span>
+                          )}
+                          {!isWaitlist && substituteResponse?.status === 'declined' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-500/20 text-red-300 rounded-full">
+                              ❌ Declined
+                            </span>
+                          )}
+                          {!isWaitlist && substituteResponse?.status === 'maybe' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-500/20 text-yellow-300 rounded-full">
+                              ⚠️ Maybe
+                            </span>
+                          )}
+                          {!substituteResponse && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/10 text-light/50 rounded-full">
+                              ⏳ No Response
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <button className="px-3 py-1 bg-purple-500/20 text-purple-300 group-hover:bg-purple-500 group-hover:text-white rounded-full text-xs font-medium transition-all shrink-0">
+                        Select
+                      </button>
+                    </div>
+                  );
+                })}
+            </div>
+
+            {getPotentialSubstitutes().length === 0 && (
+              <div className="text-center py-8 text-light/60">
+                <p>No available substitutes</p>
+                <p className="text-xs mt-2">All team members are already attending or unavailable.</p>
+              </div>
+            )}
+
+            <button
+              onClick={() => {
+                setShowSubstituteModal(false);
+                setSubstituteSearch('');
+              }}
+              className="w-full mt-4 px-4 py-3 bg-white/10 text-light rounded-lg hover:bg-white/15 font-medium transition-all"
+              disabled={requestingSubstitute}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Trainer Swap Modal */}
+      {showSwapModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-title text-2xl text-light">👨‍🏫 Swap Users</h3>
+              <button
+                onClick={() => {
+                  setShowSwapModal(false);
+                  setSwapUser1(null);
+                  setSwapUser2(null);
+                }}
+                className="text-light/60 hover:text-light transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-light/70 text-sm mb-4">
+              Select two users to swap their attendance status (e.g., active ↔ waitlist).
+            </p>
+
+            {/* User 1 Selection */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-light/80 mb-2">
+                User 1: {swapUser1 ? swapUser1.username : 'Select user...'}
+              </label>
+              <div className="space-y-1 max-h-40 overflow-y-auto border border-white/10 rounded-lg p-2">
+                {getAllMembers()
+                  .filter(m => event.responses?.[m.id]) // Only users with responses
+                  .map(member => {
+                    const response = event.responses?.[member.id];
+                    return (
+                      <div
+                        key={member.id}
+                        onClick={() => setSwapUser1(member)}
+                        className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-all ${
+                          swapUser1?.id === member.id 
+                            ? 'bg-primary/30 border border-primary' 
+                            : 'hover:bg-white/10 border border-transparent'
+                        }`}
+                      >
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white text-sm font-bold">
+                          {member.username?.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-light text-sm truncate">{member.username}</div>
+                          <div className="text-xs text-light/60">
+                            {response.status === 'attending' && '✅ Attending'}
+                            {response.status === 'waitlist' && '⏳ Waitlist'}
+                            {response.status === 'declined' && '❌ Declined'}
+                            {response.status === 'maybe' && '⚠️ Maybe'}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+
+            {/* User 2 Selection */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-light/80 mb-2">
+                User 2: {swapUser2 ? swapUser2.username : 'Select user...'}
+              </label>
+              <div className="space-y-1 max-h-40 overflow-y-auto border border-white/10 rounded-lg p-2">
+                {getAllMembers()
+                  .filter(m => event.responses?.[m.id] && m.id !== swapUser1?.id) // Exclude User 1
+                  .map(member => {
+                    const response = event.responses?.[member.id];
+                    return (
+                      <div
+                        key={member.id}
+                        onClick={() => setSwapUser2(member)}
+                        className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-all ${
+                          swapUser2?.id === member.id 
+                            ? 'bg-primary/30 border border-primary' 
+                            : 'hover:bg-white/10 border border-transparent'
+                        }`}
+                      >
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white text-sm font-bold">
+                          {member.username?.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-light text-sm truncate">{member.username}</div>
+                          <div className="text-xs text-light/60">
+                            {response.status === 'attending' && '✅ Attending'}
+                            {response.status === 'waitlist' && '⏳ Waitlist'}
+                            {response.status === 'declined' && '❌ Declined'}
+                            {response.status === 'maybe' && '⚠️ Maybe'}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+
+            {swapUser1 && swapUser2 && (
+              <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                <p className="text-blue-300 text-sm">
+                  <strong>{swapUser1.username}</strong> ({event.responses?.[swapUser1.id]?.status}) 
+                  ↔ 
+                  <strong>{swapUser2.username}</strong> ({event.responses?.[swapUser2.id]?.status})
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowSwapModal(false);
+                  setSwapUser1(null);
+                  setSwapUser2(null);
+                }}
+                className="flex-1 px-4 py-3 bg-white/10 text-light rounded-lg hover:bg-white/15 font-medium transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleTrainerSwap}
+                disabled={!swapUser1 || !swapUser2}
+                className="flex-1 px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Swap Users
               </button>
             </div>
           </div>

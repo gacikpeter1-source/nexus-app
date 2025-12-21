@@ -2125,4 +2125,376 @@ async function cancelLockNotification(eventId) {
   }
 }
 
+// ============================================================================
+// PHASE 4A: SUBSTITUTION SYSTEM
+// ============================================================================
+
+/**
+ * Request a substitute for an event
+ * Handles:
+ * - Auto-accept if substitute is from waitlist
+ * - Requires confirmation if substitute is from outside waitlist
+ */
+exports.requestSubstitute = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { eventId, originalUserId, substituteUserId, fromWaitlist } = data;
+  console.log(`🔄 Substitution request: ${originalUserId} → ${substituteUserId} for event ${eventId}`);
+
+  try {
+    const eventRef = admin.firestore().doc(`events/${eventId}`);
+    const eventDoc = await eventRef.get();
+
+    if (!eventDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Event not found');
+    }
+
+    const event = eventDoc.data();
+    const responses = event.responses || {};
+
+    // Verify original user is in active list
+    if (responses[originalUserId]?.status !== 'attending') {
+      throw new functions.https.HttpsError('failed-precondition', 'Original user is not in active list');
+    }
+
+    // Check if substitute is available
+    const substituteResponse = responses[substituteUserId];
+    if (substituteResponse && substituteResponse.status === 'attending') {
+      throw new functions.https.HttpsError('failed-precondition', 'Substitute is already attending');
+    }
+
+    // Get user data
+    const [originalUser, substituteUser] = await Promise.all([
+      admin.firestore().doc(`users/${originalUserId}`).get(),
+      admin.firestore().doc(`users/${substituteUserId}`).get()
+    ]);
+
+    // **CASE 1: Substitute from WAITLIST** - Auto-accept
+    if (fromWaitlist && substituteResponse?.status === 'waitlist') {
+      console.log('✅ Auto-accepting substitute from waitlist');
+
+      // Update event: swap users
+      const updatedResponses = { ...responses };
+      updatedResponses[originalUserId] = {
+        ...updatedResponses[originalUserId],
+        status: 'waitlist', // Move original to waitlist
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      };
+      updatedResponses[substituteUserId] = {
+        status: 'attending', // Move substitute to active
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        message: 'Substituted from waitlist'
+      };
+
+      await eventRef.update({ responses: updatedResponses });
+
+      // Notify both users
+      await Promise.all([
+        // Notify original user
+        sendPushNotification(
+          originalUserId,
+          '✅ Substitution Completed',
+          `${substituteUser.data().username} has taken your spot for "${event.title}"`
+        ),
+        // Notify substitute
+        sendPushNotification(
+          substituteUserId,
+          '🎉 You\'re In!',
+          `You've been moved to the active list for "${event.title}"`
+        )
+      ]);
+
+      return { success: true, message: 'Substitution completed automatically', autoAccepted: true };
+    }
+
+    // **CASE 2: Substitute from OUTSIDE WAITLIST** - Requires confirmation
+    console.log('📨 Creating substitution request (requires confirmation)');
+
+    // Create substitution request
+    const substitutionRef = admin.firestore().collection('substitutionRequests').doc();
+    await substitutionRef.set({
+      id: substitutionRef.id,
+      eventId,
+      eventTitle: event.title,
+      originalUserId,
+      originalUserName: originalUser.data().username,
+      substituteUserId,
+      substituteUserName: substituteUser.data().username,
+      status: 'pending', // pending, accepted, rejected, expired
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 5 * 60 * 1000), // 5 minutes
+      fromWaitlist: false
+    });
+
+    // Notify substitute
+    await sendPushNotification(
+      substituteUserId,
+      '🔄 Substitution Request',
+      `${originalUser.data().username} requests you as substitute for "${event.title}". You have 5 minutes to respond.`
+    );
+
+    return { 
+      success: true, 
+      message: 'Substitution request sent. Waiting for confirmation.', 
+      substitutionId: substitutionRef.id,
+      autoAccepted: false
+    };
+
+  } catch (error) {
+    console.error('❌ Error in requestSubstitute:', error);
+    throw error;
+  }
+});
+
+/**
+ * Respond to a substitution request (accept/reject)
+ */
+exports.respondToSubstitution = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { substitutionId, action } = data; // action: 'accept' or 'reject'
+  console.log(`💬 Substitution response: ${action} for ${substitutionId}`);
+
+  try {
+    const requestRef = admin.firestore().doc(`substitutionRequests/${substitutionId}`);
+    const requestDoc = await requestRef.get();
+
+    if (!requestDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Substitution request not found');
+    }
+
+    const request = requestDoc.data();
+
+    // Check if request is still pending
+    if (request.status !== 'pending') {
+      throw new functions.https.HttpsError('failed-precondition', 'Request already processed');
+    }
+
+    // Check if expired
+    if (request.expiresAt.toMillis() < Date.now()) {
+      await requestRef.update({ status: 'expired' });
+      throw new functions.https.HttpsError('deadline-exceeded', 'Request has expired');
+    }
+
+    // **ACCEPT**
+    if (action === 'accept') {
+      console.log('✅ Substitution accepted');
+
+      // Update event: swap users
+      const eventRef = admin.firestore().doc(`events/${request.eventId}`);
+      const eventDoc = await eventRef.get();
+      const event = eventDoc.data();
+      const responses = event.responses || {};
+
+      const updatedResponses = { ...responses };
+      updatedResponses[request.originalUserId] = {
+        ...updatedResponses[request.originalUserId],
+        status: 'declined', // Original user declines
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        message: 'Found substitute'
+      };
+      updatedResponses[request.substituteUserId] = {
+        status: 'attending', // Substitute attends
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        message: 'Substituted for ' + request.originalUserName
+      };
+
+      await eventRef.update({ responses: updatedResponses });
+      await requestRef.update({ status: 'accepted' });
+
+      // Notify original user
+      await sendPushNotification(
+        request.originalUserId,
+        '✅ Substitution Confirmed',
+        `${request.substituteUserName} has accepted to substitute you for "${request.eventTitle}"`
+      );
+
+      return { success: true, message: 'Substitution accepted' };
+    }
+
+    // **REJECT**
+    if (action === 'reject') {
+      console.log('❌ Substitution rejected');
+
+      await requestRef.update({ status: 'rejected' });
+
+      // Notify original user
+      await sendPushNotification(
+        request.originalUserId,
+        '❌ Substitution Declined',
+        `${request.substituteUserName} declined the substitution request for "${request.eventTitle}"`
+      );
+
+      return { success: true, message: 'Substitution rejected' };
+    }
+
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid action');
+
+  } catch (error) {
+    console.error('❌ Error in respondToSubstitution:', error);
+    throw error;
+  }
+});
+
+/**
+ * Trainer manually swaps users between active list and waitlist
+ * Can be used even during lock period
+ */
+exports.trainerSwapUsers = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { eventId, user1Id, user2Id } = data;
+  console.log(`👨‍🏫 Trainer swap: ${user1Id} ↔ ${user2Id} for event ${eventId}`);
+
+  try {
+    // Verify caller is trainer/admin
+    const callerUid = context.auth.uid;
+    const eventRef = admin.firestore().doc(`events/${eventId}`);
+    const eventDoc = await eventRef.get();
+
+    if (!eventDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Event not found');
+    }
+
+    const event = eventDoc.data();
+
+    // Check if caller is trainer, club owner, or admin
+    const callerDoc = await admin.firestore().doc(`users/${callerUid}`).get();
+    const callerData = callerDoc.data();
+    const isAdmin = callerData.isSuperAdmin || callerData.role === 'admin';
+
+    if (!isAdmin && event.clubId) {
+      const clubDoc = await admin.firestore().doc(`clubs/${event.clubId}`).get();
+      const club = clubDoc.data();
+      const isTrainer = (club.trainers || []).includes(callerUid);
+      const isOwner = club.ownerId === callerUid;
+
+      if (!isTrainer && !isOwner) {
+        throw new functions.https.HttpsError('permission-denied', 'Only trainers can swap users');
+      }
+    }
+
+    // Swap the users
+    const responses = event.responses || {};
+    const user1Response = responses[user1Id];
+    const user2Response = responses[user2Id];
+
+    if (!user1Response || !user2Response) {
+      throw new functions.https.HttpsError('failed-precondition', 'Both users must have responses');
+    }
+
+    // Swap statuses
+    const updatedResponses = { ...responses };
+    const temp = updatedResponses[user1Id].status;
+    updatedResponses[user1Id] = {
+      ...updatedResponses[user1Id],
+      status: updatedResponses[user2Id].status,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      message: 'Swapped by trainer'
+    };
+    updatedResponses[user2Id] = {
+      ...updatedResponses[user2Id],
+      status: temp,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      message: 'Swapped by trainer'
+    };
+
+    await eventRef.update({ responses: updatedResponses });
+
+    // Get user data for notifications
+    const [user1Doc, user2Doc] = await Promise.all([
+      admin.firestore().doc(`users/${user1Id}`).get(),
+      admin.firestore().doc(`users/${user2Id}`).get()
+    ]);
+
+    // Notify both users
+    await Promise.all([
+      sendPushNotification(
+        user1Id,
+        '🔄 Status Changed',
+        `A trainer has updated your status for "${event.title}"`
+      ),
+      sendPushNotification(
+        user2Id,
+        '🔄 Status Changed',
+        `A trainer has updated your status for "${event.title}"`
+      )
+    ]);
+
+    return { success: true, message: 'Users swapped successfully' };
+
+  } catch (error) {
+    console.error('❌ Error in trainerSwapUsers:', error);
+    throw error;
+  }
+});
+
+/**
+ * Get pending substitution requests for a user
+ */
+exports.getPendingSubstitutions = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { userId } = data;
+
+  try {
+    const snapshot = await admin.firestore()
+      .collection('substitutionRequests')
+      .where('substituteUserId', '==', userId)
+      .where('status', '==', 'pending')
+      .get();
+
+    const substitutions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    return { substitutions };
+  } catch (error) {
+    console.error('❌ Error getting pending substitutions:', error);
+    throw error;
+  }
+});
+
+/**
+ * Clean up expired substitution requests (runs every 5 minutes)
+ */
+exports.cleanupExpiredSubstitutions = functions.pubsub
+  .schedule('every 5 minutes')
+  .onRun(async (context) => {
+    try {
+      console.log('🧹 Cleaning up expired substitution requests');
+
+      const now = admin.firestore.Timestamp.now();
+      const snapshot = await admin.firestore()
+        .collection('substitutionRequests')
+        .where('status', '==', 'pending')
+        .where('expiresAt', '<', now)
+        .get();
+
+      if (snapshot.empty) {
+        console.log('ℹ️ No expired substitution requests');
+        return null;
+      }
+
+      const batch = admin.firestore().batch();
+      snapshot.docs.forEach(doc => {
+        batch.update(doc.ref, { status: 'expired' });
+      });
+
+      await batch.commit();
+      console.log(`✅ Marked ${snapshot.size} substitution requests as expired`);
+
+      return null;
+    } catch (error) {
+      console.error('❌ Error cleaning up expired substitutions:', error);
+      return null;
+    }
+  });
+
 
