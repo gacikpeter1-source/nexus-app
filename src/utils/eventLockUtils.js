@@ -108,9 +108,26 @@ export const getTimeUntilLock = (event) => {
  * @returns {Object} - { canChange: boolean, reason: string }
  */
 export const canChangeEventStatus = (event, user, isTrainer = false) => {
-  // Trainers can always manage events
+  // Trainers can always manage events (including past events)
   if (isTrainer) {
     return { canChange: true, reason: '' };
+  }
+
+  // ✅ FIX: Check if event is in the past (regular users cannot change status)
+  if (event && event.date && event.time) {
+    try {
+      const eventDateTime = new Date(`${event.date}T${event.time}`);
+      const now = new Date();
+      
+      if (eventDateTime < now) {
+        return { 
+          canChange: false, 
+          reason: 'Event has already ended. Status changes are not allowed.' 
+        };
+      }
+    } catch (error) {
+      console.error('Error checking if event is past:', error);
+    }
   }
 
   // Check if event is locked
