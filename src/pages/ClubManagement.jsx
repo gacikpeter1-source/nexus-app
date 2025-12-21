@@ -19,8 +19,12 @@ import {
   updateOrderTemplate,
   deleteOrderTemplate,
   getClubOrderTemplates,
-  getOrderResponses
+  getOrderResponses,
+  getTeamEvents,
+  deleteEvent
 } from '../firebase/firestore';
+import { getTeamChats, deleteChat } from '../firebase/chats';
+import { notifyUserAdded, notifyUserRemoved, notifyRoleChanged } from '../utils/userManagementNotifications';
 import {
   canPromoteToTrainer,
   canPromoteToAssistant,
@@ -29,6 +33,9 @@ import {
   canRemoveFromTeam,
   isClubOwner
 } from '../utils/permissions';
+import { logAuditAction, logRoleChange } from '../utils/auditLogger';
+import { AUDIT_ACTIONS } from '../constants/roles';
+import { canAssignRole } from '../firebase/privileges';
 
 export default function ClubManagement() {
   const { user, loading: authLoading, listClubsForUser } = useAuth();
@@ -313,6 +320,18 @@ const [orderSearchQuery, setOrderSearchQuery] = useState('');
       }
       await updateUser(request.userId, { clubIds: updatedClubIds });
 
+      // Send notification to user
+      const teamName = request.teamId 
+        ? updatedTeams.find(t => t.id === request.teamId)?.name 
+        : null;
+      await notifyUserAdded(
+        request.userId,
+        request.clubId,
+        club.name,
+        request.teamId || null,
+        teamName
+      );
+
       showToast('✅ Request approved!', 'success');
       await loadPendingRequests(selectedClubId);
       await loadClubData(selectedClubId);
@@ -494,6 +513,15 @@ useEffect(() => {
         teams: updatedTeams
       });
 
+      // Send notification to user
+      await notifyUserRemoved(
+        memberToRemove.id,
+        selectedClubId,
+        club.name,
+        null,
+        null
+      );
+
       showToast('User removed from club', 'success');
       setShowRemoveActionModal(false);
       setMemberToRemove(null);
@@ -641,6 +669,61 @@ useEffect(() => {
     }
   };
 
+  const handleDeleteTeam = async (teamId) => {
+    if (!selectedClubId || !teamId) return;
+
+    const club = await getClub(selectedClubId);
+    if (!club) return;
+
+    const teamToDelete = (club.teams || []).find(t => t.id === teamId);
+    if (!teamToDelete) return;
+
+    // Confirm deletion
+    const confirmMessage = `Are you sure you want to delete "${teamToDelete.name}"?\n\n⚠️ This will permanently delete:\n- The team\n- All team events\n- All team chats\n- All team members will be unassigned\n\nThis action cannot be undone!`;
+    
+    if (!window.confirm(confirmMessage)) return;
+
+    try {
+      // 1. Delete all team events
+      const teamEvents = await getTeamEvents(teamId);
+      for (const event of teamEvents) {
+        await deleteEvent(event.id);
+      }
+
+      // 2. Delete all team chats
+      const teamChats = await getTeamChats(selectedClubId, teamId);
+      for (const chat of teamChats) {
+        await deleteChat(chat.id);
+      }
+
+      // 3. Remove team from club
+      const updatedTeams = (club.teams || []).filter(t => t.id !== teamId);
+      await updateClub(selectedClubId, { teams: updatedTeams });
+
+      // 🔒 AUDIT LOG: Team deletion
+      await logAuditAction(
+        AUDIT_ACTIONS.TEAM_DELETED,
+        user.id,
+        teamId,
+        {
+          clubId: selectedClubId,
+          clubName: club.name,
+          teamName: teamToDelete.name,
+          memberCount: (teamToDelete.members || []).length,
+          eventsDeleted: teamEvents.length,
+          chatsDeleted: teamChats.length,
+          action: 'delete_team'
+        }
+      );
+
+      showToast(`✅ Team "${teamToDelete.name}" and all related data deleted successfully`, 'success');
+      await loadClubData(selectedClubId);
+    } catch (error) {
+      console.error('Error deleting team:', error);
+      showToast('Failed to delete team: ' + error.message, 'error');
+    }
+  };
+
   const handleLeaveClub = async () => {
     if (!selectedClubId) return;
     
@@ -736,6 +819,17 @@ useEffect(() => {
         members: updatedMembers
       });
       console.log('✅ Club arrays updated successfully');
+      
+      // Send notification to user
+      const targetUser = await getUser(userId);
+      const oldRole = targetUser.role || 'user';
+      await notifyRoleChanged(
+        userId,
+        selectedClubId,
+        club.name,
+        newRole,
+        oldRole
+      );
       
       showToast(`Role updated to ${newRole}`, 'success');
       await loadClubData(selectedClubId);
@@ -840,6 +934,13 @@ useEffect(() => {
     if (!selectedClubId || !memberId) return;
     
     try {
+      // 🔒 PERMISSION VALIDATION: Check if current user can assign trainer role
+      const permissionCheck = await canAssignRole(user.id, memberId, 'trainer', selectedClubId);
+      if (!permissionCheck.allowed) {
+        showToast(`❌ ${permissionCheck.reason}`, 'error');
+        return;
+      }
+      
       const club = await getClub(selectedClubId);
       if (!club) return;
 
@@ -850,6 +951,18 @@ useEffect(() => {
       };
 
       await updateClub(selectedClubId, updatedClub);
+      
+      // 🔒 AUDIT LOG: Role promotion to trainer
+      const targetUser = await getUser(memberId);
+      await logRoleChange(
+        AUDIT_ACTIONS.ROLE_PROMOTED,
+        user.id,
+        memberId,
+        targetUser?.role || 'user',
+        'trainer',
+        selectedClubId
+      );
+      
       showToast('Member promoted to trainer', 'success');
       await loadClubData(selectedClubId);
     } catch (error) {
@@ -872,6 +985,18 @@ useEffect(() => {
       };
 
       await updateClub(selectedClubId, updatedClub);
+      
+      // 🔒 AUDIT LOG: Role demotion to member
+      const targetUser = await getUser(memberId);
+      await logRoleChange(
+        AUDIT_ACTIONS.ROLE_DEMOTED,
+        user.id,
+        memberId,
+        targetUser?.role || 'trainer',
+        'user',
+        selectedClubId
+      );
+      
       showToast('Member demoted to regular member', 'success');
       await loadClubData(selectedClubId);
     } catch (error) {
@@ -1173,6 +1298,21 @@ const filteredOrderResponses = useMemo(() => {
       const club = await getClub(selectedClubId);
       if (!club) return;
 
+      // 🔒 MINIMUM TRAINER ENFORCEMENT: Check if removing last trainer
+      const targetTeam = (club.teams || []).find(t => t.id === teamForUserRemoval.id);
+      if (targetTeam) {
+        const isTrainer = (targetTeam.trainers || []).includes(userId);
+        const trainerCount = (targetTeam.trainers || []).length;
+        
+        if (isTrainer && trainerCount <= 1) {
+          showToast(
+            '❌ Cannot remove last trainer from team. Please assign another trainer first.',
+            'error'
+          );
+          return;
+        }
+      }
+
       const updatedTeams = (club.teams || []).map(t => {
         if (t.id === teamForUserRemoval.id) {
           return {
@@ -1186,6 +1326,16 @@ const filteredOrderResponses = useMemo(() => {
       });
 
       await updateClub(selectedClubId, { teams: updatedTeams });
+      
+      // Send notification to user
+      await notifyUserRemoved(
+        userId,
+        selectedClubId,
+        club.name,
+        teamForUserRemoval.id,
+        teamForUserRemoval.name
+      );
+      
       showToast('User removed from team', 'success');
       setShowRemoveUserFromTeamModal(false);
       setTeamForUserRemoval(null);
@@ -1211,7 +1361,8 @@ const filteredOrderResponses = useMemo(() => {
         name: newTeamName.trim(),
         members: [],
         trainers: [user.id], // Creator is automatically trainer
-        assistants: []
+        assistants: [],
+        createdAt: new Date().toISOString()
       };
 
       const updatedClub = {
@@ -1219,6 +1370,20 @@ const filteredOrderResponses = useMemo(() => {
       };
 
       await updateClub(selectedClubId, updatedClub);
+      
+      // 🔒 AUDIT LOG: Team creation
+      await logAuditAction(
+        AUDIT_ACTIONS.TEAM_CREATED,
+        user.id,
+        newTeam.id,
+        {
+          clubId: selectedClubId,
+          clubName: club.name,
+          teamName: newTeam.name,
+          action: 'create_team'
+        }
+      );
+      
       showToast('Team created successfully! You are now a trainer.', 'success');
       setNewTeamName('');
       setShowCreateTeamModal(false);
@@ -1264,6 +1429,21 @@ const filteredOrderResponses = useMemo(() => {
     try {
       const club = await getClub(selectedClubId);
       if (!club) return;
+
+      // 🔒 MINIMUM TRAINER ENFORCEMENT: Check if removing last trainer
+      const targetTeam = (club.teams || []).find(t => t.id === teamId);
+      if (targetTeam) {
+        const isTrainer = (targetTeam.trainers || []).includes(memberId);
+        const trainerCount = (targetTeam.trainers || []).length;
+        
+        if (isTrainer && trainerCount <= 1) {
+          showToast(
+            '❌ Cannot remove last trainer from team. Please assign another trainer first.',
+            'error'
+          );
+          return;
+        }
+      }
 
       const updatedTeams = (club.teams || []).map(team => {
         if (team.id === teamId) {

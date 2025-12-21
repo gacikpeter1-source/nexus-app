@@ -1,15 +1,33 @@
 // src/utils/permissions.js
 // Centralized permission checks for the entire application
+// Enhanced with comprehensive privilege and access control
+
+import { ROLES, PERMISSIONS, PERMISSION_ERRORS } from '../constants/roles';
+import { 
+  isAdmin as checkIsAdmin, 
+  isClubOwner as checkIsClubOwner,
+  isClubMember as checkIsClubMember,
+  isTeamMember as checkIsTeamMember,
+  canUserAccessResource,
+  hasActiveClubSubscription,
+  logPermissionChange
+} from '../firebase/privileges';
 
 /**
  * Permission System Overview:
  * 
- * Roles:
- * 1. SuperAdmin - Can see and do everything
- * 2. SuperTrainer (Club Owner) - Full control of their club
- * 3. Trainer - Manage teams and events
- * 4. Assistant - Help with team management
- * 5. User - Regular member
+ * Roles (Highest to Lowest Authority):
+ * 1. ADMIN - Can see and do everything (Super User)
+ * 2. CLUB_OWNER - Full control of their club(s) (Resource Owner)
+ * 3. TRAINER - Manage teams and events (Team Manager)
+ * 4. ASSISTANT - Help with team management (Team Helper)
+ * 5. USER - Regular member
+ * 
+ * IMPORTANT: 
+ * - ClubOwner status is ACTIVE only after purchasing CLUB subscription
+ * - At least 1 Trainer is REQUIRED per team
+ * - Only 1 ClubOwner per club at a time
+ * - Trainers can only see teams they created or are members of
  */
 
 // ============================================================================
@@ -17,19 +35,23 @@
 // ============================================================================
 
 export const isSuperAdmin = (user) => {
-  return user?.isSuperAdmin === true || user?.role === 'admin';
+  return user?.isSuperAdmin === true || user?.role === ROLES.ADMIN || user?.role === 'admin';
 };
 
 export const isTrainer = (user) => {
-  return user?.role === 'trainer';
+  return user?.role === ROLES.TRAINER || user?.role === 'trainer';
 };
 
 export const isAssistant = (user) => {
-  return user?.role === 'assistant';
+  return user?.role === ROLES.ASSISTANT || user?.role === 'assistant';
 };
 
 export const isRegularUser = (user) => {
-  return user?.role === 'user' || user?.role === 'parent';
+  return user?.role === ROLES.USER || user?.role === 'user' || user?.role === 'parent';
+};
+
+export const isClubOwnerRole = (user) => {
+  return user?.role === ROLES.CLUB_OWNER || user?.role === 'clubOwner';
 };
 
 // ============================================================================
@@ -59,13 +81,30 @@ export const isClubMember = (user, club) => {
          club.createdBy === user.id;
 };
 
-export const canManageClub = (user, club) => {
-  return isSuperAdmin(user) || isClubOwner(user, club);
+export const canManageClub = async (user, club) => {
+  if (!user || !club) return false;
+  if (isSuperAdmin(user)) return true;
+  
+  // Check if user is club owner
+  if (!isClubOwner(user, club)) return false;
+  
+  // Club owner must have active subscription
+  const hasSubscription = await hasActiveClubSubscription(user.id);
+  if (!hasSubscription) {
+    console.warn('Club owner subscription expired:', user.id);
+    return false;
+  }
+  
+  return true;
 };
 
-export const canDeleteClub = (user, club) => {
+export const canDeleteClub = async (user, club) => {
   // Only SuperAdmin or Club Owner can delete club
-  return isSuperAdmin(user) || isClubOwner(user, club);
+  if (isSuperAdmin(user)) return true;
+  if (!isClubOwner(user, club)) return false;
+  
+  // Must have active subscription
+  return await hasActiveClubSubscription(user.id);
 };
 
 export const canViewClub = (user, club) => {
@@ -151,11 +190,24 @@ export const canDemoteUser = (user, club, targetUser) => {
   return isSuperAdmin(user) || isClubOwner(user, club);
 };
 
-export const canRemoveFromTeam = (user, club, team) => {
-  return isSuperAdmin(user) ||
-         isClubOwner(user, club) ||
-         isTeamTrainer(user, team) ||
-         isTeamAssistant(user, team);
+export const canRemoveFromTeam = async (user, club, team, targetUserId) => {
+  if (isSuperAdmin(user)) return true;
+  
+  if (!isClubOwner(user, club) && 
+      !isTeamTrainer(user, team) && 
+      !isTeamAssistant(user, team)) {
+    return false;
+  }
+  
+  // If removing a trainer, check if it's the last one
+  if (team.trainers?.includes(targetUserId)) {
+    if (team.trainers.length <= 1) {
+      console.warn('Cannot remove last trainer from team:', team.id);
+      return false; // Cannot remove last trainer
+    }
+  }
+  
+  return true;
 };
 
 export const canRemoveFromClub = (user, club) => {

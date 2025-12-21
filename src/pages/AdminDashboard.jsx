@@ -16,6 +16,11 @@ import {
   updateRequest,
   createClub as createClubInFirestore
 } from '../firebase/firestore';
+import { logAuditAction, logRoleChange } from '../utils/auditLogger';
+import { AUDIT_ACTIONS } from '../constants/roles';
+import { canAssignRole } from '../firebase/privileges';
+import RoleBadge from '../components/RoleBadge';
+import { RequireAdmin } from '../components/PermissionGuard';
 
 export default function AdminDashboard() {
   const { user, isAdmin } = useAuth();
@@ -46,12 +51,13 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-2 py-0.5">
-      {/* Header */}
-      <div className="mb-1">
-        <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-light mb-2">👑 Admin Dashboard</h1>
-        <p className="text-light/60">Manage users, clubs, teams, and requests</p>
-      </div>
+    <RequireAdmin>
+      <div className="max-w-7xl mx-auto px-2 py-0.5">
+        {/* Header */}
+        <div className="mb-1">
+          <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-light mb-2">👑 Admin Dashboard</h1>
+          <p className="text-light/60">Manage users, clubs, teams, and requests</p>
+        </div>
 
       {/* Quick Actions - UPDATED WITH COMPACT BUTTONS */}
       <div className="flex flex-wrap gap-3 mb-3 max-w-2xl">
@@ -115,7 +121,8 @@ export default function AdminDashboard() {
         {activeTab === 'teams' && <TeamsTab />}
         {activeTab === 'requests' && <RequestsTab />}
       </div>
-    </div>
+      </div>
+    </RequireAdmin>
   );
 }
 
@@ -196,6 +203,19 @@ function UsersTab() {
       const clubIds = Array.isArray(targetUser.clubIds) ? targetUser.clubIds : [];
       await updateUser(targetUser.id, { clubIds: [...clubIds, selectedId] });
       
+      // 🔒 AUDIT LOG: User assigned to club
+      await logAuditAction(
+        AUDIT_ACTIONS.USER_ASSIGNED_TO_CLUB,
+        currentUser.id,
+        targetUser.id,
+        {
+          clubId: selectedId,
+          clubName: club.name,
+          targetUserEmail: targetUser.email,
+          action: 'assign_to_club'
+        }
+      );
+      
       showToast('✅ User assigned to club successfully!', 'success');
       setAssignModal({ open: false, user: null, selectedId: '' });
       await loadData();
@@ -211,7 +231,26 @@ function UsersTab() {
       return;
     }
     try {
+      // 🔒 PERMISSION VALIDATION: Check if current user can assign this role
+      const permissionCheck = await canAssignRole(currentUser.id, targetUser.id, newRole);
+      if (!permissionCheck.allowed) {
+        showToast(`❌ ${permissionCheck.reason}`, 'error');
+        return;
+      }
+      
+      const oldRole = targetUser.role;
       await updateUser(targetUser.id, { role: newRole });
+      
+      // 🔒 AUDIT LOG: Role change
+      await logRoleChange(
+        oldRole === newRole ? AUDIT_ACTIONS.ROLE_UPDATED : 
+          (newRole === 'admin' || newRole === 'trainer') ? AUDIT_ACTIONS.ROLE_PROMOTED : AUDIT_ACTIONS.ROLE_DEMOTED,
+        currentUser.id,
+        targetUser.id,
+        oldRole,
+        newRole
+      );
+      
       showToast('✅ Role updated successfully!', 'success');
       setRoleModal({ open: false, user: null, newRole: '' });
       await loadData();
@@ -223,6 +262,18 @@ function UsersTab() {
   const handleDeleteUser = async () => {
     const { user: targetUser } = deleteModal;
     try {
+      // 🔒 AUDIT LOG: User deletion (log BEFORE deleting)
+      await logAuditAction(
+        AUDIT_ACTIONS.USER_DELETED,
+        currentUser.id,
+        targetUser.id,
+        {
+          deletedUserEmail: targetUser.email,
+          deletedUserRole: targetUser.role,
+          action: 'delete_user'
+        }
+      );
+      
       await deleteUserFromFirestore(targetUser.id);
       showToast('✅ User deleted successfully!', 'success');
       setDeleteModal({ open: false, user: null });
@@ -324,14 +375,8 @@ function UsersTab() {
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
                   <h3 className="text-xl font-bold text-light">{u.username || 'No Username'}</h3>
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(u.role)}`}>
-                    {u.role?.toUpperCase() || 'USER'}
-                  </span>
-                  {u.isSuperAdmin && (
-                    <span className="px-3 py-1 rounded-full text-xs font-medium bg-purple-600 text-white">
-                      SUPER ADMIN
-                    </span>
-                  )}
+                  {/* 🎨 NEW: Beautiful role badge */}
+                  <RoleBadge role={u.role} isSuperAdmin={u.isSuperAdmin} size="sm" />
                 </div>
                 <p className="text-light/60 mb-3">📧 {u.email}</p>
                 

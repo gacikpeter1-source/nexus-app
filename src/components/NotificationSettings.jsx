@@ -1,6 +1,7 @@
-// src/components/NotificationSettings.jsx - ULTRA COMPACT VERSION
+// src/components/NotificationSettings.jsx - Entry point with link to detailed preferences
 import { useState } from 'react';
 import { useNotifications } from '../contexts/NotificationContext';
+import UserNotificationPreferences from './UserNotificationPreferences';
 
 export default function NotificationSettings() {
   const { 
@@ -11,6 +12,7 @@ export default function NotificationSettings() {
   } = useNotifications();
   
   const [showInfo, setShowInfo] = useState(false);
+  const [showDetailedPreferences, setShowDetailedPreferences] = useState(false);
 
   // Handle toggle switch
   const handleToggle = async () => {
@@ -36,65 +38,108 @@ export default function NotificationSettings() {
     );
   }
 
+  // If detailed preferences view is active, show it
+  if (showDetailedPreferences) {
+    return (
+      <div className="space-y-4">
+        {/* Back Button */}
+        <button
+          onClick={() => setShowDetailedPreferences(false)}
+          className="flex items-center gap-2 text-light/60 hover:text-light transition-colors"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          <span>Back to Profile</span>
+        </button>
+        
+        {/* Detailed Preferences */}
+        <UserNotificationPreferences />
+      </div>
+    );
+  }
+
   return (
     <>
-      {/* Ultra Compact Single Line */}
-      <div className="flex items-center justify-between py-2">
-        {/* Left: Icon + Text */}
-        <div className="flex items-center gap-2">
-          <span className="text-xl">
-            {notificationPermission === 'denied' ? '🔕' : '🔔'}
-          </span>
-          <span className="text-light text-sm font-medium">
-            Push Notifications
-          </span>
-        </div>
+      {/* Quick Overview Card */}
+      <div className="bg-white/5 rounded-lg p-6 border border-white/10">
+        {/* Browser Push Permission Toggle */}
+        <div className="flex items-center justify-between mb-4 pb-4 border-b border-white/10">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">
+              {notificationPermission === 'denied' ? '🔕' : '🔔'}
+            </span>
+            <div>
+              <div className="text-light font-semibold">Browser Push Notifications</div>
+              <div className="text-light/60 text-sm">
+                {isNotificationsEnabled ? 'Enabled' : 'Disabled'}
+              </div>
+            </div>
+          </div>
 
-        {/* Right: Info Button + Toggle */}
-        <div className="flex items-center gap-2">
-          {/* Info Button */}
-          <button
-            onClick={() => setShowInfo(!showInfo)}
-            className="p-1.5 text-light/50 hover:text-light hover:bg-white/10 rounded-full transition-all"
-            aria-label="Information"
-          >
-            <svg 
-              className="w-4 h-4" 
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24"
+          <div className="flex items-center gap-2">
+            {/* Info Button */}
+            <button
+              onClick={() => setShowInfo(!showInfo)}
+              className="p-2 text-light/50 hover:text-light hover:bg-white/10 rounded-lg transition-all"
+              aria-label="Information"
             >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" 
-              />
-            </svg>
-          </button>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </button>
 
-          {/* Toggle Switch */}
-          <button
-            onClick={handleToggle}
-            disabled={notificationPermission === 'denied'}
-            className={`
-              relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300
-              focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-dark
-              ${isNotificationsEnabled 
-                ? 'bg-green-500' 
-                : 'bg-white/30'}
-              ${notificationPermission === 'denied' ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:scale-105'}
-            `}
-            aria-label="Toggle notifications"
-          >
-            <span
+            {/* Toggle Switch */}
+            <button
+              onClick={handleToggle}
+              disabled={notificationPermission === 'denied'}
               className={`
+                relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300
+                focus:outline-none focus:ring-2 focus:ring-primary/50
+                ${isNotificationsEnabled ? 'bg-green-500' : 'bg-white/30'}
+                ${notificationPermission === 'denied' ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:scale-105'}
+              `}
+              aria-label="Toggle notifications"
+            >
+              <span className={`
                 inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform duration-300
                 ${isNotificationsEnabled ? 'translate-x-6' : 'translate-x-1'}
-              `}
-            />
-          </button>
+              `} />
+            </button>
+          </div>
         </div>
+
+        {/* Link to Detailed Preferences */}
+        <button
+          onClick={() => setShowDetailedPreferences(true)}
+          className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-primary/20 to-accent/20 
+            border border-primary/30 rounded-lg hover:border-primary hover:from-primary/30 hover:to-accent/30 
+            transition-all group"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">⚙️</span>
+            <div className="text-left">
+              <div className="text-light font-semibold">Detailed Notification Preferences</div>
+              <div className="text-light/60 text-sm">
+                Customize per notification type, quiet hours, mute clubs & more
+              </div>
+            </div>
+          </div>
+          <svg className="w-6 h-6 text-primary group-hover:translate-x-1 transition-transform" 
+            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+
+        {/* Quick Info */}
+        {isNotificationsEnabled && (
+          <div className="mt-4 bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+            <p className="text-green-400 text-sm">
+              ✅ You will receive push notifications. Click "Detailed Preferences" to customize which notifications you receive.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Info Popup - Same as before */}

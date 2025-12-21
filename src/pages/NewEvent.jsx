@@ -5,6 +5,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { createEvent, getUserClubs } from '../firebase/firestore';
 import { notifyEventCreated, getNotificationRecipients } from '../utils/notifications';
+import { useIsAdmin } from '../hooks/usePermissions';
+import { isClubOwner } from '../firebase/privileges';
 
 export default function NewEvent() {
   const navigate = useNavigate();
@@ -26,6 +28,18 @@ export default function NewEvent() {
   const [monthlyPattern, setMonthlyPattern] = useState('date');
   const [monthlyWeek, setMonthlyWeek] = useState('first');
   const [monthlyDay, setMonthlyDay] = useState('monday');
+
+  // Reminder state
+  const [reminders, setReminders] = useState([]);
+  const [showReminderConfig, setShowReminderConfig] = useState(false);
+  const [customReminderHours, setCustomReminderHours] = useState('');
+  const [customReminderMinutes, setCustomReminderMinutes] = useState('');
+
+  // Lock period state
+  const [lockEnabled, setLockEnabled] = useState(false);
+  const [lockHours, setLockHours] = useState('2');
+  const [lockMinutes, setLockMinutes] = useState('0');
+  const [notifyOnLock, setNotifyOnLock] = useState(false);
 
   const [form, setForm] = useState({
         title: '',
@@ -49,7 +63,8 @@ export default function NewEvent() {
         participantLimit: null,
         attachmentUrl: null,
         attachmentName: null,
-        responses: {}
+        responses: {},
+        reminders: []
 });
 
   // Load clubs on mount
@@ -85,7 +100,10 @@ export default function NewEvent() {
   }
 
   // Get clubs that user owns (SuperTrainer only)
-  const ownedClubs = clubs.filter(c => c.createdBy === user?.id);
+  // 🔒 NEW PERMISSION SYSTEM: Check event creation permissions
+  const isUserAdmin = useIsAdmin();
+  
+  const ownedClubs = clubs.filter(c => isClubOwner(user, c.id));
 
   // Get clubs where user is trainer or assistant
   const clubsWhereTrainerOrAssistant = clubs.filter(c => 
@@ -95,17 +113,16 @@ export default function NewEvent() {
 
   // Determine user's role capabilities
   const canCreateTeamEvents = user && (
-    user.role === 'admin' || 
-    user.isSuperAdmin ||
+    isUserAdmin ||
     user.role === 'trainer' || 
     user.role === 'assistant' ||
     clubsWhereTrainerOrAssistant.length > 0
   );
   
   const canCreateClubEvents = user && (
-    user.isSuperAdmin || 
-    user.role === 'admin' || 
-    ownedClubs.length > 0
+    isUserAdmin || 
+    ownedClubs.length > 0 ||
+    clubsWhereTrainerOrAssistant.length > 0 // Trainers can create club events too
   );
 
   // Auto-set createdBy when user loads
@@ -153,7 +170,7 @@ export default function NewEvent() {
     
     // Permission check
     if (form.visibilityLevel === 'club' && !canCreateClubEvents) {
-      showToast('Only club owners can create club-wide events', 'error');
+      showToast('Only club owners and trainers can create club-wide events', 'error');
       return;
     }
 
@@ -169,7 +186,17 @@ export default function NewEvent() {
   description: form.description,
   participantLimit: form.participantLimit || null,
   createdBy: user.id,
-  responses: {}
+  responses: {},
+  reminders: reminders,
+  lockPeriod: lockEnabled ? {
+    enabled: true,
+    minutesBefore: (parseInt(lockHours) || 0) * 60 + (parseInt(lockMinutes) || 0),
+    notifyOnLock: notifyOnLock
+  } : {
+    enabled: false,
+    minutesBefore: 0,
+    notifyOnLock: false
+  }
 };
 
 // Add optional fields only if they exist
@@ -662,6 +689,284 @@ return (
               </div>
             )}
           </div>
+        </div>
+
+        {/* Reminder Configuration */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <label className="block font-medium text-light/80">⏰ Event Reminders</label>
+            <button
+              type="button"
+              onClick={() => setShowReminderConfig(!showReminderConfig)}
+              className="text-sm text-primary hover:text-primary/80 transition-colors"
+            >
+              {showReminderConfig ? '− Hide' : '+ Add Reminders'}
+            </button>
+          </div>
+
+          {showReminderConfig && (
+            <div className="bg-white/5 border border-white/10 rounded-lg p-4 space-y-3">
+              <p className="text-light/60 text-sm">
+                Send reminders to attendees before the event starts
+              </p>
+
+              {/* Quick Add Buttons */}
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: '24 hours before', value: 24 * 60 },
+                  { label: '12 hours before', value: 12 * 60 },
+                  { label: '1 hour before', value: 60 },
+                  { label: '30 minutes before', value: 30 },
+                ].map((preset) => (
+                  <button
+                    key={preset.value}
+                    type="button"
+                    onClick={() => {
+                      const exists = reminders.some(r => r.minutesBefore === preset.value);
+                      if (!exists) {
+                        setReminders([...reminders, {
+                          id: Date.now() + Math.random(),
+                          minutesBefore: preset.value,
+                          channels: { push: true, email: false }
+                        }]);
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-sm transition-all ${
+                      reminders.some(r => r.minutesBefore === preset.value)
+                        ? 'bg-primary/30 text-primary border border-primary'
+                        : 'bg-white/10 text-light/80 hover:bg-white/15 border border-white/20'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom Reminder Input */}
+              <div className="border-t border-white/10 pt-3 mt-3">
+                <p className="text-light/70 text-sm font-medium mb-2">Or add custom time:</p>
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <label className="block text-xs text-light/60 mb-1">Hours</label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="0"
+                      value={customReminderHours}
+                      onChange={(e) => setCustomReminderHours(e.target.value)}
+                      className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs text-light/60 mb-1">Minutes</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      placeholder="0"
+                      value={customReminderMinutes}
+                      onChange={(e) => setCustomReminderMinutes(e.target.value)}
+                      className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const hours = parseInt(customReminderHours) || 0;
+                      const minutes = parseInt(customReminderMinutes) || 0;
+                      const totalMinutes = (hours * 60) + minutes;
+                      
+                      if (totalMinutes > 0) {
+                        const exists = reminders.some(r => r.minutesBefore === totalMinutes);
+                        if (!exists) {
+                          setReminders([...reminders, {
+                            id: Date.now() + Math.random(),
+                            minutesBefore: totalMinutes,
+                            channels: { push: true, email: false }
+                          }]);
+                          setCustomReminderHours('');
+                          setCustomReminderMinutes('');
+                        } else {
+                          showToast('This reminder already exists', 'info');
+                        }
+                      } else {
+                        showToast('Please enter hours or minutes', 'error');
+                      }
+                    }}
+                    className="px-4 py-2 bg-primary/20 text-primary border border-primary rounded-lg hover:bg-primary/30 transition-all text-sm whitespace-nowrap"
+                  >
+                    + Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Active Reminders List */}
+              {reminders.length > 0 && (
+                <div className="space-y-2 mt-4">
+                  <p className="text-light/70 text-sm font-medium">Active Reminders:</p>
+                  {reminders.map((reminder) => {
+                    const hours = Math.floor(reminder.minutesBefore / 60);
+                    const minutes = reminder.minutesBefore % 60;
+                    const timeText = hours > 0 
+                      ? `${hours}h${minutes > 0 ? ` ${minutes}m` : ''}`
+                      : `${minutes}m`;
+
+                    return (
+                      <div
+                        key={reminder.id}
+                        className="bg-white/5 border border-white/10 rounded-lg p-3 flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">⏰</span>
+                          <div>
+                            <p className="text-light font-medium">{timeText} before event</p>
+                            <div className="flex gap-2 mt-1">
+                              <label className="flex items-center gap-1 text-xs text-light/70">
+                                <input
+                                  type="checkbox"
+                                  checked={reminder.channels.push}
+                                  onChange={(e) => {
+                                    setReminders(reminders.map(r =>
+                                      r.id === reminder.id
+                                        ? { ...r, channels: { ...r.channels, push: e.target.checked } }
+                                        : r
+                                    ));
+                                  }}
+                                  className="rounded"
+                                />
+                                Push
+                              </label>
+                              <label className="flex items-center gap-1 text-xs text-light/70">
+                                <input
+                                  type="checkbox"
+                                  checked={reminder.channels.email}
+                                  onChange={(e) => {
+                                    setReminders(reminders.map(r =>
+                                      r.id === reminder.id
+                                        ? { ...r, channels: { ...r.channels, email: e.target.checked } }
+                                        : r
+                                    ));
+                                  }}
+                                  className="rounded"
+                                />
+                                Email
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setReminders(reminders.filter(r => r.id !== reminder.id))}
+                          className="px-2 py-1 text-red-400 hover:bg-red-500/20 rounded transition-all"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {reminders.length === 0 && (
+                <p className="text-light/40 text-sm text-center py-3">
+                  Click a preset above to add reminders
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Lock Period Configuration */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <label className="block font-medium text-light/80">🔒 Lock Period</label>
+              <span className="text-xs text-light/50">(Prevent status changes before event)</span>
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={lockEnabled}
+                onChange={(e) => setLockEnabled(e.target.checked)}
+                className="rounded"
+              />
+              <span className="text-sm text-light/80">Enable</span>
+            </label>
+          </div>
+
+          {lockEnabled && (
+            <div className="bg-white/5 border border-white/10 rounded-lg p-4 space-y-3">
+              <p className="text-light/60 text-sm">
+                Lock the event before it starts to prevent attendees from changing their status
+              </p>
+
+              {/* Lock Time Configuration */}
+              <div>
+                <label className="block text-sm font-medium text-light/70 mb-2">
+                  Lock event before start:
+                </label>
+                <div className="flex gap-2 items-center">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 bg-white/10 border border-white/20 rounded-lg px-3 py-2">
+                      <input
+                        type="number"
+                        min="0"
+                        value={lockHours}
+                        onChange={(e) => setLockHours(e.target.value)}
+                        className="w-16 bg-transparent text-light text-center focus:outline-none"
+                      />
+                      <span className="text-sm text-light/70">hours</span>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 bg-white/10 border border-white/20 rounded-lg px-3 py-2">
+                      <input
+                        type="number"
+                        min="0"
+                        max="59"
+                        value={lockMinutes}
+                        onChange={(e) => setLockMinutes(e.target.value)}
+                        className="w-16 bg-transparent text-light text-center focus:outline-none"
+                      />
+                      <span className="text-sm text-light/70">minutes</span>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-light/50 mt-2">
+                  Example: 2 hours means event locks 2 hours before start time
+                </p>
+              </div>
+
+              {/* Notify on Lock Toggle */}
+              <div className="border-t border-white/10 pt-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={notifyOnLock}
+                    onChange={(e) => setNotifyOnLock(e.target.checked)}
+                    className="rounded"
+                  />
+                  <div>
+                    <span className="text-sm text-light font-medium">Send notification when lock starts</span>
+                    <p className="text-xs text-light/50">Notify all attendees when the event becomes locked</p>
+                  </div>
+                </label>
+              </div>
+
+              {/* Lock Preview */}
+              {(parseInt(lockHours) > 0 || parseInt(lockMinutes) > 0) && (
+                <div className="bg-primary/10 border border-primary/30 rounded-lg p-3 mt-2">
+                  <p className="text-sm text-primary font-medium flex items-center gap-2">
+                    <span>🔒</span>
+                    Event will lock {lockHours} hour{parseInt(lockHours) !== 1 ? 's' : ''} {lockMinutes} minute{parseInt(lockMinutes) !== 1 ? 's' : ''} before start
+                  </p>
+                  <p className="text-xs text-light/60 mt-1">
+                    Attendees won't be able to change their status after lock. Trainers can still manage manually.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex gap-3 pt-2">

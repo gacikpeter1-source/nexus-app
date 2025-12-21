@@ -12,7 +12,190 @@ exports.setCustomClaims = functions.https.onCall(async (data, context) => {
   return { success: true };
 });
 
-// Add at top of file
+// ============================================================================
+// USER NOTIFICATION PREFERENCES SYSTEM
+// ============================================================================
+
+/**
+ * Get user notification preferences
+ */
+async function getUserNotificationPreferences(userId) {
+  try {
+    const prefDoc = await admin.firestore()
+      .doc(`users/${userId}/settings/notificationPreferences`)
+      .get();
+    
+    if (prefDoc.exists()) {
+      return prefDoc.data();
+    }
+    
+    // Return defaults if not found (all enabled)
+    return {
+      masterEnabled: true,
+      channels: { push: true, email: true, sms: false, call: false },
+      preferences: {},
+      quietHours: { enabled: false },
+      mutedClubs: [],
+      mutedTeams: []
+    };
+  } catch (error) {
+    console.error('Error getting user preferences:', error);
+    return null;
+  }
+}
+
+/**
+ * Check if user should receive notification based on their preferences
+ */
+function shouldSendToUser(userPrefs, notificationType, channel, clubId = null, teamId = null) {
+  // No preferences = allow (fail open)
+  if (!userPrefs) return true;
+  
+  // Master switch disabled = block all
+  if (userPrefs.masterEnabled === false) {
+    console.log('❌ User has master switch disabled');
+    return false;
+  }
+  
+  // Channel globally disabled
+  if (userPrefs.channels && userPrefs.channels[channel] === false) {
+    console.log(`❌ User has ${channel} channel disabled`);
+    return false;
+  }
+  
+  // Club muted
+  if (clubId && userPrefs.mutedClubs && userPrefs.mutedClubs.includes(clubId)) {
+    console.log(`❌ User has club ${clubId} muted`);
+    return false;
+  }
+  
+  // Team muted
+  if (teamId && userPrefs.mutedTeams && userPrefs.mutedTeams.includes(teamId)) {
+    console.log(`❌ User has team ${teamId} muted`);
+    return false;
+  }
+  
+  // Check notification type preferences
+  if (userPrefs.preferences && userPrefs.preferences[notificationType]) {
+    const typePref = userPrefs.preferences[notificationType];
+    
+    // Type globally disabled
+    if (typePref.enabled === false) {
+      console.log(`❌ User has ${notificationType} disabled`);
+      return false;
+    }
+    
+    // Channel disabled for this type
+    if (typePref[channel] === false) {
+      console.log(`❌ User has ${channel} disabled for ${notificationType}`);
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+/**
+ * Check if current time is within user's quiet hours
+ */
+function isWithinQuietHours(quietHours) {
+  if (!quietHours || !quietHours.enabled) return false;
+  
+  try {
+    const now = new Date();
+    const timezone = quietHours.timezone || 'UTC';
+    
+    // Get current time in user's timezone
+    const userTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+    const currentHour = userTime.getHours();
+    const currentMinute = userTime.getMinutes();
+    const currentTimeInMinutes = currentHour * 60 + currentMinute;
+    
+    // Parse quiet hours
+    const [startHour, startMinute] = (quietHours.startTime || '22:00').split(':').map(Number);
+    const [endHour, endMinute] = (quietHours.endTime || '07:00').split(':').map(Number);
+    const startTimeInMinutes = startHour * 60 + startMinute;
+    const endTimeInMinutes = endHour * 60 + endMinute;
+    
+    // Handle overnight quiet hours
+    if (startTimeInMinutes > endTimeInMinutes) {
+      return currentTimeInMinutes >= startTimeInMinutes || currentTimeInMinutes < endTimeInMinutes;
+    } else {
+      return currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes < endTimeInMinutes;
+    }
+  } catch (error) {
+    console.error('Error checking quiet hours:', error);
+    return false;
+  }
+}
+
+/**
+ * Check if notification type is critical (bypasses quiet hours)
+ */
+function isCriticalNotification(notificationType) {
+  const criticalTypes = [
+    'freeSpotAvailable',
+    'substitutionRequest',
+    'eventCancelled',
+    'eventDeleted',
+    'orderDeadline',
+    'lockPeriodStarted'
+  ];
+  return criticalTypes.includes(notificationType);
+}
+
+/**
+ * Filter users based on their notification preferences
+ * Returns object with { push: [userIds], email: [userIds], sms: [userIds], call: [userIds] }
+ */
+async function filterUsersByPreferences(userIds, notificationType, clubId = null, teamId = null) {
+  const filteredUsers = {
+    push: [],
+    email: [],
+    sms: [],
+    call: []
+  };
+  
+  const isCritical = isCriticalNotification(notificationType);
+  
+  for (const userId of userIds) {
+    const prefs = await getUserNotificationPreferences(userId);
+    
+    if (!prefs) {
+      // No prefs = allow all channels (default)
+      filteredUsers.push.push(userId);
+      filteredUsers.email.push(userId);
+      continue;
+    }
+    
+    // Check quiet hours (only for non-critical)
+    const inQuietHours = !isCritical && isWithinQuietHours(prefs.quietHours);
+    if (inQuietHours) {
+      console.log(`⏰ User ${userId} is in quiet hours, skipping non-critical notification`);
+      continue;
+    }
+    
+    // Check each channel
+    for (const channel of ['push', 'email', 'sms', 'call']) {
+      if (shouldSendToUser(prefs, notificationType, channel, clubId, teamId)) {
+        filteredUsers[channel].push(userId);
+      }
+    }
+  }
+  
+  console.log(`📊 Filtered users for ${notificationType}:`);
+  console.log(`   Push: ${filteredUsers.push.length}`);
+  console.log(`   Email: ${filteredUsers.email.length}`);
+  console.log(`   SMS: ${filteredUsers.sms.length}`);
+  console.log(`   Call: ${filteredUsers.call.length}`);
+  
+  return filteredUsers;
+}
+
+// ============================================================================
+// CLUB/TEAM NOTIFICATION SETTINGS (LEGACY - OVERRIDDEN BY USER PREFS)
+// ============================================================================
+
 async function areNotificationsEnabled(clubId, teamId, notificationType) {
   try {
     const path = teamId 
@@ -44,10 +227,23 @@ async function areNotificationsEnabled(clubId, teamId, notificationType) {
   }
 }
 
-async function sendEmailNotification(userIds, subject, body) {
+async function sendEmailNotification(userIds, subject, body, notificationType = null, clubId = null, teamId = null) {
   try {
+    let filteredUserIds = userIds;
+    
+    // Filter by user preferences if notification type provided
+    if (notificationType) {
+      const filtered = await filterUsersByPreferences(userIds, notificationType, clubId, teamId);
+      filteredUserIds = filtered.email;
+    }
+    
+    if (filteredUserIds.length === 0) {
+      console.log('ℹ️ No users eligible for email after preference filtering');
+      return;
+    }
+    
     const emails = [];
-    for (const userId of userIds) {
+    for (const userId of filteredUserIds) {
       const userDoc = await admin.firestore().collection('users').doc(userId).get();
       if (userDoc.exists()) {
         const email = userDoc.data().email;
@@ -359,17 +555,23 @@ exports.onEventCreated = functions.firestore
         return;
       }
 
-      console.log(`👥 Notifying ${targetUserIds.length} users`);
+      console.log(`👥 Initial target users: ${targetUserIds.length}`);
 
-      // Send push notifications if enabled
-      if (pushEnabled) {
-        // Get FCM tokens for all users
-        const tokens = await getUserTokens(targetUserIds);
+      // Filter users by their notification preferences
+      const filteredUsers = await filterUsersByPreferences(
+        targetUserIds,
+        'eventCreated',
+        event.clubId,
+        event.teamId
+      );
+
+      // Send push notifications to users who want them
+      if (pushEnabled && filteredUsers.push.length > 0) {
+        const tokens = await getUserTokens(filteredUsers.push);
 
         if (tokens.length > 0) {
           console.log(`🔔 Sending push to ${tokens.length} devices`);
 
-          // Send notification
           const result = await sendMulticastNotification(
             tokens,
             {
@@ -391,16 +593,25 @@ exports.onEventCreated = functions.firestore
         }
       }
 
-      // Send email notifications if enabled
-      if (emailEnabled) {
+      // Send email notifications to users who want them
+      if (emailEnabled && filteredUsers.email.length > 0) {
         await sendEmailNotification(
-          targetUserIds,
+          filteredUsers.email,
           `📅 New Event: ${event.title}`,
-          `A new event has been created:\n\n${event.title}\n${new Date(event.start).toLocaleDateString()}\n\nLocation: ${event.location || 'TBD'}\n\nCheck the app for more details.`
+          `A new event has been created:\n\n${event.title}\n${new Date(event.start).toLocaleDateString()}\n\nLocation: ${event.location || 'TBD'}\n\nCheck the app for more details.`,
+          'eventCreated',
+          event.clubId,
+          event.teamId
         );
       }
 
       console.log('✅ Event notification complete');
+      
+      // Schedule reminders for this event
+      await scheduleEventReminders(eventId, event);
+      
+      // Schedule lock notification if enabled
+      await scheduleLockNotification(eventId, event);
     } catch (error) {
       console.error('❌ Error sending event notification:', error);
     }
@@ -460,7 +671,7 @@ exports.onEventUpdated = functions.firestore
         return;
       }
 
-      console.log(`👥 Notifying ${targetUserIds.length} attendees`);
+      console.log(`👥 Initial target users: ${targetUserIds.length}`);
 
       // Determine what changed
       let changeDescription = '';
@@ -468,15 +679,21 @@ exports.onEventUpdated = functions.firestore
       else if (before.start !== after.start || before.end !== after.end) changeDescription = 'Time changed';
       else if (before.location !== after.location) changeDescription = 'Location changed';
 
-      // Send push notifications if enabled
-      if (pushEnabled) {
-        // Get FCM tokens
-        const tokens = await getUserTokens(targetUserIds);
+      // Filter users by their notification preferences
+      const filteredUsers = await filterUsersByPreferences(
+        targetUserIds,
+        'eventModified',
+        after.clubId,
+        after.teamId
+      );
+
+      // Send push notifications to users who want them
+      if (pushEnabled && filteredUsers.push.length > 0) {
+        const tokens = await getUserTokens(filteredUsers.push);
 
         if (tokens.length > 0) {
           console.log(`🔔 Sending push to ${tokens.length} devices`);
 
-          // Send notification
           const result = await sendMulticastNotification(
             tokens,
             {
@@ -498,16 +715,32 @@ exports.onEventUpdated = functions.firestore
         }
       }
 
-      // Send email notifications if enabled
-      if (emailEnabled) {
+      // Send email notifications to users who want them
+      if (emailEnabled && filteredUsers.email.length > 0) {
         await sendEmailNotification(
-          targetUserIds,
+          filteredUsers.email,
           `📝 Event Updated: ${after.title}`,
-          `The event "${after.title}" has been updated.\n\n${changeDescription}\n\nCheck the app for updated details.`
+          `The event "${after.title}" has been updated.\n\n${changeDescription}\n\nCheck the app for updated details.`,
+          'eventModified',
+          after.clubId,
+          after.teamId
         );
       }
 
       console.log('✅ Event update notification complete');
+      
+      // Cancel old reminders and reschedule if date/time changed
+      if (before.date !== after.date || before.time !== after.time || 
+          JSON.stringify(before.reminders) !== JSON.stringify(after.reminders)) {
+        await cancelEventReminders(context.params.eventId);
+        await scheduleEventReminders(context.params.eventId, after);
+      }
+      
+      // Cancel and reschedule lock notification if lock period changed
+      if (JSON.stringify(before.lockPeriod) !== JSON.stringify(after.lockPeriod)) {
+        await cancelLockNotification(context.params.eventId);
+        await scheduleLockNotification(context.params.eventId, after);
+      }
     } catch (error) {
       console.error('❌ Error sending event update notification:', error);
     }
@@ -551,17 +784,23 @@ exports.onEventDeleted = functions.firestore
         return;
       }
 
-      console.log(`👥 Notifying ${targetUserIds.length} attendees`);
+      console.log(`👥 Initial target users: ${targetUserIds.length}`);
 
-      // Send push notifications if enabled
-      if (pushEnabled) {
-        // Get FCM tokens
-        const tokens = await getUserTokens(targetUserIds);
+      // Filter users by their notification preferences (eventDeleted is critical)
+      const filteredUsers = await filterUsersByPreferences(
+        targetUserIds,
+        'eventDeleted',
+        event.clubId,
+        event.teamId
+      );
+
+      // Send push notifications to users who want them
+      if (pushEnabled && filteredUsers.push.length > 0) {
+        const tokens = await getUserTokens(filteredUsers.push);
 
         if (tokens.length > 0) {
           console.log(`🔔 Sending push to ${tokens.length} devices`);
 
-          // Send notification
           const result = await sendMulticastNotification(
             tokens,
             {
@@ -583,16 +822,25 @@ exports.onEventDeleted = functions.firestore
         }
       }
 
-      // Send email notifications if enabled
-      if (emailEnabled) {
+      // Send email notifications to users who want them
+      if (emailEnabled && filteredUsers.email.length > 0) {
         await sendEmailNotification(
-          targetUserIds,
+          filteredUsers.email,
           `❌ Event Cancelled: ${event.title}`,
-          `The event "${event.title}" has been cancelled.\n\nPlease check the app for more information.`
+          `The event "${event.title}" has been cancelled.\n\nPlease check the app for more information.`,
+          'eventDeleted',
+          event.clubId,
+          event.teamId
         );
       }
 
       console.log('✅ Event deletion notification complete');
+      
+      // Cancel all pending reminders for this event
+      await cancelEventReminders(context.params.eventId);
+      
+      // Cancel lock notification
+      await cancelLockNotification(context.params.eventId);
     } catch (error) {
       console.error('❌ Error sending event deletion notification:', error);
     }
@@ -1085,5 +1333,796 @@ exports.onAttendanceChange = functions.firestore
 
     return null;
   });
+
+// ============================================================================
+// CHAT & USER MANAGEMENT NOTIFICATIONS (PHASE 3)
+// ============================================================================
+
+/**
+ * Firestore Trigger: Send notification when new chat message is sent
+ */
+exports.onChatMessage = functions.firestore
+  .document('chats/{chatId}/messages/{messageId}')
+  .onCreate(async (snap, context) => {
+    const message = snap.data();
+    const chatId = context.params.chatId;
+    const messageId = context.params.messageId;
+    
+    console.log('💬 New message in chat:', chatId);
+
+    try {
+      // Get chat data to find members
+      const chatDoc = await admin.firestore()
+        .collection('chats')
+        .doc(chatId)
+        .get();
+      
+      if (!chatDoc.exists) {
+        console.log('⚠️ Chat not found');
+        return;
+      }
+
+      const chat = chatDoc.data();
+      const senderId = message.senderId;
+      
+      // Notify all members except the sender
+      let targetUserIds = (chat.members || []).filter(id => id !== senderId);
+
+      if (targetUserIds.length === 0) {
+        console.log('ℹ️ No users to notify');
+        return;
+      }
+
+      console.log(`👥 Initial target users: ${targetUserIds.length}`);
+
+      // Get sender name for notification
+      const senderDoc = await admin.firestore()
+        .collection('users')
+        .doc(senderId)
+        .get();
+      
+      const senderName = senderDoc.exists() 
+        ? (senderDoc.data().displayName || senderDoc.data().username || senderDoc.data().email)
+        : 'Someone';
+
+      // Filter users by their notification preferences
+      const filteredUsers = await filterUsersByPreferences(
+        targetUserIds,
+        'newChatMessage',
+        chat.clubId,
+        chat.teamId
+      );
+
+      // Prepare notification
+      const messagePreview = message.text.length > 50 
+        ? message.text.substring(0, 50) + '...'
+        : message.text;
+
+      // Send push notifications to users who want them
+      if (filteredUsers.push.length > 0) {
+        const tokens = await getUserTokens(filteredUsers.push);
+
+        if (tokens.length > 0) {
+          console.log(`🔔 Sending push to ${tokens.length} devices`);
+
+          const result = await sendMulticastNotification(
+            tokens,
+            {
+              title: `${senderName} • ${chat.title || 'Chat'}`,
+              body: messagePreview
+            },
+            {
+              type: 'chat_message',
+              chatId: chatId,
+              messageId: messageId,
+              senderId: senderId,
+              clubId: chat.clubId || '',
+              teamId: chat.teamId || ''
+            }
+          );
+
+          // Clean up invalid tokens
+          if (result.invalidTokens.length > 0) {
+            await cleanupInvalidTokens(result.invalidTokens);
+          }
+        }
+      }
+
+      // Send email notifications to users who want them (usually disabled for chat)
+      if (filteredUsers.email.length > 0) {
+        await sendEmailNotification(
+          filteredUsers.email,
+          `💬 New message from ${senderName}`,
+          `${senderName} sent a message in ${chat.title || 'chat'}:\n\n"${messagePreview}"\n\nCheck the app to reply.`,
+          'newChatMessage',
+          chat.clubId,
+          chat.teamId
+        );
+      }
+
+      console.log('✅ Chat notification complete');
+    } catch (error) {
+      console.error('❌ Error sending chat notification:', error);
+    }
+  });
+
+/**
+ * Callable Function: Notify user they were added to club/team
+ */
+exports.notifyUserAdded = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { userId, clubId, clubName, teamId, teamName } = data;
+
+  try {
+    console.log(`➕ Notifying user ${userId} added to ${clubName}${teamName ? `/${teamName}` : ''}`);
+
+    // Filter by user preferences
+    const filteredUsers = await filterUsersByPreferences(
+      [userId],
+      'userAdded',
+      clubId,
+      teamId
+    );
+
+    const location = teamName ? `team "${teamName}"` : `club "${clubName}"`;
+    
+    // Send push notification
+    if (filteredUsers.push.length > 0) {
+      const tokens = await getUserTokens(filteredUsers.push);
+
+      if (tokens.length > 0) {
+        const result = await sendMulticastNotification(
+          tokens,
+          {
+            title: '🎉 You\'ve been added!',
+            body: `You are now a member of ${location}`
+          },
+          {
+            type: 'user_added',
+            clubId: clubId,
+            clubName: clubName,
+            teamId: teamId || '',
+            teamName: teamName || ''
+          }
+        );
+
+        if (result.invalidTokens.length > 0) {
+          await cleanupInvalidTokens(result.invalidTokens);
+        }
+      }
+    }
+
+    // Send email notification
+    if (filteredUsers.email.length > 0) {
+      await sendEmailNotification(
+        filteredUsers.email,
+        `🎉 Welcome to ${clubName}!`,
+        `You have been added to ${location}.\n\nCheck the app to see team details and upcoming events.`,
+        'userAdded',
+        clubId,
+        teamId
+      );
+    }
+
+    console.log('✅ User added notification sent');
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error sending user added notification:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Callable Function: Notify user they were removed from club/team
+ */
+exports.notifyUserRemoved = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { userId, clubId, clubName, teamId, teamName } = data;
+
+  try {
+    console.log(`➖ Notifying user ${userId} removed from ${clubName}${teamName ? `/${teamName}` : ''}`);
+
+    // Filter by user preferences
+    const filteredUsers = await filterUsersByPreferences(
+      [userId],
+      'userRemoved',
+      clubId,
+      teamId
+    );
+
+    const location = teamName ? `team "${teamName}"` : `club "${clubName}"`;
+    
+    // Send push notification
+    if (filteredUsers.push.length > 0) {
+      const tokens = await getUserTokens(filteredUsers.push);
+
+      if (tokens.length > 0) {
+        const result = await sendMulticastNotification(
+          tokens,
+          {
+            title: 'Membership Update',
+            body: `You have been removed from ${location}`
+          },
+          {
+            type: 'user_removed',
+            clubId: clubId,
+            clubName: clubName,
+            teamId: teamId || '',
+            teamName: teamName || ''
+          }
+        );
+
+        if (result.invalidTokens.length > 0) {
+          await cleanupInvalidTokens(result.invalidTokens);
+        }
+      }
+    }
+
+    // Send email notification
+    if (filteredUsers.email.length > 0) {
+      await sendEmailNotification(
+        filteredUsers.email,
+        `Membership Update - ${clubName}`,
+        `You have been removed from ${location}.\n\nIf you believe this is a mistake, please contact the club administrator.`,
+        'userRemoved',
+        clubId,
+        teamId
+      );
+    }
+
+    console.log('✅ User removed notification sent');
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error sending user removed notification:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Callable Function: Notify user their role was changed
+ */
+exports.notifyRoleChanged = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { userId, clubId, clubName, newRole, oldRole } = data;
+
+  try {
+    console.log(`⭐ Notifying user ${userId} role changed from ${oldRole} to ${newRole}`);
+
+    // Filter by user preferences
+    const filteredUsers = await filterUsersByPreferences(
+      [userId],
+      'roleChanged',
+      clubId,
+      null
+    );
+
+    const roleNames = {
+      'trainer': 'Trainer',
+      'assistant': 'Assistant',
+      'user': 'Member',
+      'parent': 'Parent'
+    };
+
+    const newRoleName = roleNames[newRole] || newRole;
+    const oldRoleName = roleNames[oldRole] || oldRole;
+    
+    // Send push notification
+    if (filteredUsers.push.length > 0) {
+      const tokens = await getUserTokens(filteredUsers.push);
+
+      if (tokens.length > 0) {
+        const result = await sendMulticastNotification(
+          tokens,
+          {
+            title: '⭐ Role Updated!',
+            body: `You are now a ${newRoleName} in ${clubName}`
+          },
+          {
+            type: 'role_changed',
+            clubId: clubId,
+            clubName: clubName,
+            newRole: newRole,
+            oldRole: oldRole
+          }
+        );
+
+        if (result.invalidTokens.length > 0) {
+          await cleanupInvalidTokens(result.invalidTokens);
+        }
+      }
+    }
+
+    // Send email notification
+    if (filteredUsers.email.length > 0) {
+      await sendEmailNotification(
+        filteredUsers.email,
+        `⭐ Your role has been updated in ${clubName}`,
+        `Your role in ${clubName} has been changed from ${oldRoleName} to ${newRoleName}.\n\nCheck the app to see your new permissions and responsibilities.`,
+        'roleChanged',
+        clubId,
+        null
+      );
+    }
+
+    console.log('✅ Role changed notification sent');
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error sending role changed notification:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+// ============================================================================
+// EVENT REMINDERS (PHASE 2)
+// ============================================================================
+
+/**
+ * Schedule reminders when event is created/updated
+ * Triggered by onEventCreated and onEventUpdated
+ */
+async function scheduleEventReminders(eventId, eventData) {
+  try {
+    console.log(`📅 Scheduling reminders for event ${eventId}`);
+    
+    const reminders = eventData.reminders || [];
+    if (reminders.length === 0) {
+      console.log('ℹ️ No reminders configured for this event');
+      return;
+    }
+
+    // Calculate event start time
+    const eventDate = new Date(eventData.date);
+    if (eventData.time) {
+      const [hours, minutes] = eventData.time.split(':');
+      eventDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    }
+
+    const eventStartTime = eventDate.getTime();
+    const now = Date.now();
+
+    // Schedule each reminder
+    for (const reminder of reminders) {
+      const reminderTime = eventStartTime - (reminder.minutesBefore * 60 * 1000);
+      
+      // Only schedule if reminder time is in the future
+      if (reminderTime > now) {
+        await admin.firestore()
+          .collection('scheduledReminders')
+          .add({
+            eventId: eventId,
+            eventTitle: eventData.title,
+            eventDate: eventData.date,
+            eventTime: eventData.time || null,
+            clubId: eventData.clubId || null,
+            teamId: eventData.teamId || null,
+            minutesBefore: reminder.minutesBefore,
+            channels: reminder.channels,
+            scheduledFor: new Date(reminderTime),
+            status: 'pending',
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        
+        console.log(`✅ Scheduled reminder ${reminder.minutesBefore}min before event`);
+      } else {
+        console.log(`⏭️ Skipped reminder ${reminder.minutesBefore}min (time passed)`);
+      }
+    }
+
+    console.log(`✅ All reminders scheduled for event ${eventId}`);
+  } catch (error) {
+    console.error('❌ Error scheduling reminders:', error);
+  }
+}
+
+/**
+ * Scheduled function to check and send pending reminders
+ * Runs every minute
+ */
+exports.processEventReminders = functions.pubsub
+  .schedule('every 1 minutes')
+  .onRun(async (context) => {
+    console.log('🔔 Processing event reminders...');
+    
+    try {
+      const now = admin.firestore.Timestamp.now();
+      
+      // Get all pending reminders that are due
+      const remindersSnapshot = await admin.firestore()
+        .collection('scheduledReminders')
+        .where('status', '==', 'pending')
+        .where('scheduledFor', '<=', now.toDate())
+        .limit(50) // Process 50 at a time
+        .get();
+
+      if (remindersSnapshot.empty) {
+        console.log('ℹ️ No pending reminders to process');
+        return null;
+      }
+
+      console.log(`📊 Found ${remindersSnapshot.size} reminders to send`);
+
+      // Process each reminder
+      const promises = remindersSnapshot.docs.map(async (doc) => {
+        const reminder = doc.data();
+        
+        try {
+          // Get event details
+          const eventDoc = await admin.firestore()
+            .doc(`events/${reminder.eventId}`)
+            .get();
+
+          if (!eventDoc.exists()) {
+            console.log(`⚠️ Event ${reminder.eventId} not found, marking reminder as cancelled`);
+            await doc.ref.update({ status: 'cancelled' });
+            return;
+          }
+
+          const event = eventDoc.data();
+          
+          // Get attendees (users with status 'attending' or 'maybe')
+          const responses = event.responses || {};
+          const attendeeIds = Object.entries(responses)
+            .filter(([_, response]) => 
+              response.status === 'attending' || response.status === 'maybe'
+            )
+            .map(([userId]) => userId);
+
+          if (attendeeIds.length === 0) {
+            console.log(`ℹ️ No attendees for event ${reminder.eventId}`);
+            await doc.ref.update({ status: 'completed', sentAt: admin.firestore.FieldValue.serverTimestamp() });
+            return;
+          }
+
+          console.log(`👥 Sending reminder to ${attendeeIds.length} attendees`);
+
+          // Filter users by preferences
+          const filteredUsers = await filterUsersByPreferences(
+            attendeeIds,
+            'eventReminder',
+            reminder.clubId,
+            reminder.teamId
+          );
+
+          // Format time display
+          const hours = Math.floor(reminder.minutesBefore / 60);
+          const minutes = reminder.minutesBefore % 60;
+          const timeText = hours > 0 
+            ? `${hours} hour${hours > 1 ? 's' : ''}${minutes > 0 ? ` ${minutes} min` : ''}`
+            : `${minutes} minute${minutes > 1 ? 's' : ''}`;
+
+          // Send push notifications
+          if (reminder.channels.push && filteredUsers.push.length > 0) {
+            const tokens = await getUserTokens(filteredUsers.push);
+            
+            if (tokens.length > 0) {
+              const result = await sendMulticastNotification(
+                tokens,
+                {
+                  title: `⏰ Reminder: ${reminder.eventTitle}`,
+                  body: `Event starts in ${timeText}`
+                },
+                {
+                  type: 'event_reminder',
+                  eventId: reminder.eventId,
+                  clubId: reminder.clubId || '',
+                  teamId: reminder.teamId || ''
+                }
+              );
+
+              if (result.invalidTokens.length > 0) {
+                await cleanupInvalidTokens(result.invalidTokens);
+              }
+
+              console.log(`✅ Sent push reminders to ${tokens.length} devices`);
+            }
+          }
+
+          // Send email notifications
+          if (reminder.channels.email && filteredUsers.email.length > 0) {
+            await sendEmailNotification(
+              filteredUsers.email,
+              `⏰ Reminder: ${reminder.eventTitle}`,
+              `This is a reminder that "${reminder.eventTitle}" starts in ${timeText}.\n\nDate: ${reminder.eventDate}\nTime: ${reminder.eventTime || 'Not specified'}\n\nSee you there!`,
+              'eventReminder',
+              reminder.clubId,
+              reminder.teamId
+            );
+
+            console.log(`✅ Sent email reminders to ${filteredUsers.email.length} users`);
+          }
+
+          // Mark as completed
+          await doc.ref.update({
+            status: 'completed',
+            sentAt: admin.firestore.FieldValue.serverTimestamp(),
+            recipientCount: attendeeIds.length
+          });
+
+          console.log(`✅ Reminder ${doc.id} completed`);
+        } catch (error) {
+          console.error(`❌ Error processing reminder ${doc.id}:`, error);
+          await doc.ref.update({
+            status: 'failed',
+            error: error.message,
+            failedAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        }
+      });
+
+      await Promise.all(promises);
+      console.log('✅ Reminder processing complete');
+      return null;
+    } catch (error) {
+      console.error('❌ Error in processEventReminders:', error);
+      return null;
+    }
+  });
+
+/**
+ * Cancel reminders when event is deleted
+ */
+async function cancelEventReminders(eventId) {
+  try {
+    console.log(`🗑️ Cancelling reminders for event ${eventId}`);
+    
+    const remindersSnapshot = await admin.firestore()
+      .collection('scheduledReminders')
+      .where('eventId', '==', eventId)
+      .where('status', '==', 'pending')
+      .get();
+
+    if (remindersSnapshot.empty) {
+      console.log('ℹ️ No pending reminders to cancel');
+      return;
+    }
+
+    const batch = admin.firestore().batch();
+    remindersSnapshot.docs.forEach(doc => {
+      batch.update(doc.ref, { status: 'cancelled' });
+    });
+
+    await batch.commit();
+    console.log(`✅ Cancelled ${remindersSnapshot.size} reminders`);
+  } catch (error) {
+    console.error('❌ Error cancelling reminders:', error);
+  }
+}
+
+// ============================================================================
+// LOCK PERIOD NOTIFICATIONS (PHASE 4B)
+// ============================================================================
+
+/**
+ * Schedule lock notification when event is created/updated
+ */
+async function scheduleLockNotification(eventId, eventData) {
+  try {
+    if (!eventData.lockPeriod || !eventData.lockPeriod.enabled || !eventData.lockPeriod.notifyOnLock) {
+      return;
+    }
+
+    console.log(`🔒 Scheduling lock notification for event ${eventId}`);
+
+    // Calculate event start time
+    const eventDate = new Date(eventData.date);
+    if (eventData.time) {
+      const [hours, minutes] = eventData.time.split(':');
+      eventDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    }
+
+    const eventStartTime = eventDate.getTime();
+    const lockTime = eventStartTime - (eventData.lockPeriod.minutesBefore * 60 * 1000);
+    const now = Date.now();
+
+    // Only schedule if lock time is in the future
+    if (lockTime > now) {
+      await admin.firestore()
+        .collection('scheduledLockNotifications')
+        .add({
+          eventId: eventId,
+          eventTitle: eventData.title,
+          eventDate: eventData.date,
+          eventTime: eventData.time || null,
+          clubId: eventData.clubId || null,
+          teamId: eventData.teamId || null,
+          lockMinutesBefore: eventData.lockPeriod.minutesBefore,
+          scheduledFor: new Date(lockTime),
+          status: 'pending',
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      
+      console.log(`✅ Scheduled lock notification for event ${eventId}`);
+    } else {
+      console.log(`⏭️ Skipped lock notification (time passed)`);
+    }
+  } catch (error) {
+    console.error('❌ Error scheduling lock notification:', error);
+  }
+}
+
+/**
+ * Scheduled function to send lock notifications
+ * Runs every minute
+ */
+exports.processLockNotifications = functions.pubsub
+  .schedule('every 1 minutes')
+  .onRun(async (context) => {
+    console.log('🔒 Processing lock notifications...');
+    
+    try {
+      const now = admin.firestore.Timestamp.now();
+      
+      // Get all pending lock notifications that are due
+      const notificationsSnapshot = await admin.firestore()
+        .collection('scheduledLockNotifications')
+        .where('status', '==', 'pending')
+        .where('scheduledFor', '<=', now.toDate())
+        .limit(50)
+        .get();
+
+      if (notificationsSnapshot.empty) {
+        console.log('ℹ️ No pending lock notifications');
+        return null;
+      }
+
+      console.log(`📊 Found ${notificationsSnapshot.size} lock notifications to send`);
+
+      // Process each notification
+      const promises = notificationsSnapshot.docs.map(async (doc) => {
+        const notification = doc.data();
+        
+        try {
+          // Get event details
+          const eventDoc = await admin.firestore()
+            .doc(`events/${notification.eventId}`)
+            .get();
+
+          if (!eventDoc.exists()) {
+            console.log(`⚠️ Event ${notification.eventId} not found`);
+            await doc.ref.update({ status: 'cancelled' });
+            return;
+          }
+
+          const event = eventDoc.data();
+          
+          // Get all attendees and waitlist
+          const responses = event.responses || {};
+          const targetUserIds = Object.entries(responses)
+            .filter(([_, response]) => 
+              response.status === 'attending' || 
+              response.status === 'maybe' ||
+              response.status === 'waiting'
+            )
+            .map(([userId]) => userId);
+
+          if (targetUserIds.length === 0) {
+            console.log(`ℹ️ No attendees for event ${notification.eventId}`);
+            await doc.ref.update({ status: 'completed', sentAt: admin.firestore.FieldValue.serverTimestamp() });
+            return;
+          }
+
+          console.log(`👥 Sending lock notification to ${targetUserIds.length} users`);
+
+          // Filter by preferences (use 'eventReminder' type for lock notifications)
+          const filteredUsers = await filterUsersByPreferences(
+            targetUserIds,
+            'eventReminder',
+            notification.clubId,
+            notification.teamId
+          );
+
+          // Format time display
+          const hours = Math.floor(notification.lockMinutesBefore / 60);
+          const minutes = notification.lockMinutesBefore % 60;
+          const timeText = hours > 0 
+            ? `${hours} hour${hours > 1 ? 's' : ''}${minutes > 0 ? ` ${minutes} min` : ''}`
+            : `${minutes} minute${minutes > 1 ? 's' : ''}`;
+
+          // Send push notifications
+          if (filteredUsers.push.length > 0) {
+            const tokens = await getUserTokens(filteredUsers.push);
+            
+            if (tokens.length > 0) {
+              const result = await sendMulticastNotification(
+                tokens,
+                {
+                  title: `🔒 ${notification.eventTitle} is now locked`,
+                  body: `Status changes are no longer allowed`
+                },
+                {
+                  type: 'event_locked',
+                  eventId: notification.eventId,
+                  clubId: notification.clubId || '',
+                  teamId: notification.teamId || ''
+                }
+              );
+
+              if (result.invalidTokens.length > 0) {
+                await cleanupInvalidTokens(result.invalidTokens);
+              }
+
+              console.log(`✅ Sent push lock notifications to ${tokens.length} devices`);
+            }
+          }
+
+          // Send email notifications
+          if (filteredUsers.email.length > 0) {
+            await sendEmailNotification(
+              filteredUsers.email,
+              `🔒 Event Locked: ${notification.eventTitle}`,
+              `The event "${notification.eventTitle}" is now locked.\n\nStatus changes are no longer allowed. If you need to make changes, please contact the event organizer.\n\nDate: ${notification.eventDate}\nTime: ${notification.eventTime || 'Not specified'}`,
+              'eventReminder',
+              notification.clubId,
+              notification.teamId
+            );
+
+            console.log(`✅ Sent email lock notifications to ${filteredUsers.email.length} users`);
+          }
+
+          // Mark as completed
+          await doc.ref.update({
+            status: 'completed',
+            sentAt: admin.firestore.FieldValue.serverTimestamp(),
+            recipientCount: targetUserIds.length
+          });
+
+          console.log(`✅ Lock notification ${doc.id} completed`);
+        } catch (error) {
+          console.error(`❌ Error processing lock notification ${doc.id}:`, error);
+          await doc.ref.update({
+            status: 'failed',
+            error: error.message,
+            failedAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        }
+      });
+
+      await Promise.all(promises);
+      console.log('✅ Lock notification processing complete');
+      return null;
+    } catch (error) {
+      console.error('❌ Error in processLockNotifications:', error);
+      return null;
+    }
+  });
+
+/**
+ * Cancel lock notification when event is deleted
+ */
+async function cancelLockNotification(eventId) {
+  try {
+    console.log(`🗑️ Cancelling lock notification for event ${eventId}`);
+    
+    const notificationsSnapshot = await admin.firestore()
+      .collection('scheduledLockNotifications')
+      .where('eventId', '==', eventId)
+      .where('status', '==', 'pending')
+      .get();
+
+    if (notificationsSnapshot.empty) {
+      console.log('ℹ️ No pending lock notifications to cancel');
+      return;
+    }
+
+    const batch = admin.firestore().batch();
+    notificationsSnapshot.docs.forEach(doc => {
+      batch.update(doc.ref, { status: 'cancelled' });
+    });
+
+    await batch.commit();
+    console.log(`✅ Cancelled ${notificationsSnapshot.size} lock notifications`);
+  } catch (error) {
+    console.error('❌ Error cancelling lock notifications:', error);
+  }
+}
 
 

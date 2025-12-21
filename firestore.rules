@@ -1,247 +1,446 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper function to check if user is admin
-    function isAdmin() {
-      return request.auth != null && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isSuperAdmin == true ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
-      );
-    }
+    /* ===========================
+       HELPER FUNCTIONS
+       =========================== */
     
-    // Helper function to check if user is authenticated
+    // Check if user is authenticated
     function isAuthenticated() {
       return request.auth != null;
     }
     
-    // Helper function to check if user is club member
-    function isClubMember(clubData) {
-      return request.auth.uid in clubData.members ||
-             request.auth.uid in clubData.trainers ||
-             request.auth.uid in clubData.assistants ||
-             clubData.ownerId == request.auth.uid ||
-             clubData.createdBy == request.auth.uid;
+    // Check if user is admin
+    function isAdmin() {
+      return isAuthenticated() && 
+             (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isSuperAdmin == true ||
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
     }
     
-    // Helper function to check if user is trainer or assistant
-    function isTrainerOrAssistant(clubData) {
-      return request.auth.uid in clubData.trainers ||
-             request.auth.uid in clubData.assistants;
+    // Check if user owns the document
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
     }
     
-    // Users collection
-      match /users/{userId} {
-        allow read: if isAuthenticated();
-        allow write: if isAuthenticated() && (
-          request.auth.uid == userId || 
-          request.auth.token.isSuperAdmin == true ||
-          request.auth.token.role == 'admin' ||
-          request.auth.token.role == 'trainer' ||
-          request.auth.token.role == 'assistant'
-        );
+    // Check if user is club owner
+    function isClubOwner(clubId) {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/clubs/$(clubId)).data.ownerId == request.auth.uid;
+    }
+    
+    // Check if user is club member
+    function isClubMember(clubId) {
+      let club = get(/databases/$(database)/documents/clubs/$(clubId)).data;
+      return isAuthenticated() && (
+        club.ownerId == request.auth.uid ||
+        request.auth.uid in club.members ||
+        request.auth.uid in club.trainers ||
+        request.auth.uid in club.assistants
+      );
+    }
+    
+    // Check if user is club trainer
+    function isClubTrainer(clubId) {
+      let club = get(/databases/$(database)/documents/clubs/$(clubId)).data;
+      return isAuthenticated() && request.auth.uid in club.trainers;
+    }
+    
+    // Check if user is team member
+    function isTeamMember(clubId, teamId) {
+      let club = get(/databases/$(database)/documents/clubs/$(clubId)).data;
+      let teams = club.teams;
+      
+      // Find the team in the club's teams array
+      return isAuthenticated() && (
+        isClubOwner(clubId) ||
+        teams.hasAny([teamId]) && (
+          request.auth.uid in teams[teamId].members ||
+          request.auth.uid in teams[teamId].trainers ||
+          request.auth.uid in teams[teamId].assistants
+        )
+      );
+    }
+    
+    // Check if user has active subscription
+    function hasActiveSubscription(userId) {
+      let user = get(/databases/$(database)/documents/users/$(userId)).data;
+      return user.subscriptionStatus == 'active' || user.subscriptionStatus == 'trial';
+    }
+    
+    /* ===========================
+       USERS COLLECTION
+       =========================== */
+    
+    match /users/{userId} {
+      // Anyone can create their own user document during registration
+      allow create: if isOwner(userId);
+      
+      // Authenticated users can read other users' profiles (for chat, team lists, etc.)
+      // Users can read their own data, admins can read all
+      allow read: if isAuthenticated();
+      
+      // Users can update their own profile, admins can update any
+      allow update: if isOwner(userId) || isAdmin();
+      
+      // Users can delete their own account, admins can delete any (except other admins)
+      allow delete: if isOwner(userId) || (isAdmin() && !get(/databases/$(database)/documents/users/$(userId)).data.isSuperAdmin);
+      
+      /* User Settings Subcollection */
+      match /settings/{settingId} {
+        // Users can read and write their own settings
+        allow read, write: if isOwner(userId);
+        
+        // Admins can read any user's settings (for debugging)
+        allow read: if isAdmin();
       }
+    }
     
-    // Clubs collection - UPDATED to allow trainers/assistants
-match /clubs/{clubId} {
-  // TEMPORARY - allow all authenticated users
-  allow read: if isAuthenticated();
-  
-  allow create: if isAuthenticated();
-  
-  allow update: if isAuthenticated() && (
-    request.auth.token.isSuperAdmin == true ||
-    request.auth.token.role == 'admin' ||
-    resource.data.ownerId == request.auth.uid ||
-    resource.data.createdBy == request.auth.uid ||
-    request.auth.uid in resource.data.trainers ||
-    request.auth.uid in resource.data.assistants ||
-    request.auth.uid in resource.data.members
-  );
-  
-  allow delete: if isAuthenticated() && (
-    request.auth.token.isSuperAdmin == true ||
-    request.auth.token.role == 'admin' ||
-    resource.data.createdBy == request.auth.uid
-  );
-}
+    /* ===========================
+       CLUBS COLLECTION
+       =========================== */
     
-    // Events collection
+    match /clubs/{clubId} {
+      // Admins and users with active subscriptions can create clubs
+      allow create: if isAuthenticated() && (isAdmin() || hasActiveSubscription(request.auth.uid));
+      
+      // All authenticated users can read clubs (for browsing, joining, chat creation)
+      // This is safe because sensitive operations (update/delete) still require ownership
+      allow read: if isAuthenticated();
+      
+      // Only club owners (with active subscription) or admins can update clubs
+      allow update: if isAdmin() || (isClubOwner(clubId) && hasActiveSubscription(request.auth.uid));
+      
+      // Only club owners or admins can delete clubs
+      allow delete: if isAdmin() || isClubOwner(clubId);
+    }
+    
+    /* ===========================
+       EVENTS COLLECTION
+       =========================== */
+    
     match /events/{eventId} {
+      // Authenticated users can create events (personal events)
+      // Club/team events require appropriate permissions (checked in app logic)
+      allow create: if isAuthenticated();
+      
+      // All authenticated users can read events (for calendar display and discovery)
+      // Sensitive operations (create/update/delete) are still protected
       allow read: if isAuthenticated();
       
-      allow create: if isAuthenticated();  // All can create events
-      
-      // Allow update for RSVPs OR event management
-      allow update: if isAuthenticated();  // All users can update for RSVP
-      
-      allow delete: if isAuthenticated() && (
-        // Admins can delete all
-        request.auth.token.isSuperAdmin == true ||
-        request.auth.token.role == 'admin' ||
-        // Event creator can delete
-        request.auth.uid == resource.data.createdBy ||
-        // Club owner can delete all club events
-        (resource.data.clubId != null && 
-        (get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.ownerId == request.auth.uid ||
-          get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.createdBy == request.auth.uid)) ||
-        // Trainers/assistants can delete team events
-        (resource.data.teamId != null &&
-        (request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.trainers ||
-          request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.assistants))
-      );
-    }
-    
-    // Notification settings
-    match /notificationSettings/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-    
-    // Team notification settings (nested in clubs)
-    match /clubs/{clubId}/teams/{teamId}/notificationSettings/{settingId} {
-      allow read, write: if isAuthenticated() && (
-        request.auth.token.isSuperAdmin == true ||
-        request.auth.token.role == 'admin' ||
-        request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.trainers ||
-        request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.assistants
-      );
-    }
-
-    // Club notification settings (nested in clubs)
-    match /clubs/{clubId}/notificationSettings/{settingId} {
-      allow read, write: if isAuthenticated() && (
-        request.auth.token.isSuperAdmin == true ||
-        request.auth.token.role == 'admin' ||
-        request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.trainers ||
-        request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.assistants
-      );
-    }
-
-
-    // ============================================================================
-    // CHAT SYSTEM RULES
-    // ============================================================================
-    match /chats/{chatId} {
-      allow read: if isAuthenticated() && (
-        request.auth.uid in resource.data.members ||
-        request.auth.token.isSuperAdmin == true ||
-        request.auth.token.role == 'admin' ||
-        (resource.data.clubId != null &&
-        request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.members)
-      );
-      
-      allow create: if isAuthenticated() &&
-        request.auth.uid == request.resource.data.createdBy &&
-        request.auth.uid in request.resource.data.members;
-      
+      // Event creators, club owners (for club events), and trainers (for team events) can update
       allow update: if isAuthenticated() && (
-        request.auth.uid in resource.data.members ||
-        request.auth.uid == resource.data.createdBy ||
-        request.auth.token.isSuperAdmin == true ||
-        request.auth.token.role == 'admin' ||
-        (resource.data.clubId != null &&
-        (get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.ownerId == request.auth.uid ||
-          get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.createdBy == request.auth.uid)) ||
-        (resource.data.teamId != null &&
-        (request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.trainers ||
-          request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.assistants))
-      );
-      
-      allow delete: if isAuthenticated() && (
-        request.auth.uid == resource.data.createdBy ||
-        request.auth.token.isSuperAdmin == true ||
-        request.auth.token.role == 'admin' ||
-        (resource.data.clubId != null &&
-        (get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.ownerId == request.auth.uid ||
-          get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.createdBy == request.auth.uid))
-      );
-      
-      match /messages/{messageId} {
-        allow read, create, update: if isAuthenticated();
-        allow delete: if isAuthenticated() && request.auth.uid == resource.data.senderId;
-      }
-    }
-    
-    // Subscriptions collection
-    match /subscriptions/{subscriptionId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (
-        request.auth.uid == resource.data.userId ||
-        isAdmin()
-      );
-      allow delete: if isAdmin();
-    }
-
-    // Order templates
-    match /orderTemplates/{templateId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update, delete: if isAuthenticated() && (
-        request.auth.token.isSuperAdmin == true ||
-        request.auth.token.role == 'admin' ||
-        request.auth.uid == resource.data.createdBy
-      );
-    }
-
-    // Order responses
-    match /orderResponses/{responseId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
-      allow delete: if isAdmin();
-    }
-    
-    // Attendance
-    match /attendance/{attendanceId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update, delete: if isAuthenticated() && 
-        (resource.data.createdBy == request.auth.uid || isAdmin());
-    }
-
-    // After attendance section, add:
-    match /clubSubscriptions/{subscriptionId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (
-        request.auth.token.isSuperAdmin == true ||
-        request.auth.token.role == 'admin'
-      );
-    }
-    
-    // Request to join Clubs & team - UPDATED to allow trainers/assistants
-    match /requests/{requestId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null && (
         isAdmin() ||
-        request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.trainers ||
-        request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.assistants
+        resource.data.createdBy == request.auth.uid ||
+        (resource.data.visibilityLevel == 'club' && resource.data.clubId != null && isClubOwner(resource.data.clubId)) ||
+        (resource.data.visibilityLevel == 'team' && resource.data.clubId != null && isClubTrainer(resource.data.clubId))
       );
-    }
-
-
-    // Vouchers
-    match /vouchers/{voucherId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && (
-        request.auth.token.isSuperAdmin == true ||
-        request.auth.token.role == 'admin'
-      );
-      allow update: if isAuthenticated();  // All users can redeem
+      
+      // Same permissions for delete as update
       allow delete: if isAuthenticated() && (
-        request.auth.token.isSuperAdmin == true ||
-        request.auth.token.role == 'admin'
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid ||
+        (resource.data.visibilityLevel == 'club' && resource.data.clubId != null && isClubOwner(resource.data.clubId)) ||
+        (resource.data.visibilityLevel == 'team' && resource.data.clubId != null && isClubTrainer(resource.data.clubId))
       );
     }
-
-    // Pending notifications
-      match /pendingNotifications/{notificationId} {
-        allow read, write: if isAuthenticated();
+    
+    /* ===========================
+       CHATS COLLECTION
+       =========================== */
+    
+    match /chats/{chatId} {
+      // Authenticated users can create chats
+      allow create: if isAuthenticated();
+      
+      // Only chat members can read chats
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        request.auth.uid in resource.data.members
+      );
+      
+      // Only members can update chat
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        request.auth.uid in resource.data.members
+      );
+      
+      // Only admins or chat creators can delete chats
+      allow delete: if isAdmin() || resource.data.createdBy == request.auth.uid;
+      
+      /* Messages Subcollection */
+      match /messages/{messageId} {
+        // Chat members can create messages
+        allow create: if isAuthenticated() && 
+                         request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.members;
+        
+        // Chat members can read messages
+        allow read: if isAuthenticated() && (
+          isAdmin() ||
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.members
+        );
+        
+        // Message sender can update their own message
+        allow update: if isAuthenticated() && resource.data.senderId == request.auth.uid;
+        
+        // Message sender or admin can delete message
+        allow delete: if isAdmin() || resource.data.senderId == request.auth.uid;
       }
-
-      // Scheduled tasks
-      match /scheduledTasks/{taskId} {
-        allow read, write: if isAuthenticated();
-      }
+    }
+    
+    /* ===========================
+       REQUESTS COLLECTION
+       =========================== */
+    
+    match /requests/{requestId} {
+      // Authenticated users can create requests
+      allow create: if isAuthenticated();
+      
+      // Request creator and club owners/trainers can read
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.userId == request.auth.uid ||
+        isClubOwner(resource.data.clubId) ||
+        isClubTrainer(resource.data.clubId)
+      );
+      
+      // Club owners and trainers can update requests (approve/reject)
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        isClubOwner(resource.data.clubId) ||
+        isClubTrainer(resource.data.clubId)
+      );
+      
+      // Request creator, club owner, or admin can delete
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.userId == request.auth.uid ||
+        isClubOwner(resource.data.clubId)
+      );
+    }
+    
+    /* ===========================
+       ORDER TEMPLATES COLLECTION
+       =========================== */
+    
+    match /orderTemplates/{orderId} {
+      // Club owners and trainers can create order templates
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        isClubOwner(request.resource.data.clubId) ||
+        isClubTrainer(request.resource.data.clubId)
+      );
+      
+      // Club members can read orders
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        isClubMember(resource.data.clubId)
+      );
+      
+      // Creator, club owner, or trainers can update
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid ||
+        isClubOwner(resource.data.clubId) ||
+        isClubTrainer(resource.data.clubId)
+      );
+      
+      // Creator, club owner, or admin can delete
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid ||
+        isClubOwner(resource.data.clubId)
+      );
+    }
+    
+    /* ===========================
+       ORDER RESPONSES COLLECTION
+       =========================== */
+    
+    match /orderResponses/{responseId} {
+      // Club members can create order responses
+      allow create: if isAuthenticated() && isClubMember(request.resource.data.clubId);
+      
+      // Response owner and club managers can read
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.userId == request.auth.uid ||
+        isClubOwner(resource.data.clubId) ||
+        isClubTrainer(resource.data.clubId)
+      );
+      
+      // Response owner can update their own response
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // Response owner or admin can delete
+      allow delete: if isAdmin() || resource.data.userId == request.auth.uid;
+    }
+    
+    /* ===========================
+       ATTENDANCE COLLECTION
+       =========================== */
+    
+    match /attendance/{attendanceId} {
+      // Trainers and assistants can create attendance
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        isClubOwner(request.resource.data.clubId) ||
+        isClubTrainer(request.resource.data.clubId)
+      );
+      
+      // Team members can read attendance
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        isClubMember(resource.data.clubId)
+      );
+      
+      // Trainers and assistants can update attendance
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        isClubOwner(resource.data.clubId) ||
+        isClubTrainer(resource.data.clubId)
+      );
+      
+      // Creator or admin can delete
+      allow delete: if isAdmin() || resource.data.createdBy == request.auth.uid;
+    }
+    
+    /* ===========================
+       SUBSCRIPTIONS COLLECTION
+       =========================== */
+    
+    match /subscriptions/{subscriptionId} {
+      // Only admins or the subscription owner can create
+      allow create: if isAdmin() || isOwner(request.resource.data.userId);
+      
+      // User can read their own subscription, admins can read all, club members can read club subscriptions
+      allow read: if isAdmin() || 
+                     isOwner(resource.data.userId) ||
+                     (resource.data.clubId != null && isClubMember(resource.data.clubId));
+      
+      // Only admins can update subscriptions
+      allow update: if isAdmin();
+      
+      // Only admins can delete subscriptions
+      allow delete: if isAdmin();
+    }
+    
+    /* ===========================
+       INVOICES COLLECTION
+       =========================== */
+    
+    match /invoices/{invoiceId} {
+      // Only admins can create invoices
+      allow create: if isAdmin();
+      
+      // User can read their own invoices, admins can read all
+      allow read: if isAdmin() || isOwner(resource.data.userId);
+      
+      // Only admins can update invoices
+      allow update: if isAdmin();
+      
+      // Only admins can delete invoices
+      allow delete: if isAdmin();
+    }
+    
+    /* ===========================
+       VOUCHERS COLLECTION
+       =========================== */
+    
+    match /vouchers/{voucherId} {
+      // Only admins can create vouchers
+      allow create: if isAdmin();
+      
+      // Everyone can read vouchers (to validate codes)
+      allow read: if isAuthenticated();
+      
+      // Only admins can update vouchers
+      allow update: if isAdmin();
+      
+      // Only admins can delete vouchers
+      allow delete: if isAdmin();
+    }
+    
+    /* ===========================
+       AUDIT LOGS COLLECTION
+       =========================== */
+    
+    match /auditLogs/{logId} {
+      // System can create audit logs (backend function)
+      allow create: if true;
+      
+      // Only admins can read audit logs
+      allow read: if isAdmin();
+      
+      // Audit logs are immutable (cannot be updated)
+      allow update: if false;
+      
+      // Only admins can delete audit logs (for cleanup)
+      allow delete: if isAdmin();
+    }
+    
+    /* ===========================
+       PRIVILEGES COLLECTION
+       =========================== */
+    
+    match /privileges/{userId} {
+      // Only admins can create privilege documents
+      allow create: if isAdmin();
+      
+      // User can read their own privileges, admins can read all
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Only admins can update privileges
+      allow update: if isAdmin();
+      
+      // Only admins can delete privileges
+      allow delete: if isAdmin();
+    }
+    
+    /* ===========================
+       EMAIL QUEUE COLLECTION
+       =========================== */
+    
+    match /emailQueue/{emailId} {
+      // System and admins can create email queue items
+      allow create: if isAuthenticated();
+      
+      // Only admins can read email queue
+      allow read: if isAdmin();
+      
+      // System updates email status
+      allow update: if true;
+      
+      // Only admins can delete email queue items
+      allow delete: if isAdmin();
+    }
+    
+    /* ===========================
+       PENDING NOTIFICATIONS COLLECTION
+       =========================== */
+    
+    match /pendingNotifications/{notificationId} {
+      // System can create notifications
+      allow create: if isAuthenticated();
+      
+      // User can read their own notifications
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // System can update notifications
+      allow update: if true;
+      
+      // User can delete their own notifications
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
+    /* ===========================
+       DEFAULT DENY ALL
+       =========================== */
+    
+    // Deny all other access by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }

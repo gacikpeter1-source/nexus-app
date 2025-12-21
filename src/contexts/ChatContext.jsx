@@ -13,7 +13,7 @@ import {
   closeChat as closeChatFirebase,
   deleteChat as deleteChatFirebase,
 } from '../firebase/chats';
-import { isSuperAdmin } from '../utils/permissions';
+import { isAdmin } from '../firebase/privileges';
 
 const ChatContext = createContext(null);
 
@@ -45,7 +45,7 @@ export const ChatProvider = ({ children }) => {
     const loadChats = async () => {
       try {
         // SuperAdmin/Admin sees all chats
-        if (isSuperAdmin(user)) {
+        if (isAdmin(user)) {
           const allChats = await getAllChats();
           setChats(allChats);
           setLoading(false); 

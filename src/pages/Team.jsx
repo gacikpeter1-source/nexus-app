@@ -117,6 +117,18 @@ export default function Team() {
   const handleLeaveTeam = async () => {
     if (!team) return;
     
+    // 🔒 MINIMUM TRAINER ENFORCEMENT: Prevent last trainer from leaving
+    const isTrainer = (team.trainers || []).includes(user.id);
+    const trainerCount = (team.trainers || []).length;
+    
+    if (isTrainer && trainerCount <= 1) {
+      showToast(
+        '❌ Cannot leave team: You are the last trainer. Please assign another trainer before leaving.',
+        'error'
+      );
+      return;
+    }
+    
     if (!window.confirm(`Are you sure you want to leave ${team.name}?`)) return;
     
     try {

@@ -4,13 +4,14 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useChat } from '../contexts/ChatContext';
 import { getClub, getUser, getAllUsers } from '../firebase/firestore';
-import { isSuperAdmin } from '../utils/permissions';
 import { addChatMember, removeChatMember } from '../firebase/chats';
+import { useIsAdmin } from '../hooks/usePermissions';
 
 export default function Chats() {
   const { user } = useAuth();
   const { chats, loading, createChat, deleteChat } = useChat();
   const navigate = useNavigate();
+  const isUserAdmin = useIsAdmin();
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
@@ -82,8 +83,9 @@ export default function Chats() {
     navigate(`/chat/${chatId}`);
   };
 
+  // 🔒 NEW PERMISSION SYSTEM: Check if user can manage chat
   const canManageChat = (chat) => {
-    return isSuperAdmin(user) || chat.createdBy === user.id;
+    return isUserAdmin || chat.createdBy === user.id;
   };
 
   const handleManageChat = (chat, e) => {
@@ -159,7 +161,7 @@ export default function Chats() {
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-light">Chats</h1>
             <p className="text-light/60 mt-1">
-              {isSuperAdmin(user)
+              {isUserAdmin
                 ? 'All conversations (Admin View)'
                 : 'Your conversations'}
             </p>
@@ -537,6 +539,7 @@ function ManageChatModal({ chat, user, onClose }) {
 
 // Create Chat Modal Component (keeping your existing one with all the features)
 function CreateChatModal({ user, onClose, onCreate }) {
+  const isUserAdmin = useIsAdmin();
   const [title, setTitle] = useState('');
   const [selectedClub, setSelectedClub] = useState('');
   const [selectedTeam, setSelectedTeam] = useState('');
@@ -582,7 +585,7 @@ function CreateChatModal({ user, onClose, onCreate }) {
         let userClubs = [];
         let detectedRole = 'user';
 
-        if (isSuperAdmin(user)) {
+        if (isUserAdmin) {
           userClubs = clubsData;
           detectedRole = 'owner';
         } else {
@@ -612,7 +615,7 @@ function CreateChatModal({ user, onClose, onCreate }) {
     };
 
     loadData();
-  }, [user]);
+  }, [user, isUserAdmin]);
 
   useEffect(() => {
     if (selectedClub) {

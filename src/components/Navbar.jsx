@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useIsAdmin } from '../hooks/usePermissions';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -42,16 +43,18 @@ export default function Navbar() {
     }
   };
 
+  // 🔒 NEW PERMISSION SYSTEM: Check user permissions
+  const isUserAdmin = useIsAdmin();
+  
   // Check if user is manager (SuperAdmin, admin, trainer, or assistant)
   const isManager = () => {
     if (!user) return false;
-    return user.isSuperAdmin === true || ['admin', 'trainer', 'assistant'].includes(user.role);
+    return isUserAdmin || ['trainer', 'assistant'].includes(user.role);
   };
 
   // Check if user is SuperAdmin or Admin
   const isSuperAdminOrAdmin = () => {
-    if (!user) return false;
-    return user.isSuperAdmin === true || user.role === 'admin';
+    return isUserAdmin;
   };
 
   // Don't show navbar on public pages

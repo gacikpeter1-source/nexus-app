@@ -17,7 +17,7 @@ import {
   markImportantAsRead,
 } from '../firebase/chats';
 import { getUser, getClub } from '../firebase/firestore';
-import { isSuperAdmin } from '../utils/permissions';
+import { useIsAdmin } from '../hooks/usePermissions';
 
 const MESSAGE_COLORS = [
   'bg-blue-500',
@@ -77,7 +77,7 @@ export default function ChatRoom() {
         }
 
         // Check if user has access
-        if (!isSuperAdmin(user) && !chatData.members?.includes(user.id)) {
+        if (!isUserAdmin && !chatData.members?.includes(user.id)) {
           alert('You do not have access to this chat');
           navigate('/chats');
           return;
@@ -185,9 +185,11 @@ export default function ChatRoom() {
     }
   };
 
+  // 🔒 NEW PERMISSION SYSTEM: Check if user can manage important messages
+  const isUserAdmin = useIsAdmin();
+  
   const canManageImportant = () => {
-    if (isSuperAdmin(user)) return true;
-    if (user.role === 'admin') return true;
+    if (isUserAdmin) return true;
     if (chat?.createdBy === user.id) return true;
     
     // Check if user is trainer or assistant in the club
@@ -230,7 +232,7 @@ export default function ChatRoom() {
   };
 
   const canCloseChat = () => {
-    if (isSuperAdmin(user)) return true;
+    if (isUserAdmin) return true;
     if (chat?.createdBy === user.id) return true;
     return false;
   };

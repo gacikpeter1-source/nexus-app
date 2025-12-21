@@ -4,6 +4,10 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { getEvent, updateEventResponse, deleteEvent, getClub, getAllUsers } from '../firebase/firestore';
+import { useIsAdmin } from '../hooks/usePermissions';
+import { isClubOwner } from '../firebase/privileges';
+import { ShowIf } from '../components/PermissionGuard';
+import { isEventLocked, canChangeEventStatus, getLockTimeText } from '../utils/eventLockUtils';
 
 export default function EventPage() {
   const { eventId } = useParams();
@@ -234,11 +238,14 @@ export default function EventPage() {
     return event.responses[user.id];
   }
 
+  // 🔒 NEW PERMISSION SYSTEM: Check if user can manage this event
+  const isUserAdmin = useIsAdmin();
+  
   function canManageEvent() {
     if (!user || !event) return false;
 
     // Admin can manage everything
-    if (user.role === 'admin' || user.isSuperAdmin) return true;
+    if (isUserAdmin) return true;
 
     // Creator can manage their own
     if (event.createdBy === user.id) return true;
@@ -246,7 +253,7 @@ export default function EventPage() {
     // Check club roles for team/club events
     if (club) {
       const isTrainer = (club.trainers || []).includes(user.id);
-      const isOwner = club.createdBy === user.id;
+      const isOwner = isClubOwner(user, club.id);
       return isTrainer || isOwner;
     }
 
@@ -354,6 +361,12 @@ export default function EventPage() {
   const canEdit = canManageEvent();
   const allMembers = getAllMembers();
 
+  // Check lock status
+  const eventIsLocked = isEventLocked(event);
+  const isTrainerOrAdmin = isUserAdmin || (club && (club.trainers || []).includes(user?.id));
+  const statusChangeCheck = canChangeEventStatus(event, user, isTrainerOrAdmin);
+  const canChangeStatus = statusChangeCheck.canChange;
+
   return (
     <div className="max-w-4xl mx-auto p-6">
       {/* Back Button */}
@@ -367,6 +380,26 @@ export default function EventPage() {
 
       {/* Event Header */}
       <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 mb-6">
+      
+      {/* Lock Status Banner */}
+      {eventIsLocked && (
+        <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 mb-4">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">🔒</span>
+            <div className="flex-1">
+              <p className="text-red-300 font-medium text-sm">
+                Event is Locked
+              </p>
+              <p className="text-red-200/80 text-xs mt-1">
+                {isTrainerOrAdmin 
+                  ? 'Status changes are disabled for attendees. You can still manage as trainer.'
+                  : 'Status changes are no longer allowed. Contact the organizer if needed.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* RSVP Buttons - Top Row */}
       {event.visibilityLevel !== 'personal' && user && (
         <div className="flex flex-wrap gap-2 mb-4 pb-4 border-b border-white/10">
@@ -376,8 +409,9 @@ export default function EventPage() {
               userResponse?.status === 'attending' 
                 ? 'bg-green-600 text-white ring-2 ring-green-400' 
                 : 'bg-green-500 text-white hover:bg-green-600'
-            }`}
-            disabled={updatingRsvp}
+            } ${!canChangeStatus && 'opacity-50 cursor-not-allowed'}`}
+            disabled={updatingRsvp || !canChangeStatus}
+            title={!canChangeStatus ? statusChangeCheck.reason : ''}
           >
             {userResponse?.status === 'attending' ? '✓ Attending' : 'Attend'}
           </button>
@@ -390,8 +424,9 @@ export default function EventPage() {
                 userResponse?.status === 'declined' 
                   ? 'bg-red-600 text-white ring-2 ring-red-400' 
                   : 'bg-red-500 text-white hover:bg-red-600'
-              }`}
-              disabled={updatingRsvp}
+              } ${!canChangeStatus && 'opacity-50 cursor-not-allowed'}`}
+              disabled={updatingRsvp || !canChangeStatus}
+              title={!canChangeStatus ? statusChangeCheck.reason : ''}
             >
               {userResponse?.status === 'declined' ? '✓ Declined' : 'Decline ▼'}
             </button>
@@ -429,8 +464,9 @@ export default function EventPage() {
                 userResponse?.status === 'maybe' 
                   ? 'bg-yellow-600 text-white ring-2 ring-yellow-400' 
                   : 'bg-yellow-500 text-white hover:bg-yellow-600'
-              }`}
-              disabled={updatingRsvp}
+              } ${!canChangeStatus && 'opacity-50 cursor-not-allowed'}`}
+              disabled={updatingRsvp || !canChangeStatus}
+              title={!canChangeStatus ? statusChangeCheck.reason : ''}
             >
               {userResponse?.status === 'maybe' ? '✓ Maybe' : 'Maybe ▼'}
             </button>
@@ -550,8 +586,8 @@ export default function EventPage() {
           </div>     
         </div>
 
-        {/* Edit/Delete/Invite Buttons */}
-        {canEdit && (
+        {/* Edit/Delete/Invite Buttons - 🎨 NEW: Using ShowIf component */}
+        <ShowIf condition={canEdit}>
           <div className="flex flex-wrap gap-2 pt-4 border-t border-white/10">
             {event.visibilityLevel !== 'personal' && (
               <button
@@ -574,7 +610,7 @@ export default function EventPage() {
               Delete
             </button>
           </div>
-        )}
+        </ShowIf>
       </div>
 
       {/* Attendance Statistics */}

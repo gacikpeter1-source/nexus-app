@@ -1,14 +1,13 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
-import { LanguageProvider } from './contexts/LanguageContext';
-import { ToastProvider } from './contexts/ToastContext';
-import { NotificationProvider } from './contexts/NotificationContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/Navbar';
+
+// Page imports
 import Register from './pages/Register';
 import Login from './pages/Login';
 import VerifyEmail from './pages/VerifyEmail';
 import CompleteRegistration from './pages/CompleteRegistration';
+import AuthAction from './pages/AuthAction';
 import ClubsDashboard from './pages/ClubsDashboard';
 import ClubManagement from './pages/ClubManagement';
 import Calendar from './pages/Calendar';
@@ -25,28 +24,23 @@ import Support from './pages/Support';
 import Feedback from './pages/Feedback';
 import PendingRequests from './pages/PendingRequests';
 import AdminDashboard from './pages/AdminDashboard';
-import FirebaseDiagnostic from './components/FirebaseDiagnostic';
-import AuthAction from './pages/AuthAction';
-import { SubscriptionProvider } from './contexts/SubscriptionContext';
-import SubscriptionManager from './components/SubscriptionManager';
-import VoucherGenerator from './components/VoucherGenerator';
-import { ChatProvider } from './contexts/ChatContext';
 import Chats from './pages/Chats';
 import ChatRoom from './pages/ChatRoom';
 import AttendanceEntry from './pages/AttendanceEntry';
 
+// Component imports
+import FirebaseDiagnostic from './components/FirebaseDiagnostic';
+import SubscriptionManager from './components/SubscriptionManager';
+import VoucherGenerator from './components/VoucherGenerator';
+import PermissionTest from './pages/PermissionTest';
+
 function App() {
+  // ✅ NO PROVIDERS HERE - They're all in main.jsx now
   return (
-    <AuthProvider>
-      <SubscriptionProvider>
-        <LanguageProvider>
-          <ToastProvider>  {/* ✅ ADD THIS - Wrap with ToastProvider if not already */}
-            <ChatProvider>
-              <NotificationProvider>  {/* ✅ ADD THIS - New wrapper for notifications */}
-                <div className="min-h-screen bg-gradient-to-br from-dark via-mid-dark to-dark">
-                  <Navbar />
-                  <main className="relative z-10 container mx-auto px-4 py-8">
-                    <Routes>
+    <div className="min-h-screen bg-gradient-to-br from-dark via-mid-dark to-dark">
+      <Navbar />
+      <main className="relative z-10 container mx-auto px-4 py-8">
+        <Routes>
                       {/* Public Routes */}
                       <Route path="/register" element={<Register />} />
                       <Route path="/login" element={<Login />} />
@@ -207,6 +201,14 @@ function App() {
                           </ProtectedRoute>
                         }
                       />
+                      <Route
+                        path="/test-permissions"
+                        element={
+                          <ProtectedRoute>
+                            <PermissionTest />
+                          </ProtectedRoute>
+                        }
+                      />
                       <Route 
                         path="/admin/subscriptions" 
                         element={
@@ -241,17 +243,11 @@ function App() {
                         } 
                       />
 
-                      {/* Catch all - redirect to home */}
-                      <Route path="*" element={<Navigate to="/" replace />} />
-                    </Routes>
-                  </main>
-                </div>
-              </NotificationProvider>  {/* ✅ CLOSE NotificationProvider */}
-            </ChatProvider>
-          </ToastProvider>  {/* ✅ CLOSE ToastProvider */}
-        </LanguageProvider>
-      </SubscriptionProvider>
-    </AuthProvider>
+          {/* Catch all - redirect to home */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </main>
+    </div>
   );
 }
 
