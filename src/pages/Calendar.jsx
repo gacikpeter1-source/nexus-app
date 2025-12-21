@@ -97,8 +97,15 @@ export default function Calendar() {
   }, [events, clubFilter, teamFilter, typeFilter, userFilter, user]);
 
   // Split into upcoming and past
-  const upcomingEvents = filteredEvents.filter(e => new Date(e.date) >= new Date().setHours(0, 0, 0, 0));
-  const pastEvents = filteredEvents.filter(e => new Date(e.date) < new Date().setHours(0, 0, 0, 0));
+  // ✅ FIX: Compare date AND time, not just date
+  const upcomingEvents = filteredEvents.filter(e => {
+    const eventDateTime = new Date(`${e.date}T${e.time || '00:00'}`);
+    return eventDateTime >= new Date();
+  });
+  const pastEvents = filteredEvents.filter(e => {
+    const eventDateTime = new Date(`${e.date}T${e.time || '00:00'}`);
+    return eventDateTime < new Date();
+  });
 
   // Get events for month view
   function getEventsForDay(year, month, day) {

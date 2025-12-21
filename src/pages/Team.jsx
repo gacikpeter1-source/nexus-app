@@ -348,14 +348,19 @@ const handleCreateTeamChat = async () => {
     const now = new Date();
     
     // Filter future events for this team
+    // ✅ FIX: Compare date AND time, not just date
     const futureEvents = events.filter(event => {
-      const eventDate = new Date(event.date);
-      return eventDate >= now;
+      const eventDateTime = new Date(`${event.date}T${event.time || '00:00'}`);
+      return eventDateTime >= now;
     });
     
-    // Sort by date (soonest first) and take first 5
+    // Sort by datetime (soonest first) and take first 5
     return futureEvents
-      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .sort((a, b) => {
+        const aDateTime = new Date(`${a.date}T${a.time || '00:00'}`);
+        const bDateTime = new Date(`${b.date}T${b.time || '00:00'}`);
+        return aDateTime - bDateTime;
+      })
       .slice(0, 5);
   }, [team, events]);
 
