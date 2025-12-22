@@ -57,8 +57,33 @@ export default function PendingSubstitutions() {
   }
 
   function getTimeRemaining(expiresAt) {
+    if (!expiresAt) return 'Expired';
+    
     const now = Date.now();
-    const expiry = expiresAt.toMillis();
+    let expiry;
+    
+    // ✅ FIX: Handle different timestamp formats from Cloud Functions
+    if (typeof expiresAt === 'number') {
+      // Already in milliseconds
+      expiry = expiresAt;
+    } else if (typeof expiresAt.toMillis === 'function') {
+      // Firebase Timestamp object
+      expiry = expiresAt.toMillis();
+    } else if (expiresAt._seconds !== undefined) {
+      // Serialized timestamp from Cloud Function (has _seconds)
+      expiry = expiresAt._seconds * 1000 + (expiresAt._nanoseconds || 0) / 1000000;
+    } else if (expiresAt.seconds !== undefined) {
+      // Alternative serialized format (has seconds)
+      expiry = expiresAt.seconds * 1000 + (expiresAt.nanoseconds || 0) / 1000000;
+    } else if (expiresAt instanceof Date) {
+      // JavaScript Date object
+      expiry = expiresAt.getTime();
+    } else {
+      // Unknown format
+      console.error('Unknown expiresAt format:', expiresAt);
+      return 'Expired';
+    }
+    
     const diff = expiry - now;
     
     if (diff <= 0) return 'Expired';
