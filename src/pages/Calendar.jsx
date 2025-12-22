@@ -4,7 +4,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { getUserEvents, getUserClubs } from '../firebase/firestore';
-import PendingSubstitutions from '../components/PendingSubstitutions';
 
 export default function Calendar() {
   const { user } = useAuth();
@@ -195,8 +194,6 @@ export default function Calendar() {
         </div>
       </div>
 
-      {/* Pending Substitutions */}
-      <PendingSubstitutions />
 
       {/* Filters */}
       <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 mb-6">

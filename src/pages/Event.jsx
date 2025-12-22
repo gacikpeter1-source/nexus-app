@@ -8,7 +8,7 @@ import { useIsAdmin } from '../hooks/usePermissions';
 import { isClubOwner } from '../firebase/privileges';
 import { ShowIf } from '../components/PermissionGuard';
 import { isEventLocked, canChangeEventStatus, getLockTimeText } from '../utils/eventLockUtils';
-import { requestSubstitute, trainerSwapUsers, getPendingSubstitutions, respondToSubstitution } from '../utils/substitutionUtils';
+import { requestSubstitute, trainerSwapUsers, getPendingSubstitutions, respondToSubstitution, deleteSubstitutionRequest } from '../utils/substitutionUtils';
 
 export default function EventPage() {
   const { eventId } = useParams();
@@ -49,6 +49,10 @@ export default function EventPage() {
   // Pending substitution requests
   const [pendingRequests, setPendingRequests] = useState([]);
   const [respondingToRequest, setRespondingToRequest] = useState(null);
+  const [deletingRequest, setDeletingRequest] = useState(null);
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState('details'); // 'details' | 'attendance' | 'substitutions'
 
   useEffect(() => {
     loadEventData();
@@ -473,10 +477,46 @@ export default function EventPage() {
     }
   }
 
+  // Delete a substitution request
+  async function handleDeleteRequest(requestId) {
+    setDeletingRequest(requestId);
+    
+    try {
+      await deleteSubstitutionRequest(requestId);
+      showToast('🗑️ Substitution request deleted', 'success');
+      
+      // Reload pending requests
+      await loadPendingRequests();
+    } catch (error) {
+      console.error('Error deleting substitution request:', error);
+      showToast(error.message || 'Failed to delete request', 'error');
+    } finally {
+      setDeletingRequest(null);
+    }
+  }
+
   // Get time remaining for a substitution request
   function getTimeRemaining(expiresAt) {
+    if (!expiresAt) return 'Expired';
+    
     const now = Date.now();
-    const expiry = expiresAt.toMillis();
+    let expiry;
+    
+    // Handle different types of timestamp data
+    if (typeof expiresAt === 'number') {
+      expiry = expiresAt;
+    } else if (expiresAt.toMillis && typeof expiresAt.toMillis === 'function') {
+      expiry = expiresAt.toMillis();
+    } else if (expiresAt.seconds) {
+      // Plain object from Cloud Function { seconds, nanoseconds }
+      expiry = expiresAt.seconds * 1000 + Math.floor(expiresAt.nanoseconds / 1000000);
+    } else if (expiresAt._seconds) {
+      // Alternative format
+      expiry = expiresAt._seconds * 1000 + Math.floor((expiresAt._nanoseconds || 0) / 1000000);
+    } else {
+      return 'Expired';
+    }
+    
     const diff = expiry - now;
     
     if (diff <= 0) return 'Expired';
@@ -554,61 +594,6 @@ export default function EventPage() {
         </div>
       )}
 
-      {/* Pending Substitution Requests - Compact Version */}
-      {pendingRequests.length > 0 && (
-        <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 mb-4">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-lg">🔄</span>
-            <h4 className="font-medium text-purple-300 text-sm">Substitution Request{pendingRequests.length > 1 ? 's' : ''}</h4>
-            <span className="px-1.5 py-0.5 bg-purple-500/30 text-purple-200 rounded-full text-xs font-bold">
-              {pendingRequests.length}
-            </span>
-          </div>
-          
-          <div className="space-y-2">
-            {pendingRequests.map(req => {
-              const timeRemaining = getTimeRemaining(req.expiresAt);
-              const isExpired = timeRemaining === 'Expired';
-              
-              return (
-                <div key={req.id} className="bg-white/5 border border-white/10 rounded-lg p-2">
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <p className="text-sm text-light/90">
-                      <strong>{req.originalUserName}</strong> requests you as substitute
-                    </p>
-                    <span className={`text-xs font-mono px-2 py-0.5 rounded ${isExpired ? 'bg-red-500/20 text-red-300' : 'bg-yellow-500/20 text-yellow-300'}`}>
-                      ⏱️ {timeRemaining}
-                    </span>
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleRespondToRequest(req.id, 'accept')}
-                      disabled={respondingToRequest === req.id || isExpired}
-                      className="flex-1 px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      ✅ Accept
-                    </button>
-                    <button
-                      onClick={() => handleRespondToRequest(req.id, 'reject')}
-                      disabled={respondingToRequest === req.id || isExpired}
-                      className="flex-1 px-2 py-1 bg-red-500 hover:bg-red-600 text-white rounded text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      ❌ Decline
-                    </button>
-                  </div>
-                  
-                  {isExpired && (
-                    <p className="text-xs text-red-300 mt-1">
-                      This request has expired
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
       
       {/* RSVP Buttons - Top Row */}
       {event.visibilityLevel !== 'personal' && user && (
@@ -846,157 +831,275 @@ export default function EventPage() {
         </ShowIf>
       </div>
 
-      {/* Attendance Statistics */}
-      <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 mb-6">
-        <h2 className="font-title text-lg text-light mb-3">Attendance Statistics</h2>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-center">
-            <div className="text-2xl font-bold text-green-400">
-              {getResponseCount('attending')}
-            </div>
-            <div className="text-xs text-green-300 mt-1">✅ Attending</div>
-          </div>
-          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-center">
-            <div className="text-2xl font-bold text-red-400">
-              {getResponseCount('declined')}
-            </div>
-            <div className="text-xs text-red-300 mt-1">❌ Not Attending</div>
-          </div>
-          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-center">
-            <div className="text-2xl font-bold text-yellow-400">
-              {getResponseCount('maybe')}
-            </div>
-            <div className="text-xs text-yellow-300 mt-1">⚠️ Maybe</div>
-          </div>
-          <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 text-center">
-            <div className="text-2xl font-bold text-orange-400">
-              {getResponseCount('waiting')}
-            </div>
-            <div className="text-xs text-orange-300 mt-1">⏳ Waiting</div>
-          </div>
-          <div className="bg-white/5 border border-white/10 rounded-lg p-3 text-center">
-            <div className="text-2xl font-bold text-light">
-              {allMembers.length - Object.keys(event.responses || {}).length}
-            </div>
-            <div className="text-xs text-light/60 mt-1">⏳ No Response</div>
-          </div>
+      {/* Tab Navigation */}
+      <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl overflow-hidden mb-6">
+        <div className="flex border-b border-white/10">
+          <button
+            onClick={() => setActiveTab('details')}
+            className={`flex-1 px-4 py-3 text-sm font-medium transition-all ${
+              activeTab === 'details'
+                ? 'bg-primary text-white'
+                : 'text-light/60 hover:text-light hover:bg-white/5'
+            }`}
+          >
+            📋 Details
+          </button>
+          <button
+            onClick={() => setActiveTab('attendance')}
+            className={`flex-1 px-4 py-3 text-sm font-medium transition-all ${
+              activeTab === 'attendance'
+                ? 'bg-primary text-white'
+                : 'text-light/60 hover:text-light hover:bg-white/5'
+            }`}
+          >
+            📊 Attendance
+          </button>
+          <button
+            onClick={() => setActiveTab('substitutions')}
+            className={`flex-1 px-4 py-3 text-sm font-medium transition-all relative ${
+              activeTab === 'substitutions'
+                ? 'bg-primary text-white'
+                : 'text-light/60 hover:text-light hover:bg-white/5'
+            }`}
+          >
+            🔄 Substitutions
+            {pendingRequests.length > 0 && (
+              <span className="absolute top-2 right-2 px-1.5 py-0.5 bg-purple-500 text-white rounded-full text-xs font-bold">
+                {pendingRequests.length}
+              </span>
+            )}
+          </button>
         </div>
-      </div>
 
-      {/* Tracking Button */}
-      <div className="mb-6">
-        <button
-          onClick={() => setShowTracking(!showTracking)}
-          className="px-4 py-2 text-sm bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
-        >
-          📊 {showTracking ? 'Hide' : 'View'} Attendance Tracking
-        </button>
-      </div>
-
-      {/* Tracking View */}
-      {showTracking && (
-        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 md:p-6 overflow-hidden">
-          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4">
-            <h3 className="font-title text-xl text-light">Attendance Tracking</h3>
-            
-            <select
-              value={trackingFilter}
-              onChange={(e) => setTrackingFilter(e.target.value)}
-              className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-            >
-              <option value="all" className="bg-mid-dark">All ({allMembers.length})</option>
-              <option value="attending" className="bg-mid-dark">✅ Attending ({getResponseCount('attending')})</option>
-              <option value="declined" className="bg-mid-dark">❌ Not Attending ({getResponseCount('declined')})</option>
-              <option value="maybe" className="bg-mid-dark">⚠️ Maybe ({getResponseCount('maybe')})</option>
-              <option value="noresponse" className="bg-mid-dark">⏳ No Response ({allMembers.length - Object.keys(event.responses || {}).length})</option>
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            {filteredMembers.length === 0 ? (
-              <div className="text-center py-8 text-light/60">
-                No members in this filter
+        {/* Tab Content */}
+        <div className="p-4">
+          {/* Details Tab */}
+          {activeTab === 'details' && (
+            <div>
+              <h2 className="font-title text-lg text-light mb-3">Event Statistics</h2>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-center">
+                  <div className="text-2xl font-bold text-green-400">
+                    {getResponseCount('attending')}
+                  </div>
+                  <div className="text-xs text-green-300 mt-1">✅ Attending</div>
+                </div>
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-center">
+                  <div className="text-2xl font-bold text-red-400">
+                    {getResponseCount('declined')}
+                  </div>
+                  <div className="text-xs text-red-300 mt-1">❌ Not Attending</div>
+                </div>
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-center">
+                  <div className="text-2xl font-bold text-yellow-400">
+                    {getResponseCount('maybe')}
+                  </div>
+                  <div className="text-xs text-yellow-300 mt-1">⚠️ Maybe</div>
+                </div>
+                <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 text-center">
+                  <div className="text-2xl font-bold text-orange-400">
+                    {getResponseCount('waiting')}
+                  </div>
+                  <div className="text-xs text-orange-300 mt-1">⏳ Waiting</div>
+                </div>
+                <div className="bg-white/5 border border-white/10 rounded-lg p-3 text-center">
+                  <div className="text-2xl font-bold text-light">
+                    {allMembers.length - Object.keys(event.responses || {}).length}
+                  </div>
+                  <div className="text-xs text-light/60 mt-1">⏳ No Response</div>
+                </div>
               </div>
-            ) : (
-              filteredMembers.map((member, idx) => {
-                const response = event.responses?.[member.id];
+            </div>
+          )}
+
+          {/* Attendance Tab */}
+          {activeTab === 'attendance' && (
+            <div>
+              <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4">
+                <h2 className="font-title text-lg text-light">Member List</h2>
                 
-                // Calculate standby status if limit exists
-                const isStandby = event.participantLimit && response?.status === 'attending' ? 
-                  (() => {
-                    const attendingList = Object.entries(event.responses || {})
-                      .filter(([_, r]) => r.status === 'attending')
-                      .sort((a, b) => {
-                        const timeA = a[1].timestamp?.toMillis?.() || 0;
-                        const timeB = b[1].timestamp?.toMillis?.() || 0;
-                        return timeA - timeB;
-                      });
-                    const userIndex = attendingList.findIndex(([id]) => id === member.id);
-                    return userIndex >= event.participantLimit;
-                  })() : false;
+                <select
+                  value={trackingFilter}
+                  onChange={(e) => setTrackingFilter(e.target.value)}
+                  className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm"
+                >
+                  <option value="all" className="bg-mid-dark">All ({allMembers.length})</option>
+                  <option value="attending" className="bg-mid-dark">✅ Attending ({getResponseCount('attending')})</option>
+                  <option value="declined" className="bg-mid-dark">❌ Not Attending ({getResponseCount('declined')})</option>
+                  <option value="maybe" className="bg-mid-dark">⚠️ Maybe ({getResponseCount('maybe')})</option>
+                  <option value="noresponse" className="bg-mid-dark">⏳ No Response ({allMembers.length - Object.keys(event.responses || {}).length})</option>
+                </select>
+              </div>
 
-                const canSeeMessage = canManageEvent();
+              <div className="space-y-2">
+                {filteredMembers.length === 0 ? (
+                  <div className="text-center py-8 text-light/60">
+                    No members in this filter
+                  </div>
+                ) : (
+                  filteredMembers.map((member) => {
+                    const response = event.responses?.[member.id];
+                    const isStandby = event.participantLimit && response?.status === 'attending' ? 
+                      (() => {
+                        const attendingList = Object.entries(event.responses || {})
+                          .filter(([_, r]) => r.status === 'attending')
+                          .sort((a, b) => {
+                            const timeA = a[1].timestamp?.toMillis?.() || 0;
+                            const timeB = b[1].timestamp?.toMillis?.() || 0;
+                            return timeA - timeB;
+                          });
+                        const userIndex = attendingList.findIndex(([id]) => id === member.id);
+                        return userIndex >= event.participantLimit;
+                      })() : false;
 
-                return (
-                  <div
-                    key={member.id}
-                    className={`p-2 md:p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-all ${
-                      isStandby ? 'opacity-50' : ''
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0">
-                        <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold shrink-0">
-                          {member.username?.charAt(0).toUpperCase() || '?'}
+                    const canSeeMessage = canManageEvent();
+
+                    return (
+                      <div
+                        key={member.id}
+                        className={`p-2 md:p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-all ${
+                          isStandby ? 'opacity-50' : ''
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0">
+                            <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold shrink-0">
+                              {member.username?.charAt(0).toUpperCase() || '?'}
+                            </div>
+                            <div className="flex items-center gap-2 flex-1">
+                              <span className="font-medium text-light text-sm md:text-base truncate">{member.username || 'Unknown'}</span>
+                              {member.role && (
+                                <span className="text-xs text-light/50">• {member.role}</span>
+                              )}
+                              {member.memberType === 'External' && (
+                                <span className="px-2 py-1 bg-blue-500/20 text-blue-300 rounded text-xs font-medium">
+                                  External
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            {response ? (
+                              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                response.status === 'attending' ? 'bg-green-500/20 text-green-300' :
+                                response.status === 'waiting' ? 'bg-orange-500/20 text-orange-300' :
+                                response.status === 'declined' ? 'bg-red-500/20 text-red-300' :
+                                'bg-yellow-500/20 text-yellow-300'
+                              }`}>
+                                {response.status === 'attending' && '✅ Attending'}
+                                {response.status === 'waiting' && (response.waitlistNotified ? '🔔 Notified' : '⏳ Waiting')}
+                                {response.status === 'declined' && '❌ Not Attending'}
+                                {response.status === 'maybe' && '⚠️ Maybe'}
+                              </span>
+                            ) : (
+                              <span className="px-3 py-1 rounded-full text-xs font-medium bg-white/5 text-light/50">
+                                ⏳ No Response
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 flex-1">
-                          <span className="font-medium text-light text-sm md:text-base truncate">{member.username || 'Unknown'}</span>
-                          {member.role && (
-                            <span className="text-xs text-light/50">• {member.role}</span>
-                          )}
-                          {member.memberType === 'External' && (
-                            <span className="px-2 py-1 bg-blue-500/20 text-blue-300 rounded text-xs font-medium">
-                              External
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div>
-                        {response ? (
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            response.status === 'attending' ? 'bg-green-500/20 text-green-300' :
-                            response.status === 'waiting' ? 'bg-orange-500/20 text-orange-300' :
-                            response.status === 'declined' ? 'bg-red-500/20 text-red-300' :
-                            'bg-yellow-500/20 text-yellow-300'
-                          }`}>
-                            {response.status === 'attending' && '✅ Attending'}
-                            {response.status === 'waiting' && (response.waitlistNotified ? '🔔 Notified' : '⏳ Waiting')}
-                            {response.status === 'declined' && '❌ Not Attending'}
-                            {response.status === 'maybe' && '⚠️ Maybe'}
-                          </span>
-                        ) : (
-                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-white/5 text-light/50">
-                            ⏳ No Response
-                          </span>
+
+                        {canSeeMessage && response?.message && (
+                          <div className="mt-2 pl-13 pr-3">
+                            <div className="text-xs text-light/60 bg-white/5 border border-white/10 rounded px-3 py-2">
+                              <span className="font-medium">Message:</span> {response.message}
+                            </div>
+                          </div>
                         )}
                       </div>
-                    </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
 
-                    {/* Show message if exists and user can see it */}
-                    {canSeeMessage && response?.message && (
-                      <div className="mt-2 pl-13 pr-3">
-                        <div className="text-xs text-light/60 bg-white/5 border border-white/10 rounded px-3 py-2">
-                          <span className="font-medium">Message:</span> {response.message}
+          {/* Substitutions Tab */}
+          {activeTab === 'substitutions' && (
+            <div>
+              <h2 className="font-title text-lg text-light mb-3">Substitution Requests</h2>
+              
+              {pendingRequests.length === 0 ? (
+                <div className="text-center py-12 text-light/60">
+                  <div className="text-4xl mb-3">🔄</div>
+                  <p>No pending substitution requests</p>
+                  <p className="text-sm mt-2">Requests will appear here when someone needs a substitute</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {pendingRequests.map(req => {
+                    const timeRemaining = getTimeRemaining(req.expiresAt);
+                    const isExpired = timeRemaining === 'Expired';
+                    
+                    return (
+                      <div key={req.id} className="bg-white/5 border border-white/10 rounded-lg p-4">
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div className="flex-1">
+                            <p className="text-light font-medium mb-1">
+                              <strong>{req.originalUserName}</strong> requests you as their substitute
+                            </p>
+                            <p className="text-sm text-light/60">
+                              Event: {req.eventTitle}
+                            </p>
+                          </div>
+                          <span className={`text-sm font-mono px-2 py-1 rounded shrink-0 ${isExpired ? 'bg-red-500/20 text-red-300' : 'bg-yellow-500/20 text-yellow-300'}`}>
+                            ⏱️ {timeRemaining}
+                          </span>
                         </div>
+                        
+                        {/* Show Accept/Decline buttons only if not expired */}
+                        {!isExpired && (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleRespondToRequest(req.id, 'accept')}
+                              disabled={respondingToRequest === req.id}
+                              className="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              ✅ Accept
+                            </button>
+                            <button
+                              onClick={() => handleRespondToRequest(req.id, 'reject')}
+                              disabled={respondingToRequest === req.id}
+                              className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              ❌ Decline
+                            </button>
+                          </div>
+                        )}
+                        
+                        {/* Show Delete button for expired requests or if user is the requester */}
+                        {(isExpired || req.requesterId === user?.id) && (
+                          <button
+                            onClick={() => handleDeleteRequest(req.id)}
+                            disabled={deletingRequest === req.id}
+                            className="w-full px-4 py-2 bg-gray-500/20 hover:bg-red-500/30 text-light/80 hover:text-red-300 border border-white/10 hover:border-red-500/50 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                          >
+                            {deletingRequest === req.id ? (
+                              <>
+                                <span className="animate-spin">⏳</span> Deleting...
+                              </>
+                            ) : (
+                              <>
+                                🗑️ Delete Request
+                              </>
+                            )}
+                          </button>
+                        )}
+                        
+                        {isExpired && req.requesterId !== user?.id && (
+                          <p className="text-xs text-red-300/60 mt-2">
+                            This request has expired
+                          </p>
+                        )}
                       </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Invite Modal */}
       {showInviteModal && (

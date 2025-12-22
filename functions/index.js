@@ -2503,37 +2503,105 @@ exports.getPendingSubstitutions = functions.https.onCall(async (data, context) =
 });
 
 /**
- * Clean up expired substitution requests (runs every 5 minutes)
+ * Delete a specific substitution request (manual deletion by user)
+ */
+exports.deleteSubstitutionRequest = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { requestId } = data;
+  const userId = context.auth.uid;
+
+  if (!requestId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Request ID is required');
+  }
+
+  try {
+    console.log(`🗑️ Deleting substitution request ${requestId} by user ${userId}`);
+
+    const requestRef = admin.firestore().collection('substitutionRequests').doc(requestId);
+    const requestDoc = await requestRef.get();
+
+    if (!requestDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Substitution request not found');
+    }
+
+    const request = requestDoc.data();
+
+    // Check if user is authorized to delete (requester, substitute, or admin)
+    const userDoc = await admin.firestore().collection('users').doc(userId).get();
+    const isAdmin = userDoc.data()?.role === 'admin';
+    const isRequester = request.requesterId === userId;
+    const isSubstitute = request.substituteUserId === userId;
+
+    if (!isAdmin && !isRequester && !isSubstitute) {
+      throw new functions.https.HttpsError('permission-denied', 'You do not have permission to delete this request');
+    }
+
+    // Delete the request
+    await requestRef.delete();
+
+    console.log(`✅ Successfully deleted substitution request ${requestId}`);
+
+    return { success: true, message: 'Substitution request deleted' };
+  } catch (error) {
+    console.error('❌ Error deleting substitution request:', error);
+    throw error;
+  }
+});
+
+/**
+ * Clean up expired and old substitution requests (runs every 5 minutes)
+ * - Marks expired requests as 'expired'
+ * - Deletes all but the 20 newest substitution requests
  */
 exports.cleanupExpiredSubstitutions = functions.pubsub
   .schedule('every 5 minutes')
   .onRun(async (context) => {
     try {
-      console.log('🧹 Cleaning up expired substitution requests');
+      console.log('🧹 Cleaning up substitution requests');
 
+      // Step 1: Mark expired pending requests as 'expired'
       const now = admin.firestore.Timestamp.now();
-      const snapshot = await admin.firestore()
+      const expiredSnapshot = await admin.firestore()
         .collection('substitutionRequests')
         .where('status', '==', 'pending')
         .where('expiresAt', '<', now)
         .get();
 
-      if (snapshot.empty) {
-        console.log('ℹ️ No expired substitution requests');
-        return null;
+      if (!expiredSnapshot.empty) {
+        const batch1 = admin.firestore().batch();
+        expiredSnapshot.docs.forEach(doc => {
+          batch1.update(doc.ref, { status: 'expired' });
+        });
+        await batch1.commit();
+        console.log(`✅ Marked ${expiredSnapshot.size} requests as expired`);
       }
 
-      const batch = admin.firestore().batch();
-      snapshot.docs.forEach(doc => {
-        batch.update(doc.ref, { status: 'expired' });
-      });
+      // Step 2: Keep only the 20 newest substitution requests
+      const allRequests = await admin.firestore()
+        .collection('substitutionRequests')
+        .orderBy('createdAt', 'desc')
+        .get();
 
-      await batch.commit();
-      console.log(`✅ Marked ${snapshot.size} substitution requests as expired`);
+      if (allRequests.size > 20) {
+        const toDelete = allRequests.docs.slice(20); // Keep first 20, delete the rest
+        const batch2 = admin.firestore().batch();
+        
+        toDelete.forEach(doc => {
+          batch2.delete(doc.ref);
+        });
+
+        await batch2.commit();
+        console.log(`🗑️ Deleted ${toDelete.length} old substitution requests (keeping 20 newest)`);
+      } else {
+        console.log(`ℹ️ Total requests: ${allRequests.size}, no deletion needed (limit: 20)`);
+      }
 
       return null;
     } catch (error) {
-      console.error('❌ Error cleaning up expired substitutions:', error);
+      console.error('❌ Error cleaning up substitutions:', error);
       return null;
     }
   });

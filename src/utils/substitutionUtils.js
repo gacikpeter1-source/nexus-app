@@ -84,3 +84,18 @@ export async function getPendingSubstitutions(userId) {
   }
 }
 
+/**
+ * Delete a substitution request (manual deletion)
+ * @param {string} requestId - Substitution request ID
+ * @returns {Promise<{success: boolean, message: string}>}
+ */
+export async function deleteSubstitutionRequest(requestId) {
+  try {
+    const deleteFunc = httpsCallable(functions, 'deleteSubstitutionRequest');
+    const result = await deleteFunc({ requestId });
+    return result.data;
+  } catch (error) {
+    console.error('Error deleting substitution request:', error);
+    throw error;
+  }
+}
