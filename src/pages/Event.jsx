@@ -8,7 +8,7 @@ import { useIsAdmin } from '../hooks/usePermissions';
 import { isClubOwner } from '../firebase/privileges';
 import { ShowIf } from '../components/PermissionGuard';
 import { isEventLocked, canChangeEventStatus, getLockTimeText } from '../utils/eventLockUtils';
-import { requestSubstitute, trainerSwapUsers } from '../utils/substitutionUtils';
+import { requestSubstitute, trainerSwapUsers, getPendingSubstitutions, respondToSubstitution } from '../utils/substitutionUtils';
 
 export default function EventPage() {
   const { eventId } = useParams();
@@ -46,9 +46,18 @@ export default function EventPage() {
   const [swapUser1, setSwapUser1] = useState(null);
   const [swapUser2, setSwapUser2] = useState(null);
 
+  // Pending substitution requests
+  const [pendingRequests, setPendingRequests] = useState([]);
+  const [respondingToRequest, setRespondingToRequest] = useState(null);
+
   useEffect(() => {
     loadEventData();
-  }, [eventId]);
+    loadPendingRequests();
+    
+    // Refresh pending requests every 30 seconds
+    const interval = setInterval(loadPendingRequests, 30000);
+    return () => clearInterval(interval);
+  }, [eventId, user]);
 
   async function loadEventData() {
     try {
@@ -427,6 +436,57 @@ export default function EventPage() {
     });
   }
 
+  // Load pending substitution requests for current user and event
+  async function loadPendingRequests() {
+    if (!user || !eventId) return;
+    
+    try {
+      const requests = await getPendingSubstitutions(user.id);
+      // Filter to only show requests for this event
+      const eventRequests = requests.filter(req => req.eventId === eventId);
+      setPendingRequests(eventRequests);
+    } catch (error) {
+      console.error('Error loading pending requests:', error);
+    }
+  }
+
+  // Respond to substitution request
+  async function handleRespondToRequest(requestId, action) {
+    setRespondingToRequest(requestId);
+    
+    try {
+      await respondToSubstitution(requestId, action);
+      
+      if (action === 'accept') {
+        showToast('✅ Substitution accepted! You are now attending.', 'success');
+      } else {
+        showToast('❌ Substitution declined.', 'info');
+      }
+      
+      // Reload event and requests
+      await Promise.all([loadEventData(), loadPendingRequests()]);
+    } catch (error) {
+      console.error('Error responding to substitution:', error);
+      showToast(error.message || 'Failed to respond', 'error');
+    } finally {
+      setRespondingToRequest(null);
+    }
+  }
+
+  // Get time remaining for a substitution request
+  function getTimeRemaining(expiresAt) {
+    const now = Date.now();
+    const expiry = expiresAt.toMillis();
+    const diff = expiry - now;
+    
+    if (diff <= 0) return 'Expired';
+    
+    const minutes = Math.floor(diff / 60000);
+    const seconds = Math.floor((diff % 60000) / 1000);
+    
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -490,6 +550,62 @@ export default function EventPage() {
                   : 'Status changes are no longer allowed. Contact the organizer if needed.'}
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pending Substitution Requests - Compact Version */}
+      {pendingRequests.length > 0 && (
+        <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-lg">🔄</span>
+            <h4 className="font-medium text-purple-300 text-sm">Substitution Request{pendingRequests.length > 1 ? 's' : ''}</h4>
+            <span className="px-1.5 py-0.5 bg-purple-500/30 text-purple-200 rounded-full text-xs font-bold">
+              {pendingRequests.length}
+            </span>
+          </div>
+          
+          <div className="space-y-2">
+            {pendingRequests.map(req => {
+              const timeRemaining = getTimeRemaining(req.expiresAt);
+              const isExpired = timeRemaining === 'Expired';
+              
+              return (
+                <div key={req.id} className="bg-white/5 border border-white/10 rounded-lg p-2">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <p className="text-sm text-light/90">
+                      <strong>{req.originalUserName}</strong> requests you as substitute
+                    </p>
+                    <span className={`text-xs font-mono px-2 py-0.5 rounded ${isExpired ? 'bg-red-500/20 text-red-300' : 'bg-yellow-500/20 text-yellow-300'}`}>
+                      ⏱️ {timeRemaining}
+                    </span>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleRespondToRequest(req.id, 'accept')}
+                      disabled={respondingToRequest === req.id || isExpired}
+                      className="flex-1 px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      ✅ Accept
+                    </button>
+                    <button
+                      onClick={() => handleRespondToRequest(req.id, 'reject')}
+                      disabled={respondingToRequest === req.id || isExpired}
+                      className="flex-1 px-2 py-1 bg-red-500 hover:bg-red-600 text-white rounded text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      ❌ Decline
+                    </button>
+                  </div>
+                  
+                  {isExpired && (
+                    <p className="text-xs text-red-300 mt-1">
+                      This request has expired
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
