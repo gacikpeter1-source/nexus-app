@@ -804,6 +804,7 @@ exports.onEventDeleted = functions.firestore
         'push.events.deleted'
       );
       
+      
       const emailEnabled = await areNotificationsEnabled(
         event.clubId,
         event.teamId,
