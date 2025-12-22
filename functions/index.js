@@ -397,6 +397,46 @@ async function cleanupInvalidTokens(invalidTokens) {
 }
 
 /**
+ * Helper function to send push notification to a single user
+ * @param {string} userId - User ID to send notification to
+ * @param {string} title - Notification title
+ * @param {string} body - Notification body
+ * @param {object} data - Optional data payload
+ */
+async function sendPushNotification(userId, title, body, data = {}) {
+  try {
+    // Get user's FCM tokens
+    const tokens = await getUserTokens([userId]);
+    
+    if (tokens.length === 0) {
+      console.log(`No FCM tokens found for user ${userId}`);
+      return { success: false, reason: 'no_tokens' };
+    }
+
+    // Send notification
+    const result = await sendMulticastNotification(
+      tokens,
+      { title, body },
+      data
+    );
+
+    // Clean up invalid tokens
+    if (result.invalidTokens.length > 0) {
+      await cleanupInvalidTokens(result.invalidTokens);
+    }
+
+    return { 
+      success: result.successCount > 0,
+      successCount: result.successCount,
+      failureCount: result.failureCount
+    };
+  } catch (error) {
+    console.error(`Error sending push notification to user ${userId}:`, error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Send push notification to multiple FCM tokens
  * Callable function from client
  */

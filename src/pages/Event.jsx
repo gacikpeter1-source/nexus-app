@@ -95,6 +95,15 @@ export default function EventPage() {
     async function handleRsvp(status, message = null) {
     if (!user || !event) return;
 
+    // ✅ FIX: Check if user can change status (blocks past events for regular users)
+    const isTrainer = isUserAdmin || (club && (club.trainers || []).includes(user?.id));
+    const statusCheck = canChangeEventStatus(event, user, isTrainer);
+    
+    if (!statusCheck.canChange) {
+      showToast(statusCheck.reason || 'Cannot change status for this event', 'error');
+      return;
+    }
+
     try {
       setUpdatingRsvp(true);
       await updateEventResponse(eventId, user.id, status, message);
@@ -516,8 +525,8 @@ export default function EventPage() {
               {userResponse?.status === 'declined' ? '✓ Declined' : 'Decline ▼'}
             </button>
 
-            {/* Dropdown Menu */}
-            {showDeclineMenu && (
+            {/* Dropdown Menu - Only show if status can be changed */}
+            {showDeclineMenu && canChangeStatus && (
               <div className="absolute top-full left-0 mt-1 bg-mid-dark border border-white/20 rounded-lg shadow-2xl overflow-hidden z-50 min-w-full">
                 <button
                   onClick={() => {
@@ -556,8 +565,8 @@ export default function EventPage() {
               {userResponse?.status === 'maybe' ? '✓ Maybe' : 'Maybe ▼'}
             </button>
 
-            {/* Dropdown Menu */}
-            {showMaybeMenu && (
+            {/* Dropdown Menu - Only show if status can be changed */}
+            {showMaybeMenu && canChangeStatus && (
               <div className="absolute top-full left-0 mt-1 bg-mid-dark border border-white/20 rounded-lg shadow-2xl overflow-hidden z-50 min-w-full">
                 <button
                   onClick={() => {
