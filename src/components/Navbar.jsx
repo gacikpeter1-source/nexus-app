@@ -14,6 +14,7 @@ export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const dropdownRef = useRef(null);
   const mobileMenuRef = useRef(null);
+  const mobileButtonRef = useRef(null);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -21,7 +22,11 @@ export default function Navbar() {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsDropdownOpen(false);
       }
-      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target)) {
+      // ✅ FIX: Don't close mobile menu if clicking the toggle button itself
+      if (mobileMenuRef.current && 
+          !mobileMenuRef.current.contains(event.target) &&
+          mobileButtonRef.current && 
+          !mobileButtonRef.current.contains(event.target)) {
         setIsMobileMenuOpen(false);
       }
     }
@@ -104,6 +109,7 @@ export default function Navbar() {
           <div className="flex items-center gap-3">
             {/* Mobile Hamburger Menu Button */}
             <button
+              ref={mobileButtonRef}
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="md:hidden w-10 h-10 flex items-center justify-center rounded-lg hover:bg-white/10 transition text-light"
             >

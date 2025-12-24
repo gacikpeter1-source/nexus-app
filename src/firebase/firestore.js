@@ -1256,19 +1256,19 @@ export const getTeamAttendance = async (teamId) => {
 };
 
 /**
- * Get attendance by date
+ * Get attendance by date - Returns ALL attendance records for that date
  */
 export const getAttendanceByDate = async (teamId, date) => {
   try {
     const q = query(
       collection(db, 'attendance'),
       where('teamId', '==', teamId),
-      where('date', '==', date)
+      where('date', '==', date),
+      orderBy('createdAt', 'desc')
     );
     const snapshot = await getDocs(q);
-    if (snapshot.empty) return null;
-    const doc = snapshot.docs[0];
-    return { id: doc.id, ...doc.data() };
+    if (snapshot.empty) return [];
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
     console.error('Error getting attendance by date:', error);
     throw error;

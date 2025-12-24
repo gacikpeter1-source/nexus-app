@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
-import Navbar from './components/Navbar';
+import Sidebar from './components/Sidebar';
 
 // Page imports
 import Register from './pages/Register';
@@ -38,8 +38,10 @@ function App() {
   // ✅ NO PROVIDERS HERE - They're all in main.jsx now
   return (
     <div className="min-h-screen bg-gradient-to-br from-dark via-mid-dark to-dark">
-      <Navbar />
-      <main className="relative z-10 container mx-auto px-4 py-8">
+      <Sidebar />
+      {/* Main content with padding for sidebar */}
+      <main className="relative z-10 md:ml-64 min-h-screen">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 ml-4 md:ml-0">
         <Routes>
                       {/* Public Routes */}
                       <Route path="/register" element={<Register />} />
@@ -243,9 +245,10 @@ function App() {
                         } 
                       />
 
-          {/* Catch all - redirect to home */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+                  {/* Catch all - redirect to home */}
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+        </div>
       </main>
     </div>
   );

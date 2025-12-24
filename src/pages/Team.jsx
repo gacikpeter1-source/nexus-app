@@ -148,8 +148,8 @@ export default function Team() {
       );
       
       await updateClub(clubId, { teams: updatedTeams });
-      showToast('Left team successfully', 'success');
-      navigate('/dashboard');
+      showToast('✅ Left team successfully', 'success');
+      navigate('/');
     } catch (error) {
       console.error('Error leaving team:', error);
       showToast('Failed to leave team', 'error');
@@ -1073,12 +1073,18 @@ onUpdateTeamSettings={async (settings) => {
             {/* Header with Take Attendance Button */}
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-2xl font-bold text-light">📋 Attendance History</h3>
-              <button
-                onClick={() => navigate(`/team/${clubId}/${teamId}/attendance`)}
-                className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium"
-              >
-                + Take Attendance
-              </button>
+              {/* Only show button for Admin, ClubOwner, Trainer, or Assistant */}
+              {(user?.isSuperAdmin || 
+                club?.ownerId === user?.id || 
+                team?.trainers?.includes(user?.id) || 
+                team?.assistants?.includes(user?.id)) && (
+                <button
+                  onClick={() => navigate(`/team/${clubId}/${teamId}/attendance`)}
+                  className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium"
+                >
+                  + Take Attendance
+                </button>
+              )}
             </div>
             {/* Filters */}
             <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
@@ -1155,6 +1161,11 @@ onUpdateTeamSettings={async (settings) => {
                             <div className="flex items-center gap-3 mb-2">
                               <h3 className="font-title text-xl text-light capitalize">
                                 {displayType}
+                                {record.sessionName && (
+                                  <span className="ml-2 text-base font-normal text-primary">
+                                    • {record.sessionName}
+                                  </span>
+                                )}
                               </h3>
                               <span className="text-sm text-light/60">
                                 {formatAttendanceDate(record.date)}
@@ -1189,18 +1200,26 @@ onUpdateTeamSettings={async (settings) => {
                           >
                             View Details
                           </button>
-                          <button
-                            onClick={() => navigate(`/team/${clubId}/${teamId}/attendance`)}
-                            className="px-4 py-2 bg-white/10 hover:bg-white/20 text-light rounded-lg text-sm transition"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteAttendance(record.id)}
-                            className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm transition"
-                          >
-                            Delete
-                          </button>
+                          {/* Only show Edit/Delete for Admin, ClubOwner, Trainer, or Assistant */}
+                          {(user?.isSuperAdmin || 
+                            club?.ownerId === user?.id || 
+                            team?.trainers?.includes(user?.id) || 
+                            team?.assistants?.includes(user?.id)) && (
+                            <>
+                              <button
+                                onClick={() => navigate(`/team/${clubId}/${teamId}/attendance`)}
+                                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-light rounded-lg text-sm transition"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteAttendance(record.id)}
+                                className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm transition"
+                              >
+                                Delete
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1220,6 +1239,11 @@ onUpdateTeamSettings={async (settings) => {
                           {selectedAttendance.type === 'custom' && selectedAttendance.customType 
                             ? selectedAttendance.customType 
                             : selectedAttendance.type}
+                          {selectedAttendance.sessionName && (
+                            <span className="ml-2 text-lg font-normal text-primary">
+                              • {selectedAttendance.sessionName}
+                            </span>
+                          )}
                         </h3>
                         <p className="text-sm text-light/60 mt-1">
                           {formatAttendanceDate(selectedAttendance.date)}
@@ -1256,7 +1280,7 @@ onUpdateTeamSettings={async (settings) => {
                     </div>
 
                     {/* Member List */}
-                    <div className="space-y-3">
+                    <div className="space-y-3 mb-6">
                       <h4 className="font-semibold text-light mb-3">Member Attendance</h4>
                       {selectedAttendance.records.map((record) => {
                         return (
@@ -1278,6 +1302,17 @@ onUpdateTeamSettings={async (settings) => {
                                 <div>
                                   <div className="font-medium text-light">{record.username}</div>
                                   <div className="text-xs text-light/50">{record.email}</div>
+                                  {record.customStatuses && Object.entries(record.customStatuses).some(([_, val]) => val) && (
+                                    <div className="flex gap-2 mt-2">
+                                      {Object.entries(record.customStatuses).map(([statusId, isActive]) => 
+                                        isActive && (
+                                          <span key={statusId} className="px-2 py-1 bg-white/10 rounded text-xs text-light/80 capitalize">
+                                            {statusId.replace('_', ' ')}
+                                          </span>
+                                        )
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                               <div className="text-right">
@@ -1293,6 +1328,33 @@ onUpdateTeamSettings={async (settings) => {
                         );
                       })}
                     </div>
+
+                    {/* Edit History */}
+                    {selectedAttendance.editHistory && selectedAttendance.editHistory.length > 0 && (
+                      <div className="border-t border-white/10 pt-6">
+                        <h4 className="font-semibold text-light mb-3">📝 Edit History</h4>
+                        <div className="space-y-2">
+                          {selectedAttendance.editHistory.map((edit, index) => (
+                            <div key={index} className="bg-white/5 rounded-lg p-3 text-sm">
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <div className="text-light/80">
+                                    <span className="font-medium text-light">{edit.editedByName}</span>
+                                    {' '}{edit.changes}
+                                  </div>
+                                  {edit.reason && (
+                                    <div className="text-light/60 text-xs mt-1">Reason: {edit.reason}</div>
+                                  )}
+                                </div>
+                                <div className="text-xs text-light/50 whitespace-nowrap ml-4">
+                                  {new Date(edit.editedAt).toLocaleString()}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

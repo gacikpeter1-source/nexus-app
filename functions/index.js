@@ -2332,17 +2332,37 @@ exports.respondToSubstitution = functions.https.onCall(async (data, context) => 
       const responses = event.responses || {};
 
       const updatedResponses = { ...responses };
-      updatedResponses[request.originalUserId] = {
-        ...updatedResponses[request.originalUserId],
-        status: 'declined', // Original user declines
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        message: 'Found substitute'
-      };
-      updatedResponses[request.substituteUserId] = {
-        status: 'attending', // Substitute attends
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        message: 'Substituted for ' + request.originalUserName
-      };
+      
+      // ✅ FIX: Check if substitute was from waitlist - if so, SWAP them
+      const substituteWasInWaitlist = responses[request.substituteUserId]?.status === 'waitlist';
+      
+      if (substituteWasInWaitlist) {
+        // SWAP: Original goes to waitlist, Substitute goes to active
+        updatedResponses[request.originalUserId] = {
+          ...updatedResponses[request.originalUserId],
+          status: 'waitlist',
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          message: 'Swapped with substitute from waitlist'
+        };
+        updatedResponses[request.substituteUserId] = {
+          status: 'attending',
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          message: 'Substituted from waitlist for ' + request.originalUserName
+        };
+      } else {
+        // Normal substitution: Original declines, Substitute attends
+        updatedResponses[request.originalUserId] = {
+          ...updatedResponses[request.originalUserId],
+          status: 'declined',
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          message: 'Found substitute'
+        };
+        updatedResponses[request.substituteUserId] = {
+          status: 'attending',
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          message: 'Substituted for ' + request.originalUserName
+        };
+      }
 
       await eventRef.update({ responses: updatedResponses });
       await requestRef.update({ status: 'accepted' });
@@ -2414,7 +2434,7 @@ exports.trainerSwapUsers = functions.https.onCall(async (data, context) => {
       const clubDoc = await admin.firestore().doc(`clubs/${event.clubId}`).get();
       const club = clubDoc.data();
       const isTrainer = (club.trainers || []).includes(callerUid);
-      const isOwner = club.ownerId === callerUid;
+      const isOwner = club.createdBy === callerUid || (club.trainers || []).includes(callerUid);
 
       if (!isTrainer && !isOwner) {
         throw new functions.https.HttpsError('permission-denied', 'Only trainers can swap users');

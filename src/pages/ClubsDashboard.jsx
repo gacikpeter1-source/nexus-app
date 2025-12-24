@@ -47,6 +47,7 @@ export default function ClubsDashboard() {
   const [openCreateModal, setOpenCreateModal] = useState(false);
   const [openRequestModal, setOpenRequestModal] = useState(false);
   const [allClubsForRequest, setAllClubsForRequest] = useState([]);
+  const [loadingClubsForRequest, setLoadingClubsForRequest] = useState(false);
   const [selectedClubForRequest, setSelectedClubForRequest] = useState('');
   const [selectedTeam, setSelectedTeam] = useState('');
   const [clubSearchQuery, setClubSearchQuery] = useState('');
@@ -80,15 +81,20 @@ export default function ClubsDashboard() {
   }, [openRequestModal]);
 
   async function loadAllClubsForRequest() {
+    setLoadingClubsForRequest(true);
     try {
       if (!user?.id) {
+        console.log('❌ No user ID found');
         setAllClubsForRequest([]);
         return;
       }
 
+      console.log('📋 Loading clubs for request...');
+      
       // Get user's current clubs
       const userClubs = await getUserClubs(user.id);
       const userClubIds = userClubs.map(c => c.id);
+      console.log(`✅ User is member of ${userClubIds.length} clubs:`, userClubIds);
       
       // Get ALL clubs from Firestore (now allowed by updated rules)
       const db = (await import('../firebase/config')).db;
@@ -96,14 +102,25 @@ export default function ClubsDashboard() {
       
       const clubsSnapshot = await getDocs(collection(db, 'clubs'));
       const allClubs = clubsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      console.log(`✅ Found ${allClubs.length} total clubs in database`);
       
       // Filter out clubs user is already member of
       const availableClubs = allClubs.filter(club => !userClubIds.includes(club.id));
+      console.log(`✅ ${availableClubs.length} clubs available to join:`, availableClubs.map(c => c.name));
       
       setAllClubsForRequest(availableClubs);
+      
+      if (availableClubs.length === 0 && allClubs.length > 0) {
+        showToast('You are already a member of all available clubs!', 'info');
+      } else if (allClubs.length === 0) {
+        showToast('No clubs found in the database. Create one first!', 'info');
+      }
     } catch (error) {
-      console.error('Error loading clubs:', error);
+      console.error('❌ Error loading clubs for request:', error);
+      showToast(`Failed to load clubs: ${error.message}`, 'error');
       setAllClubsForRequest([]);
+    } finally {
+      setLoadingClubsForRequest(false);
     }
   }
 
@@ -241,6 +258,64 @@ async function handleSubmitOrderResponse(status) {
     }
   };
 
+  const handleLeaveClub = async () => {
+    if (!selectedClub) return;
+
+    // Check if user is the creator or last trainer
+    const isCreator = selectedClub.createdBy === user.id;
+    const trainers = selectedClub.trainers || [];
+    const isLastTrainer = trainers.includes(user.id) && trainers.length === 1;
+
+    if (isCreator || isLastTrainer) {
+      showToast(
+        '❌ Cannot leave club: You are the creator or last trainer. Please transfer ownership or assign another trainer first.',
+        'error'
+      );
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to leave "${selectedClub.name}"? You will be removed from all teams in this club.`)) {
+      return;
+    }
+
+    try {
+      const { updateClub, updateUser, getUser } = await import('../firebase/firestore');
+
+      // Remove user from all teams in the club
+      const updatedTeams = (selectedClub.teams || []).map(team => ({
+        ...team,
+        members: (team.members || []).filter(id => id !== user.id),
+        trainers: (team.trainers || []).filter(id => id !== user.id),
+        assistants: (team.assistants || []).filter(id => id !== user.id)
+      }));
+
+      // Remove user from club members, trainers, and assistants
+      const updatedMembers = (selectedClub.members || []).filter(id => id !== user.id);
+      const updatedTrainers = (selectedClub.trainers || []).filter(id => id !== user.id);
+      const updatedAssistants = (selectedClub.assistants || []).filter(id => id !== user.id);
+
+      // Update club
+      await updateClub(selectedClubId, {
+        members: updatedMembers,
+        trainers: updatedTrainers,
+        assistants: updatedAssistants,
+        teams: updatedTeams
+      });
+
+      // Remove club from user's clubIds
+      const userData = await getUser(user.id);
+      const updatedClubIds = (userData.clubIds || []).filter(id => id !== selectedClubId);
+      await updateUser(user.id, { clubIds: updatedClubIds });
+
+      showToast('✅ Left club successfully', 'success');
+      setSelectedClubId(null);
+      await loadClubs();
+    } catch (error) {
+      console.error('Error leaving club:', error);
+      showToast('Failed to leave club', 'error');
+    }
+  };
+
   // Render club list (Level 1)
   const renderClubList = () => {
     if (loading) {
@@ -340,16 +415,27 @@ async function handleSubmitOrderResponse(status) {
     return (
       <div className="animate-fade-in">
         {/* Back button and club header */}
-        <div className="mb-6 flex items-center gap-4">
-          <button
-            onClick={() => setSelectedClubId(null)}
-            className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center text-light transition-all"
-          >
-            ←
-          </button>
-          <div>
-            <h2 className="font-title text-xl md:text-3xl text-light">{selectedClub.name}</h2>
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setSelectedClubId(null)}
+              className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center text-light transition-all"
+            >
+              ←
+            </button>
+            <div>
+              <h2 className="font-title text-xl md:text-3xl text-light">{selectedClub.name}</h2>
+            </div>
           </div>
+          
+          {/* Leave Club Button */}
+          <button
+            onClick={handleLeaveClub}
+            className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 rounded-lg transition-all font-medium text-sm flex items-center gap-2"
+          >
+            <span>🚪</span>
+            <span>Leave Club</span>
+          </button>
         </div>
 
         {/* Teams in this club */}
@@ -471,45 +557,56 @@ async function handleSubmitOrderResponse(status) {
         }}
       >
         <div className="space-y-4">
+          {/* Loading State */}
+          {loadingClubsForRequest && (
+            <div className="text-center py-4">
+              <div className="text-light/60">Loading clubs...</div>
+            </div>
+          )}
+          
           {/* Club Search */}
-          <div>
-            <label className="block text-sm font-medium text-light/80 mb-2">
-              🔍 Search Club
-            </label>
-            <input
-              type="text"
-              placeholder="Type to search clubs..."
-              value={clubSearchQuery}
-              onChange={(e) => setClubSearchQuery(e.target.value)}
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 md:px-4 md:py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all mb-2"
-            />
-            
-            {/* Club Dropdown */}
-            <select
-              value={selectedClubForRequest}
-              onChange={(e) => { 
-                setSelectedClubForRequest(e.target.value); 
-                setSelectedTeam(''); 
-                setTeamSearchQuery('');
-              }}
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 md:px-4 md:py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-            >
-              <option value="" className="bg-mid-dark">-- Select a club --</option>
-              {filteredClubsForRequest.map(c => (
-                <option key={c.id} value={c.id} className="bg-mid-dark">
-                  {c.name} {c.clubType ? `(${c.clubType})` : ''}
-                </option>
-              ))}
-            </select>
-            
-            {clubSearchQuery && filteredClubsForRequest.length === 0 && (
-              <p className="text-sm text-light/50 mt-2">No clubs found matching "{clubSearchQuery}"</p>
-            )}
-            
-            {!clubSearchQuery && allClubsForRequest.length === 0 && (
-              <p className="text-sm text-light/50 mt-2">You're already a member of all available clubs!</p>
-            )}
-          </div>
+          {!loadingClubsForRequest && (
+            <div>
+              <label className="block text-sm font-medium text-light/80 mb-2">
+                🔍 Search Club
+              </label>
+              <input
+                type="text"
+                placeholder="Type to search clubs..."
+                value={clubSearchQuery}
+                onChange={(e) => setClubSearchQuery(e.target.value)}
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 md:px-4 md:py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all mb-2"
+              />
+              
+              {/* Club Dropdown */}
+              <select
+                value={selectedClubForRequest}
+                onChange={(e) => { 
+                  setSelectedClubForRequest(e.target.value); 
+                  setSelectedTeam(''); 
+                  setTeamSearchQuery('');
+                }}
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 md:px-4 md:py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+              >
+                <option value="" className="bg-mid-dark">-- Select a club --</option>
+                {filteredClubsForRequest.map(c => (
+                  <option key={c.id} value={c.id} className="bg-mid-dark">
+                    {c.name} {c.clubType ? `(${c.clubType})` : ''}
+                  </option>
+                ))}
+              </select>
+              
+              {clubSearchQuery && filteredClubsForRequest.length === 0 && !loadingClubsForRequest && (
+                <p className="text-sm text-light/50 mt-2">No clubs found matching "{clubSearchQuery}"</p>
+              )}
+              
+              {!clubSearchQuery && allClubsForRequest.length === 0 && !loadingClubsForRequest && (
+                <p className="text-sm text-yellow-400 mt-2">
+                  ℹ️ You're already a member of all available clubs, or no clubs exist yet!
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Team Search (only show if club selected) */}
           {selectedClubForRequest && availableTeams.length > 0 && (

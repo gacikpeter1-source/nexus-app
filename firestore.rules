@@ -24,10 +24,13 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
     
-    // Check if user is club owner
+    // Check if user is club owner (creator or in trainers array)
     function isClubOwner(clubId) {
-      return isAuthenticated() && 
-             get(/databases/$(database)/documents/clubs/$(clubId)).data.ownerId == request.auth.uid;
+      let club = get(/databases/$(database)/documents/clubs/$(clubId)).data;
+      return isAuthenticated() && (
+        club.createdBy == request.auth.uid ||
+        request.auth.uid in club.trainers
+      );
     }
     
     // Check if user is club member
@@ -110,12 +113,12 @@ service cloud.firestore {
       // This is safe because sensitive operations (update/delete) still require ownership
       allow read: if isAuthenticated();
       
-      // ✅ FIX: Allow club owners to update (removed subscription check to avoid load issues)
+      // ✅ FIX: Allow club owners and trainers to update
       // (Subscription validation handled in app logic)
-      allow update: if isAuthenticated() && (isAdmin() || isClubOwner(clubId));
+      allow update: if isAuthenticated() && (isAdmin() || isClubOwner(clubId) || isClubTrainer(clubId));
       
-      // Only club owners or admins can delete clubs
-      allow delete: if isAdmin() || isClubOwner(clubId);
+      // Only club owners, trainers, or admins can delete clubs
+      allow delete: if isAdmin() || isClubOwner(clubId) || isClubTrainer(clubId);
       
       // ✅ Club-level notification settings
       match /notificationSettings/{settingId} {
