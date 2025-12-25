@@ -4,6 +4,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { getUserEvents, getUserClubs } from '../firebase/firestore';
+import WeekView from '../components/calendar/WeekView';
+import DayView from '../components/calendar/DayView';
+import FilterModal from '../components/calendar/FilterModal';
 
 export default function Calendar() {
   const { user } = useAuth();
@@ -17,7 +20,8 @@ export default function Calendar() {
   const [teamFilter, setTeamFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [userFilter, setUserFilter] = useState('all'); // 'all' or 'mine'
-  const [viewMode, setViewMode] = useState('list'); // list | month
+  const [viewMode, setViewMode] = useState('list'); // list | month | week
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
@@ -156,6 +160,24 @@ export default function Calendar() {
     }
   }
 
+  // Calculate active filter count
+  function getActiveFilterCount() {
+    let count = 0;
+    if (userFilter !== 'all') count++;
+    if (clubFilter !== 'all') count++;
+    if (teamFilter !== 'all') count++;
+    if (typeFilter !== 'all') count++;
+    return count;
+  }
+
+  // Handle applying filters from modal
+  function handleApplyFilters(newFilters) {
+    setUserFilter(newFilters.userFilter);
+    setClubFilter(newFilters.clubFilter);
+    setTeamFilter(newFilters.teamFilter);
+    setTypeFilter(newFilters.typeFilter);
+  }
+
   function getEventIcon(type) {
     switch(type) {
       case 'training': return '🏋️';
@@ -182,7 +204,7 @@ export default function Calendar() {
   return (
     <div className="p-0.5">
       {/* Header */}
-      <div className="mb-2">
+      <div className="mb-4">
         <div className="flex items-center justify-between mb-4">
           <h1 className="font-title text-2xl md:text-4xl lg:text-5xl text-light">📅 Calendar</h1>
           <Link
@@ -194,111 +216,125 @@ export default function Calendar() {
         </div>
       </div>
 
+      {/* Compact View & Filter Bar */}
+      <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 mb-6">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* View Mode Tabs */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
+                viewMode === 'list' 
+                  ? 'bg-primary text-white' 
+                  : 'bg-white/10 text-light hover:bg-white/15'
+              }`}
+            >
+              📋 List
+            </button>
+            <button
+              onClick={() => setViewMode('month')}
+              className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
+                viewMode === 'month' 
+                  ? 'bg-primary text-white' 
+                  : 'bg-white/10 text-light hover:bg-white/15'
+              }`}
+            >
+              📅 Month
+            </button>
+            <button
+              onClick={() => setViewMode('week')}
+              className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
+                viewMode === 'week' 
+                  ? 'bg-primary text-white' 
+                  : 'bg-white/10 text-light hover:bg-white/15'
+              }`}
+            >
+              📆 Week
+            </button>
+          </div>
 
-      {/* Filters */}
-      <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 mb-6">
-        <div className="grid md:grid-cols-4 gap-4">
-          {/* View Mode */}
-          <div className="md:col-span-1">
-            <label className="block text-sm font-medium text-light/80 mb-2">View</label>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setViewMode('list')}
-                className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${
-                  viewMode === 'list' 
-                    ? 'bg-primary text-white' 
-                    : 'bg-white/10 text-light hover:bg-white/15'
-                }`}
-              >
-                📋 List
-              </button>
-              <button
-                onClick={() => setViewMode('month')}
-                className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${
-                  viewMode === 'month' 
-                    ? 'bg-primary text-white' 
-                    : 'bg-white/10 text-light hover:bg-white/15'
-                }`}
-              >
-                📅 Month
-              </button>
+          {/* Filter Button with Badge */}
+          <button
+            onClick={() => setIsFilterModalOpen(true)}
+            className="relative px-4 py-2 bg-white/10 hover:bg-white/15 text-light rounded-lg font-medium transition-all text-sm flex items-center gap-2"
+          >
+            🔍 Filters
+            {getActiveFilterCount() > 0 && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-white text-xs rounded-full flex items-center justify-center font-bold">
+                {getActiveFilterCount()}
+              </span>
+            )}
+          </button>
+
+          {/* Active Filter Chips */}
+          {getActiveFilterCount() > 0 && (
+            <div className="flex flex-wrap gap-2 ml-auto">
+              {userFilter !== 'all' && (
+                <div className="flex items-center gap-1 px-3 py-1 bg-primary/20 text-primary rounded-full text-xs font-medium">
+                  {userFilter === 'mine' ? 'My Events' : userFilter}
+                  <button
+                    onClick={() => setUserFilter('all')}
+                    className="hover:text-white transition-colors"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              {clubFilter !== 'all' && (
+                <div className="flex items-center gap-1 px-3 py-1 bg-primary/20 text-primary rounded-full text-xs font-medium">
+                  {clubs.find(c => c.id === clubFilter)?.name || 'Club'}
+                  <button
+                    onClick={() => {
+                      setClubFilter('all');
+                      setTeamFilter('all');
+                    }}
+                    className="hover:text-white transition-colors"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              {teamFilter !== 'all' && (
+                <div className="flex items-center gap-1 px-3 py-1 bg-primary/20 text-primary rounded-full text-xs font-medium">
+                  {teams.find(t => t.id === teamFilter)?.name || 'Team'}
+                  <button
+                    onClick={() => setTeamFilter('all')}
+                    className="hover:text-white transition-colors"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              {typeFilter !== 'all' && (
+                <div className="flex items-center gap-1 px-3 py-1 bg-primary/20 text-primary rounded-full text-xs font-medium capitalize">
+                  {typeFilter}
+                  <button
+                    onClick={() => setTypeFilter('all')}
+                    className="hover:text-white transition-colors"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
-
-          {/* User Filter */}
-          <div>
-            <label className="block text-sm font-medium text-light/80 mb-2">Show</label>
-            <select
-              value={userFilter}
-              onChange={(e) => setUserFilter(e.target.value)}
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-            >
-              <option value="all" className="bg-mid-dark">All Events</option>
-              <option value="mine" className="bg-mid-dark">My Events Only</option>
-            </select>
-          </div>
-
-          {/* Club Filter */}
-          <div>
-            <label className="block text-sm font-medium text-light/80 mb-2">Club</label>
-            <select
-              value={clubFilter}
-              onChange={(e) => {
-                setClubFilter(e.target.value);
-                setTeamFilter('all'); // Reset team filter when club changes
-              }}
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-            >
-              <option value="all" className="bg-mid-dark">All Clubs</option>
-              {clubs.map(c => (
-                <option key={c.id} value={c.id} className="bg-mid-dark">
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Team Filter */}
-          <div>
-            <label className="block text-sm font-medium text-light/80 mb-2">Team</label>
-            <select
-              value={teamFilter}
-              onChange={(e) => setTeamFilter(e.target.value)}
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-              disabled={clubFilter === 'all' && teams.length === 0}
-            >
-              <option value="all" className="bg-mid-dark">
-                {clubFilter === 'all' ? 'All Teams' : 'All Teams in Club'}
-              </option>
-              {teams.map(t => (
-                <option key={t.id} value={t.id} className="bg-mid-dark">
-                  {clubFilter === 'all' ? t.displayName : t.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Second Row - Type Filter */}
-        <div className="mt-4 grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-light/80 mb-2">Event Type</label>
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-            >
-              <option value="all" className="bg-mid-dark">All Types</option>
-              <option value="training" className="bg-mid-dark">🏋️ Training</option>
-              <option value="game" className="bg-mid-dark">⚽ Game</option>
-              <option value="match" className="bg-mid-dark">⚽ Match</option>
-              <option value="tournament" className="bg-mid-dark">🏆 Tournament</option>
-              <option value="meeting" className="bg-mid-dark">💼 Meeting</option>
-              <option value="social" className="bg-mid-dark">🎉 Social</option>
-            </select>
-          </div>
+          )}
         </div>
       </div>
+
+      {/* Filter Modal */}
+      <FilterModal
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        filters={{
+          userFilter,
+          clubFilter,
+          teamFilter,
+          typeFilter
+        }}
+        clubs={clubs}
+        teams={teams}
+        onApply={handleApplyFilters}
+      />
 
       {/* List View */}
       {viewMode === 'list' && (
@@ -508,6 +544,21 @@ export default function Calendar() {
             })}
           </div>
         </div>
+      )}
+
+      {/* Week/Day View - Responsive */}
+      {viewMode === 'week' && (
+        <>
+          {/* Desktop: Week View (≥1024px) */}
+          <div className="hidden lg:block">
+            <WeekView events={filteredEvents} />
+          </div>
+          
+          {/* Mobile/Tablet: Day View (<1024px) */}
+          <div className="block lg:hidden">
+            <DayView events={filteredEvents} />
+          </div>
+        </>
       )}
     </div>
   );

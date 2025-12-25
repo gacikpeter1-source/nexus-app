@@ -1,6 +1,6 @@
 // src/pages/NewEvent.jsx
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { createEvent, getUserClubs } from '../firebase/firestore';
@@ -12,6 +12,7 @@ export default function NewEvent() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { showToast } = useToast();
+  const [searchParams] = useSearchParams();
 
   const [loading, setLoading] = useState(false);
   const [clubs, setClubs] = useState([]);
@@ -71,6 +72,20 @@ export default function NewEvent() {
   useEffect(() => {
     loadClubs();
   }, []);
+
+  // Pre-fill date and time from URL parameters (from Week/Day view)
+  useEffect(() => {
+    const dateParam = searchParams.get('date');
+    const timeParam = searchParams.get('time');
+    
+    if (dateParam || timeParam) {
+      setForm(f => ({
+        ...f,
+        ...(dateParam && { date: dateParam }),
+        ...(timeParam && { time: timeParam })
+      }));
+    }
+  }, [searchParams]);
 
   async function loadClubs() {
     try {

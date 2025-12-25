@@ -1,5 +1,5 @@
 // src/components/Sidebar.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useIsAdmin } from '../hooks/usePermissions';
@@ -12,6 +12,19 @@ export default function Sidebar() {
   
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [expandedMenu, setExpandedMenu] = useState(null);
+  
+  // Drag-to-scroll state
+  const [menuOffset, setMenuOffset] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startY, setStartY] = useState(0);
+  const [dragVelocity, setDragVelocity] = useState(0);
+  const [lastMoveTime, setLastMoveTime] = useState(0);
+  const [containerHeight, setContainerHeight] = useState(0);
+  const [contentHeight, setContentHeight] = useState(0);
+  
+  // Refs for drag-to-scroll
+  const navContainerRef = useRef(null);
+  const navContentRef = useRef(null);
 
   // Check if user is manager (admin, trainer, or assistant)
   const isManager = () => {
@@ -23,6 +36,159 @@ export default function Sidebar() {
   useEffect(() => {
     setIsMobileOpen(false);
   }, [location.pathname]);
+
+  // Calculate container and content heights for drag boundaries
+  useEffect(() => {
+    const updateHeights = () => {
+      if (navContainerRef.current && navContentRef.current) {
+        const container = navContainerRef.current.clientHeight;
+        const content = navContentRef.current.scrollHeight;
+        setContainerHeight(container);
+        setContentHeight(content);
+      }
+    };
+    
+    updateHeights();
+    window.addEventListener('resize', updateHeights);
+    
+    // Also update when menu items change (expand/collapse)
+    const timer = setTimeout(updateHeights, 300);
+    
+    return () => {
+      window.removeEventListener('resize', updateHeights);
+      clearTimeout(timer);
+    };
+  }, [expandedMenu]);
+
+  // Calculate max scroll distance
+  const maxScroll = Math.max(0, contentHeight - containerHeight);
+
+  // Touch/Mouse start handler
+  const handleDragStart = (clientY) => {
+    setIsDragging(true);
+    setStartY(clientY);
+    setLastMoveTime(Date.now());
+  };
+
+  // Touch/Mouse move handler
+  const handleDragMove = (clientY) => {
+    if (!isDragging) return;
+    
+    const currentTime = Date.now();
+    const deltaY = clientY - startY;
+    const timeDelta = currentTime - lastMoveTime;
+    
+    // Calculate velocity for momentum
+    if (timeDelta > 0) {
+      setDragVelocity(deltaY / timeDelta);
+    }
+    
+    let newOffset = menuOffset + deltaY;
+    
+    // Add resistance when dragging beyond boundaries
+    if (newOffset > 0) {
+      newOffset = newOffset * 0.3; // Resistance at top
+    } else if (newOffset < -maxScroll) {
+      newOffset = -maxScroll + (newOffset + maxScroll) * 0.3; // Resistance at bottom
+    }
+    
+    setMenuOffset(newOffset);
+    setStartY(clientY);
+    setLastMoveTime(currentTime);
+  };
+
+  // Touch/Mouse end handler
+  const handleDragEnd = () => {
+    setIsDragging(false);
+    
+    // Apply momentum if dragging fast enough
+    if (Math.abs(dragVelocity) > 0.5) {
+      const momentumOffset = menuOffset + (dragVelocity * 100);
+      const boundedOffset = Math.max(Math.min(momentumOffset, 0), -maxScroll);
+      setMenuOffset(boundedOffset);
+    } else {
+      // Snap back to boundaries if over-scrolled
+      if (menuOffset > 0) {
+        setMenuOffset(0);
+      } else if (menuOffset < -maxScroll) {
+        setMenuOffset(-maxScroll);
+      }
+    }
+    
+    setDragVelocity(0);
+  };
+
+  // Touch event handlers
+  const handleTouchStart = (e) => {
+    // Only handle if touching the nav area, not on buttons
+    if (e.target.tagName === 'BUTTON' || e.target.tagName === 'A') return;
+    handleDragStart(e.touches[0].clientY);
+  };
+
+  const handleTouchMove = (e) => {
+    if (!isDragging) return;
+    e.preventDefault(); // Prevent default scroll
+    handleDragMove(e.touches[0].clientY);
+  };
+
+  const handleTouchEnd = () => {
+    handleDragEnd();
+  };
+
+  // Mouse event handlers (desktop support)
+  const handleMouseDown = (e) => {
+    // Only handle if clicking the nav area, not on buttons
+    if (e.target.tagName === 'BUTTON' || e.target.tagName === 'A') return;
+    handleDragStart(e.clientY);
+  };
+
+  // Global mouse event listeners (for drag)
+  useEffect(() => {
+    if (isDragging) {
+      const handleMouseMove = (e) => {
+        if (!isDragging) return;
+        handleDragMove(e.clientY);
+      };
+
+      const handleMouseUp = () => {
+        handleDragEnd();
+      };
+
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, menuOffset]);
+
+  // Mouse wheel scroll support (desktop)
+  useEffect(() => {
+    const navContainer = navContainerRef.current;
+    if (!navContainer) return;
+
+    const handleWheel = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const scrollAmount = e.deltaY;
+      const maxScroll = Math.max(0, contentHeight - containerHeight);
+      
+      setMenuOffset(prevOffset => {
+        let newOffset = prevOffset - scrollAmount;
+        newOffset = Math.max(Math.min(newOffset, 0), -maxScroll);
+        return newOffset;
+      });
+    };
+
+    navContainer.addEventListener('wheel', handleWheel, { passive: false });
+    
+    return () => {
+      navContainer.removeEventListener('wheel', handleWheel);
+    };
+  }, [contentHeight, containerHeight]);
 
   // Toggle submenu (accordion behavior - only one open at a time)
   const toggleSubmenu = (menuKey) => {
@@ -119,7 +285,7 @@ export default function Sidebar() {
       {/* Mobile ONLY: Thin line with circular button (< 768px) */}
       <div className="md:hidden fixed left-0 top-0 bottom-0 z-[60] pointer-events-none">
         {/* Thin vertical line (1-2mm wide) */}
-        <div className="w-[6px] h-full bg-gradient-to-b from-primary/70 via-accent/30 to-primary/70"></div>
+        <div className="w-[6px] h-full bg-gradient-to-b from-primary/70 via-accent/70 to-primary/70"></div>
       </div>
       
       {/* Circular bubble button - small, gentle, ~4mm diameter */}
@@ -134,7 +300,7 @@ export default function Sidebar() {
         }}
       >
         <svg 
-          className="w-4 h-4" 
+          className="w-5 h-4" 
           fill="none" 
           stroke="currentColor" 
           viewBox="0 0 24 24"
@@ -196,9 +362,33 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto py-4 px-2">
-          <div className="space-y-1">
+        {/* Navigation - Drag-to-scroll (mobile) + Mouse wheel (desktop) */}
+        <div className="flex-1 relative overflow-hidden">
+          {/* Scroll indicator - Top fade */}
+          {menuOffset < 0 && (
+            <div className="absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-dark to-transparent pointer-events-none z-10" />
+          )}
+          
+          <nav 
+            ref={navContainerRef}
+            className="h-full overflow-hidden py-4 px-2"
+            style={{ 
+              cursor: isDragging ? 'grabbing' : 'default',
+              userSelect: isDragging ? 'none' : 'auto'
+            }}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onMouseDown={handleMouseDown}
+          >
+            <div 
+              ref={navContentRef}
+              className="space-y-1 transition-transform"
+              style={{ 
+                transform: `translateY(${menuOffset}px)`,
+                transition: isDragging ? 'none' : 'transform 0.3s ease-out'
+              }}
+            >
             {visibleMenuItems.map((item) => (
               <div key={item.key}>
                 {/* Main menu item */}
@@ -272,6 +462,12 @@ export default function Sidebar() {
             ))}
           </div>
         </nav>
+        
+        {/* Scroll indicator - Bottom fade */}
+        {menuOffset > -(Math.max(0, contentHeight - containerHeight)) && contentHeight > containerHeight && (
+          <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-dark to-transparent pointer-events-none z-10" />
+        )}
+      </div>
 
         {/* Logout Button */}
         <div className="p-4 border-t border-white/10">

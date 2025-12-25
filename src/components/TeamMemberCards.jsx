@@ -89,8 +89,9 @@ export default function TeamMemberCards({
     };
   }).filter(Boolean);
 
-  const canCustomizeColors = userSubscription === 'club' || userSubscription === 'full';
-  const canCustomizeLayers = userSubscription === 'full';
+  // Trainers and Assistants can always customize, OR users with Club/Full subscription
+  const canCustomizeColors = canEditCards || userSubscription === 'club' || userSubscription === 'full';
+  const canCustomizeLayers = canEditCards || userSubscription === 'full';
 
   // Handle jersey background image upload
 const handleJerseyBgUpload = async (e) => {
@@ -248,83 +249,117 @@ const handleLayerImageUpload = async (e, idx) => {
       {/* Settings Panel */}
       {showSettings && (
         <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
-          <h4 className="text-xl font-bold text-light mb-4">Card Customization</h4>
+          <div className="mb-6">
+            <h4 className="text-2xl font-bold text-light mb-2">🎨 Card Customization</h4>
+            <p className="text-sm text-light/60">
+              Customize the appearance of all team member cards. Changes apply to the entire team.
+            </p>
+          </div>
 
-          {userSubscription === 'free' || userSubscription === 'user' ? (
-            <div className="bg-yellow-500/20 border border-yellow-500/30 rounded-lg p-4 mb-4">
-              <p className="text-yellow-200 text-sm">
+          {!canCustomizeColors && (
+            <div className="bg-yellow-500/20 border border-yellow-500/30 rounded-lg p-4 mb-6">
+              <p className="text-yellow-200 text-sm font-semibold">
                 ⚠️ Card customization requires Club or Full subscription
               </p>
+              <p className="text-yellow-200/80 text-xs mt-1">
+                Upgrade to customize team colors and add your team logo
+              </p>
             </div>
-          ) : null}
+          )}
 
-          {/* Photo Section Background (Layer 3) */}
+          {/* Team Colors */}
           {canCustomizeColors && (
-            <div className="mb-6">
-              <h5 className="font-semibold text-light mb-3">Photo Section Background (Layer 3)</h5>
-              <p className="text-sm text-light/60 mb-3">Upload an image to display behind the profile circle (arena, nature, etc.)</p>
-              <div className="space-y-3">
+            <div className="mb-6 bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+              <h5 className="font-bold text-light mb-2 flex items-center gap-2">
+                🎨 Team Colors
+              </h5>
+              <p className="text-xs text-light/60 mb-4">
+                These colors are used for: diagonal stripes, player names, team banner, and info grid borders
+              </p>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-light/80 mb-2">
+                    Primary Color
+                  </label>
+                  <input
+                    type="color"
+                    value={cardSettings.primaryColor}
+                    onChange={(e) => setCardSettings({...cardSettings, primaryColor: e.target.value})}
+                    className="w-full h-12 rounded cursor-pointer border-2 border-white/20"
+                  />
+                  <p className="text-xs text-light/50 mt-1">Player name, borders</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-light/80 mb-2">
+                    Secondary Color
+                  </label>
+                  <input
+                    type="color"
+                    value={cardSettings.secondaryColor}
+                    onChange={(e) => setCardSettings({...cardSettings, secondaryColor: e.target.value})}
+                    className="w-full h-12 rounded cursor-pointer border-2 border-white/20"
+                  />
+                  <p className="text-xs text-light/50 mt-1">Team banner, stripes</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-light/80 mb-2">
+                    Accent Color
+                  </label>
+                  <input
+                    type="color"
+                    value={cardSettings.accentColor}
+                    onChange={(e) => setCardSettings({...cardSettings, accentColor: e.target.value})}
+                    className="w-full h-12 rounded cursor-pointer border-2 border-white/20"
+                  />
+                  <p className="text-xs text-light/50 mt-1">Stats, highlights</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Team Logo / Background */}
+          {canCustomizeColors && (
+            <div className="mb-6 bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
+              <h5 className="font-bold text-light mb-2 flex items-center gap-2">
+                🏒 Team Logo / Background (Optional)
+              </h5>
+              <p className="text-xs text-light/60 mb-3">
+                Upload your team logo or a background image. This appears as a subtle background on player cards.
+              </p>
+              <div className="flex items-start gap-4">
                 {cardSettings.jerseyBackgroundImage && (
-                  <div className="relative w-32 h-32 rounded-lg overflow-hidden border-2 border-white/20">
+                  <div className="relative w-32 h-32 rounded-lg overflow-hidden border-4 border-white shadow-lg">
                     <img 
                       src={cardSettings.jerseyBackgroundImage} 
-                      alt="Jersey background" 
+                      alt="Team logo/background" 
                       className="w-full h-full object-cover"
                     />
                     <button
                       onClick={() => setCardSettings({...cardSettings, jerseyBackgroundImage: null})}
-                      className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1"
+                      className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center font-bold"
                     >
                       ✕
                     </button>
                   </div>
                 )}
-                <label className="block">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleJerseyBgUpload}
-                    className="hidden"
-                  />
-                  <div className="px-4 py-2 bg-white/10 hover:bg-white/20 text-light rounded-lg cursor-pointer inline-flex items-center gap-2">
-                    {uploadingJerseyBg ? '⏳ Uploading...' : '📤 Upload Background Image'}
-                  </div>
-                </label>
-              </div>
-            </div>
-          )}
-
-          {/* Color Customization */}
-          {canCustomizeColors && (
-            <div className="mb-6">
-              <h5 className="font-semibold text-light mb-3">Colors</h5>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm text-light/80 mb-2">Primary Color</label>
-                  <input
-                    type="color"
-                    value={cardSettings.primaryColor}
-                    onChange={(e) => setCardSettings({...cardSettings, primaryColor: e.target.value})}
-                    className="w-full h-10 rounded cursor-pointer"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-light/80 mb-2">Secondary Color</label>
-                  <input
-                    type="color"
-                    value={cardSettings.secondaryColor}
-                    onChange={(e) => setCardSettings({...cardSettings, secondaryColor: e.target.value})}
-                    className="w-full h-10 rounded cursor-pointer"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-light/80 mb-2">Accent Color</label>
-                  <input
-                    type="color"
-                    value={cardSettings.accentColor}
-                    onChange={(e) => setCardSettings({...cardSettings, accentColor: e.target.value})}
-                    className="w-full h-10 rounded cursor-pointer"
-                  />
+                <div className="flex-1">
+                  <label className="block">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleJerseyBgUpload}
+                      className="hidden"
+                    />
+                    <div className="px-6 py-3 bg-purple-500 hover:bg-purple-600 text-white rounded-lg cursor-pointer inline-flex items-center gap-2 font-semibold transition-all">
+                      {uploadingJerseyBg ? '⏳ Uploading...' : '📤 Upload Team Logo'}
+                    </div>
+                  </label>
+                  <p className="text-xs text-light/50 mt-2">
+                    ✨ Recommended: Square logo (500x500px or larger), PNG with transparent background
+                  </p>
+                  <p className="text-xs text-light/50 mt-1">
+                    💡 This will appear as a subtle watermark on the cards
+                  </p>
                 </div>
               </div>
             </div>
@@ -413,9 +448,47 @@ const handleLayerImageUpload = async (e, idx) => {
             </div>
           )}
 
+          {/* Card Preview */}
+          {canCustomizeColors && (
+            <div className="mb-6 bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+              <h5 className="font-bold text-light mb-2 flex items-center gap-2">
+                👁️ Color Preview
+              </h5>
+              <div className="flex gap-2 items-center">
+                <div 
+                  className="w-20 h-20 rounded-lg shadow-lg border-4 border-white"
+                  style={{ background: `linear-gradient(135deg, ${cardSettings.primaryColor}, ${cardSettings.secondaryColor})` }}
+                />
+                <div className="flex-1">
+                  <div 
+                    className="px-4 py-2 rounded font-bold text-white mb-2"
+                    style={{ backgroundColor: cardSettings.primaryColor }}
+                  >
+                    Player Name
+                  </div>
+                  <div 
+                    className="px-4 py-2 rounded font-bold text-white text-sm"
+                    style={{ backgroundColor: cardSettings.secondaryColor }}
+                  >
+                    Team Banner
+                  </div>
+                </div>
+                <div className="text-center">
+                  <div 
+                    className="text-3xl font-black mb-1"
+                    style={{ color: cardSettings.accentColor }}
+                  >
+                    25
+                  </div>
+                  <div className="text-xs text-light/60">Stats</div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Custom Statistics */}
           <div className="mb-6">
-            <h5 className="font-semibold text-light mb-3">Custom Statistics (max 6)</h5>
+            <h5 className="font-semibold text-light mb-3">📊 Custom Statistics (max 6)</h5>
             
             {!editingStats ? (
               <div>
@@ -502,6 +575,7 @@ const handleLayerImageUpload = async (e, idx) => {
             <MemberCard
               key={member.id}
               member={member}
+              team={team}
               teamStats={teamStats}
               cardSettings={cardSettings}
               badgeSettings={team.badgeSettings}

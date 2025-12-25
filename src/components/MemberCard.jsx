@@ -4,6 +4,7 @@ import SlidingStatsPanel from './SlidingStatsPanel';
 
 export default function MemberCard({ 
   member, 
+  team = {},
   teamStats = [], 
   cardSettings = {},
   badgeSettings = {},
@@ -18,6 +19,7 @@ export default function MemberCard({
 }) {
   const [imageError, setImageError] = useState(false);
   const [showStatsPanel, setShowStatsPanel] = useState(false);
+  const [showDetailed, setShowDetailed] = useState(false); // Card flip state
 
   // Default card settings
   const {
@@ -48,11 +50,9 @@ export default function MemberCard({
   const teamProfileImage = teamMemberData.profileImage;
   const useMainProfile = teamMemberData.useMainProfile !== false;
 
-console.log('🔍 customFields type check:', {
-  customFields: customFields,
-  type: typeof customFields,
-  isArray: Array.isArray(customFields)
-});
+  // Split custom fields by view mode
+  const basicFields = (customFields || []).filter(f => !f.viewMode || f.viewMode === 'basic');
+  const detailedFields = (customFields || []).filter(f => f.viewMode === 'detailed');
 
   // Determine which image to use
   const displayImage = teamProfileImage || (useMainProfile ? profileImage : null);
@@ -140,282 +140,359 @@ console.log('🔍 customFields type check:', {
 
   return (
     <div className="relative group">
-      {/* Card Container with Shine Effect */}
+      {/* Card Container - Modern Sports Card Style */}
       <div 
-        className="relative rounded-2xl shadow-2xl border-4 overflow-hidden transform hover:scale-105 transition duration-300"
-        style={{ 
-          borderColor: `${accentColor}80`,
-          background: `linear-gradient(to bottom right, #1e293b, #0f172a)`
-        }}
+        onClick={() => setShowDetailed(!showDetailed)}
+        className={`relative bg-white rounded-lg shadow-2xl overflow-hidden cursor-pointer transform hover:scale-105 transition-all duration-300 ${
+          showDetailed ? 'ring-4 ring-blue-500' : ''
+        }`}
+        style={{ aspectRatio: '2.5/3.5' }}
       >
-        {/* Background Layers */}
-        {showBackgroundLayers && backgroundLayers.length > 0 && (
-          <div className="absolute inset-0 opacity-80 overflow-hidden">
-            {backgroundLayers.map((layer, idx) => (
-              <div key={idx} className="absolute inset-0">
-                {layer.type === 'image' && layer.data && (
-                  <img 
-                    src={layer.data} 
-                    alt="" 
-                    className="w-full h-full object-cover"
-                  />
-                )}
-                {layer.type === 'badge' && layer.data && (
-                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64">
-                    <img 
-                      src={layer.data} 
-                      alt="" 
-                      className="w-full h-full object-contain opacity-80"
-                    />
-                  </div>
-                )}
-              </div>
-            ))}
+        {/* Diagonal Stripes Decoration */}
+        <div className="absolute top-0 left-0 w-24 h-24 overflow-hidden pointer-events-none">
+          <div 
+            className="absolute -top-12 -left-12 w-32 h-32 transform rotate-45"
+            style={{ background: `linear-gradient(135deg, ${primaryColor} 0%, ${primaryColor} 33%, ${secondaryColor} 33%, ${secondaryColor} 66%, ${accentColor} 66%, ${accentColor} 100%)` }}
+          />
+        </div>
+        <div className="absolute bottom-0 right-0 w-24 h-24 overflow-hidden pointer-events-none">
+          <div 
+            className="absolute -bottom-12 -right-12 w-32 h-32 transform rotate-45"
+            style={{ background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor} 33%, ${secondaryColor} 33%, ${secondaryColor} 66%, ${primaryColor} 66%, ${primaryColor} 100%)` }}
+          />
+        </div>
+
+        {/* Corner Dots Pattern */}
+        <div className="absolute top-2 right-2 flex flex-col gap-0.5 pointer-events-none z-10">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="flex gap-0.5">
+              {[...Array(3)].map((_, j) => (
+                <div 
+                  key={j} 
+                  className="w-1 h-1 rounded-full" 
+                  style={{ backgroundColor: primaryColor }}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+
+        {/* Team Logo Watermark */}
+        {jerseyBackgroundImage && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[5] p-4">
+            <img 
+              src={jerseyBackgroundImage} 
+              alt="Team logo" 
+              className="w-full h-full object-contain filter grayscale opacity-20"
+            />
           </div>
         )}
 
-        {/* Shine Effect Overlay */}
-        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-        </div>
-
-        {/* Top Banner */}
-        <div 
-          className="relative p-4 text-center"
-          style={{ 
-            background: `linear-gradient(to right, ${primaryColor}, ${secondaryColor}, ${primaryColor})` 
-          }}
-        >
-          {/* Stats Panel Button - Top Left */}
-            {statsTemplate?.enabled && (
-              <button
-                onClick={() => setShowStatsPanel(true)}
-                className="absolute top-2 left-2 w-8 h-8 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white font-bold transition"
-                title="View detailed stats"
-              >
-                →
-              </button>
-            )}
-
-          {/* Badges - Top Right */}
-          {badges.length > 0 && (
-            <div className="absolute top-2 right-2 flex gap-1">
-              {badges.slice(0, 3).map((badge, idx) => {
-                const badgeDisplay = getBadgeDisplay(badge.badge);
-                return (
-                  <div 
-                    key={idx}
-                    className="relative group/badge"
-                    title={`${badge.name} - ${badgeDisplay.name}`}
-                  >
-                    <div 
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-lg border-2 border-white/30"
-                      style={{ backgroundColor: `${badgeDisplay.color}30` }}
-                    >
-                      {badgeDisplay.icon}
-                    </div>
-                    {/* Tooltip */}
-                    <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-black/90 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/badge:opacity-100 transition-opacity pointer-events-none">
-                      {badge.name}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          
-          <div className="text-white font-bold text-lg tracking-wider">{username}</div>
-          <div className="text-white/80 text-sm">2024-2025 SEASON</div>
-        </div>
-
-        {/* Player Photo Section */}
-        <div 
-          className="relative p-6 pb-8"
-          style={{ 
-            background: `linear-gradient(to bottom, #334155, #1e293b)` 
-          }}
-        >
-          {/* Photo Section Background (Layer 3) */}
-          {(jerseyNumber || jerseyBackgroundImage) && (
-            <div className="absolute top-0 right-0 w-full h-full overflow-hidden">
-              {jerseyBackgroundImage ? (
-                <div className="absolute top-0 right-0 w-full h-full opacity-80">
-                  <img 
-                    src={jerseyBackgroundImage} 
-                    alt="" 
-                    className="w-full h-full object-cover"
-                  />
-                </div>
+        {/* FRONT VIEW */}
+        {!showDetailed ? (
+          <div className="relative h-full flex flex-col z-10">
+            {/* Large Player Photo */}
+            <div className="relative bg-gradient-to-br from-slate-100 to-slate-200 border-6 border-white m-2" style={{ height: '60%' }}>
+              {displayImage && !imageError ? (
+                <img
+                  src={displayImage}
+                  alt={username}
+                  onError={() => setImageError(true)}
+                  className="w-full h-full object-cover"
+                />
               ) : (
-                <div className="absolute top-0 right-0 text-[120px] font-black text-white/5 leading-none pr-4">
-                  {jerseyNumber}
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-300 to-slate-400">
+                  <div 
+                    className="text-9xl font-black"
+                    style={{ color: primaryColor }}
+                  >
+                    {getInitials()}
+                  </div>
+                </div>
+              )}
+              
+              {/* Jersey Number Overlay */}
+              {jerseyNumber && (
+                <div 
+                  className="absolute bottom-2 right-2 px-3 py-1 font-black text-2xl text-white shadow-lg"
+                  style={{ backgroundColor: primaryColor }}
+                >
+                  #{jerseyNumber}
+                </div>
+              )}
+
+              {/* Badges Top Right */}
+              {badges.length > 0 && (
+                <div className="absolute top-2 right-2 flex gap-1">
+                  {badges.slice(0, 2).map((badge, idx) => {
+                    const badgeDisplay = getBadgeDisplay(badge.badge);
+                    return (
+                      <div 
+                        key={idx}
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-lg border-2 border-white shadow-lg"
+                        style={{ backgroundColor: badgeDisplay.color }}
+                        title={badge.name}
+                      >
+                        {badgeDisplay.icon}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
-          )}
-          
-          {/* LAYOUT: Left (Custom Fields) + Right (Photo) */}
-          <div className="flex gap-3 items-start relative z-10">
-            {/* LEFT SIDE - Custom Fields */}
-            <div className="flex-1 space-y-1.5 text-xs max-h-40 overflow-y-auto pr-1">
-              {(customFields || [])
-                .map((field) => {
-                  const value = teamMemberData[field.key] || '-';  // ← Show '-' if empty
-                  
-                  return (
-                    <div key={field.key} className="flex items-center justify-between bg-slate-700/80 rounded px-2 py-1.5">
-                      <span className="text-slate-200 font-medium">{field.label}:</span>
-                      <span className="text-white font-bold">{value}</span>
-                    </div>
-                  );
-                })
-              }
-            </div>
 
-            {/* RIGHT SIDE - Player Photo */}
-            <div className="flex-shrink-0 relative">
-              <div className="w-32 h-32">
+            {/* Player Info Section */}
+            <div className="relative px-4 pb-4 bg-white">
+              <div className="text-center mb-2">
+                <h2 
+                  className="text-2xl md:text-3xl font-black uppercase tracking-tight"
+                  style={{ color: primaryColor }}
+                >
+                  {username}
+                </h2>
+                <p className="text-sm font-bold text-gray-600 uppercase tracking-wider">
+                  {position || 'Player'}
+                </p>
+              </div>
+
+              <div 
+                className="text-center py-2 font-bold text-lg uppercase tracking-widest text-white"
+                style={{ backgroundColor: secondaryColor }}
+              >
+                {team?.name || 'Team Name'}
+              </div>
+
+              {/* Tap to View Details Hint */}
+              <div className="text-center mt-2 text-xs text-gray-400">
+                💡 Tap card for details
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="relative h-full flex flex-col p-4 bg-white">
+            {/* BACK VIEW */}
+            
+            {/* Team Logo Watermark - Back View */}
+            {jerseyBackgroundImage && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[5] p-4">
+                <img 
+                  src={jerseyBackgroundImage} 
+                  alt="Team logo" 
+                  className="w-full h-full object-contain filter grayscale opacity-15"
+                />
+              </div>
+            )}
+            
+            {/* Top Section: Photo + Name */}
+            <div className="relative z-10 flex gap-3 items-start mb-3">
+              {/* Small Photo */}
+              <div className="w-16 h-16 flex-shrink-0 bg-gradient-to-br from-slate-100 to-slate-200 border-2 border-white shadow-lg">
                 {displayImage && !imageError ? (
                   <img
                     src={displayImage}
                     alt={username}
                     onError={() => setImageError(true)}
-                    className="w-full h-full rounded-full object-cover shadow-xl border-4"
-                    style={{ borderColor: accentColor }}
+                    className="w-full h-full object-cover"
                   />
                 ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-300 to-slate-400">
+                    <div 
+                      className="text-4xl font-black"
+                      style={{ color: primaryColor }}
+                    >
+                      {getInitials()}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Player Name & Position */}
+              <div className="flex-1">
+                <h2 
+                  className="text-lg font-black uppercase mb-0.5"
+                  style={{ color: primaryColor }}
+                >
+                  {username}
+                </h2>
+                <p className="text-xs font-bold text-gray-600 uppercase mb-1">
+                  {position || 'Player'}
+                </p>
+                {jerseyNumber && (
                   <div 
-                    className="w-full h-full rounded-full flex items-center justify-center text-5xl font-bold text-white shadow-xl border-4"
+                    className="inline-block px-1.5 py-0.5 font-black text-white text-xs"
+                    style={{ backgroundColor: primaryColor }}
+                  >
+                    #{jerseyNumber}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Team Name Banner */}
+            <div 
+              className="text-center py-1.5 text-white font-bold uppercase text-sm mb-2"
+              style={{ backgroundColor: secondaryColor }}
+            >
+              {team?.clubName || team?.name || 'Team'}
+            </div>
+
+            {/* All Fields as List */}
+            <div className="flex-1 mb-2 space-y-1 overflow-y-auto max-h-72">
+              {/* Basic Fields */}
+              {basicFields.map((field) => {
+                const value = teamMemberData[field.key] || '-';
+                return (
+                  <div 
+                    key={field.key}
+                    className="flex justify-between items-center py-1 px-2 border-l-3"
                     style={{ 
-                      background: `linear-gradient(to bottom right, ${primaryColor}, ${secondaryColor})`,
-                      borderColor: accentColor
+                      borderColor: primaryColor,
+                      backgroundColor: '#f8fafc'
                     }}
                   >
-                    {getInitials()}
+                    <span className="text-[11px] font-bold text-gray-600 uppercase">
+                      {field.label}
+                    </span>
+                    <span className="text-xs font-black" style={{ color: primaryColor }}>
+                      {value}
+                    </span>
                   </div>
-                )}
-                
-                {/* Star Badge */}
-                {badges.length > 0 && (
+                );
+              })}
+
+              {/* Detailed Fields */}
+              {detailedFields.map((field) => {
+                const value = teamMemberData[field.key];
+                if (!value) return null;
+                return (
                   <div 
-                    className="absolute -bottom-2 -right-2 rounded-full p-2 border-4 border-slate-800 shadow-lg"
-                    style={{ backgroundColor: getBadgeDisplay(badges[0].badge).color }}
+                    key={field.key}
+                    className="flex justify-between items-center py-1 px-2 border-l-3"
+                    style={{ 
+                      borderColor: primaryColor,
+                      backgroundColor: '#f8fafc'
+                    }}
                   >
-                    <span className="text-2xl">⭐</span>
+                    <span className="text-[11px] font-bold text-gray-600 uppercase">
+                      {field.label}
+                    </span>
+                    <span className="text-xs font-black" style={{ color: primaryColor }}>
+                      {value}
+                    </span>
                   </div>
-                )}
-              </div>
-            </div>
-          </div>
+                );
+              })}
 
-          {/* Position & Jersey Number - Below Photo */}
-          <div className="text-center relative z-10 mt-3">
-          {jerseyNumber && (
-            <div className="flex items-center justify-center" style={{ color: accentColor }}>
-              <span className="text-4xl font-black">#{jerseyNumber}</span>
-            </div>
-          )}
-        </div>
-        </div>
-
-        {/* Stats Section */}
-        <div className="relative bg-slate-900/50 backdrop-blur p-4 border-t-2" style={{ borderColor: `${accentColor}50` }}>
-          {/* Team-Defined Stats */}
-          {teamStats.length > 0 ? (
-            <div className={`grid ${teamStats.length <= 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-3 mb-4`}>
-              {teamStats.slice(0, 6).map((stat, idx) => (
-                <div key={idx} className="bg-slate-800/50 rounded-lg p-3 text-center border border-slate-700">
-                  <div className="text-2xl font-bold" style={{ color: accentColor }}>
-                    {formatStatValue(stats[stat.key])}
+              {/* Stats as List Items */}
+              {teamStats.map((stat) => {
+                const value = formatStatValue(stats[stat.key]);
+                return (
+                  <div 
+                    key={stat.key}
+                    className="flex justify-between items-center py-1 px-2 border-l-3"
+                    style={{ 
+                      borderColor: accentColor,
+                      backgroundColor: `${accentColor}10`
+                    }}
+                  >
+                    <span className="text-[11px] font-bold text-gray-600 uppercase">
+                      {stat.label}
+                    </span>
+                    <span className="text-xs font-black" style={{ color: accentColor }}>
+                      {value}
+                    </span>
                   </div>
-                  <div className="text-xs text-slate-400 uppercase">{stat.label}</div>
+                );
+              })}
+
+              {/* Attendance from member data */}
+              {member.stats?.attendance !== undefined && (
+                <div 
+                  className="flex justify-between items-center py-1 px-2 border-l-3"
+                  style={{ 
+                    borderColor: accentColor,
+                    backgroundColor: `${accentColor}10`
+                  }}
+                >
+                  <span className="text-[11px] font-bold text-gray-600 uppercase">
+                    Attendance
+                  </span>
+                  <span className="text-xs font-black" style={{ color: accentColor }}>
+                    {member.stats.attendance}%
+                  </span>
                 </div>
-              ))}
+              )}
+
+              {/* Badges/Behaviour */}
+              {badges.length > 0 && (
+                <div 
+                  className="flex justify-between items-center py-1 px-2 border-l-3"
+                  style={{ 
+                    borderColor: primaryColor,
+                    backgroundColor: '#f8fafc'
+                  }}
+                >
+                  <span className="text-[11px] font-bold text-gray-600 uppercase">
+                    Badges
+                  </span>
+                  <div className="flex gap-1">
+                    {badges.slice(0, 3).map((badge, idx) => {
+                      const badgeDisplay = getBadgeDisplay(badge.badge);
+                      return (
+                        <div 
+                          key={idx}
+                          className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] border border-white"
+                          style={{ backgroundColor: badgeDisplay.color }}
+                          title={badge.name}
+                        >
+                          {badgeDisplay.icon}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="text-center text-slate-500 text-sm mb-4 py-2">
-              No statistics configured
+
+
+            {/* Footer */}
+            <div className="text-center text-[10px] text-gray-400 font-medium mt-auto">
+              Powered by Nexus International
             </div>
-          )}
-
-          {/* Contact Info */}
-          <div className="space-y-2 text-sm mb-4">
-            {email && (
-              <div className="flex items-center gap-2 text-slate-300 truncate">
-                <svg className="w-4 h-4 flex-shrink-0" style={{ color: primaryColor }} fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/>
-                  <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/>
-                </svg>
-                <span className="truncate">{email}</span>
-              </div>
-            )}
-            {phone && (
-              <div className="flex items-center gap-2 text-slate-300">
-                <svg className="w-4 h-4 flex-shrink-0 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"/>
-                </svg>
-                <span>{phone}</span>
-              </div>
-            )}
           </div>
+        )}
 
-          {/* Custom Fields Display */}
-            {customFields && customFields.length > 0 && (
-              <div className="mb-4 space-y-2">
-                {customFields
-                  .filter(field => field.key !== 'position' && field.key !== 'post' && field.key !== 'handedness')
-                  .map((field) => {
-                    const value = teamMemberData[field.key];
-                    if (!value) return null;
-                    
-                    return (
-                      <div key={field.key} className="flex items-center justify-between text-sm bg-slate-800/30 rounded px-3 py-2">
-                        <span className="text-slate-400">{field.label}:</span>
-                        <span className="text-light font-medium">{value}</span>
-                      </div>
-                    );
-                  })
-                }
-              </div>
-            )}
+        {/* Action Buttons - Floating at bottom */}
+        {canEdit && onEdit && (
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(member);
+            }}
+            className="absolute bottom-2 right-2 w-10 h-10 rounded-full flex items-center justify-center text-white shadow-lg z-20 hover:scale-110 transition-transform"
+            style={{ backgroundColor: primaryColor }}
+            title="Edit Card"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </button>
+        )}
 
-          {/* Actions */}
-          <div className="flex gap-2">
-            {canEdit && onEdit && (
-              <button 
-                onClick={() => onEdit(member)}
-                className="flex-1 text-white py-2 px-3 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2 hover:opacity-90"
-                style={{ backgroundColor: primaryColor }}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-                Edit Card
-              </button>
-            )}
-            {onMessage && !canEdit && (
-              <button 
-                onClick={() => onMessage(member)}
-                className="flex-1 text-white py-2 px-3 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2 hover:opacity-90"
-                style={{ backgroundColor: primaryColor }}
-              >
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/>
-                  <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/>
-                </svg>
-                Message
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Bottom Stripe */}
-        <div 
-          className="h-2"
-          style={{ 
-            background: `linear-gradient(to right, ${accentColor}, ${accentColor}cc, ${accentColor})` 
-          }}
-        ></div>
+        {/* Stats Panel Button */}
+        {statsTemplate?.enabled && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowStatsPanel(true);
+            }}
+            className="absolute bottom-2 left-2 w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center z-20 hover:scale-110 transition-transform"
+            style={{ color: primaryColor }}
+            title="View Stats"
+          >
+            <span className="text-xl font-bold">→</span>
+          </button>
+        )}
       </div>
 
       {/* Sliding Stats Panel */}

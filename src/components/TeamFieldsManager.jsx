@@ -17,6 +17,7 @@ export default function TeamFieldsManager({
     label: '',
     type: 'text',
     required: false,
+    viewMode: 'basic', // 'basic' or 'detailed'
     options: []
   });
   const [editingField, setEditingField] = useState(null);
@@ -111,6 +112,7 @@ export default function TeamFieldsManager({
       label: '',
       type: 'text',
       required: false,
+      viewMode: 'basic',
       options: []
     });
   };
@@ -335,6 +337,16 @@ const handleSave = async () => {
                                   Required
                                 </span>
                               )}
+                              {field.viewMode === 'detailed' && (
+                                <span className="px-2 py-0.5 bg-purple-500/20 text-purple-300 text-xs rounded">
+                                  📄 Detailed View Only
+                                </span>
+                              )}
+                              {(!field.viewMode || field.viewMode === 'basic') && (
+                                <span className="px-2 py-0.5 bg-green-500/20 text-green-300 text-xs rounded">
+                                  👁️ Basic View
+                                </span>
+                              )}
                             </div>
                             <div className="text-sm text-light/60">
                               Key: <code className="bg-white/10 px-2 py-0.5 rounded">{field.key}</code>
@@ -448,6 +460,43 @@ const handleSave = async () => {
                       </button>
                     </div>
                   )}
+
+                  <div>
+                    <label className="block text-sm font-medium text-light/80 mb-2">
+                      Card View Display
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setNewField({...newField, viewMode: 'basic'})}
+                        className={`p-3 rounded-lg border-2 transition ${
+                          newField.viewMode === 'basic'
+                            ? 'border-green-500 bg-green-500/20 text-green-300'
+                            : 'bg-white/5 border-white/20 text-light/60 hover:border-green-500/50'
+                        }`}
+                      >
+                        <div className="text-2xl mb-1">👁️</div>
+                        <div className="text-xs font-semibold">Basic View</div>
+                        <div className="text-[10px] mt-1">Always visible</div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewField({...newField, viewMode: 'detailed'})}
+                        className={`p-3 rounded-lg border-2 transition ${
+                          newField.viewMode === 'detailed'
+                            ? 'border-purple-500 bg-purple-500/20 text-purple-300'
+                            : 'bg-white/5 border-white/20 text-light/60 hover:border-purple-500/50'
+                        }`}
+                      >
+                        <div className="text-2xl mb-1">📄</div>
+                        <div className="text-xs font-semibold">Detailed View</div>
+                        <div className="text-[10px] mt-1">Click to see</div>
+                      </button>
+                    </div>
+                    <p className="text-xs text-light/50 mt-2">
+                      <strong>Basic:</strong> Shown on front of card • <strong>Detailed:</strong> Shown when card is clicked/flipped
+                    </p>
+                  </div>
 
                   <label className="flex items-center gap-2 text-light">
                     <input
