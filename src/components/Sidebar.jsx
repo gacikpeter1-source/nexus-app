@@ -116,32 +116,50 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Mobile: Thin line with bubble button (only on small screens) */}
-      <div className="md:hidden fixed left-0 top-0 bottom-0 z-40">
-        {/* Thin line */}
-        <div className="w-1 h-full bg-gradient-to-b from-primary via-accent to-primary"></div>
-        
-        {/* Bubble button */}
-        <button
-          onClick={() => setIsMobileOpen(true)}
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-8 h-8 -ml-0.5 bg-gradient-to-br from-primary to-accent rounded-full shadow-lg flex items-center justify-center text-white text-xs transform hover:scale-110 transition-transform"
-        >
-          ☰
-        </button>
+      {/* Mobile ONLY: Thin line with circular button (< 768px) */}
+      <div className="md:hidden fixed left-0 top-0 bottom-0 z-[60] pointer-events-none">
+        {/* Thin vertical line (1-2mm wide) */}
+        <div className="w-[6px] h-full bg-gradient-to-b from-primary/70 via-accent/30 to-primary/70"></div>
       </div>
+      
+      {/* Circular bubble button - small, gentle, ~4mm diameter */}
+      <button
+        onClick={() => setIsMobileOpen(true)}
+        className="md:hidden fixed w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full shadow-[0_8px_24px_rgba(255,51,102,0.7)] flex items-center justify-center text-white active:scale-90 transition-transform duration-200 z-[65]"
+        aria-label="Open menu"
+        style={{ 
+          top: '50%',
+          left: '1px',
+          transform: 'translateY(-50%)'
+        }}
+      >
+        <svg 
+          className="w-4 h-4" 
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
+          strokeWidth="2.5"
+        >
+          <path 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            d="M4 6h16M4 12h16M4 18h16" 
+          />
+        </svg>
+      </button>
 
-      {/* Mobile: Overlay (only on small screens) */}
+      {/* Mobile ONLY: Semi-transparent overlay when menu is open */}
       {isMobileOpen && (
         <div
-          className="md:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-40 animate-fade-in"
+          className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[45] animate-fade-in"
           onClick={() => setIsMobileOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar - Slides out on mobile, always visible on desktop */}
       <aside
         className={`
-          fixed top-0 bottom-0 z-50 bg-dark border-r border-white/10
+          fixed top-0 bottom-0 z-[50] bg-dark border-r border-white/10
           transition-all duration-300 ease-in-out
           w-64
           ${isMobileOpen ? 'left-0' : '-left-64'}
