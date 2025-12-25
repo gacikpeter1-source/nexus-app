@@ -108,9 +108,9 @@ export default function EventPage() {
     async function handleRsvp(status, message = null) {
     if (!user || !event) return;
 
-    // ✅ FIX: Check if user can change status (blocks past events for regular users)
+    // ✅ FIX: Check if user can change status (blocks past events, manages lock period)
     const isTrainer = isUserAdmin || (club && (club.trainers || []).includes(user?.id));
-    const statusCheck = canChangeEventStatus(event, user, isTrainer);
+    const statusCheck = canChangeEventStatus(event, user, isTrainer, status);
     
     if (!statusCheck.canChange) {
       showToast(statusCheck.reason || 'Cannot change status for this event', 'error');
@@ -555,9 +555,16 @@ export default function EventPage() {
   const canEdit = canManageEvent();
   const allMembers = getAllMembers();
 
-  // Check lock status
+  // Check lock status and individual action permissions
   const eventIsLocked = isEventLocked(event);
   const isTrainerOrAdmin = isUserAdmin || (club && (club.trainers || []).includes(user?.id));
+  
+  // ✅ Check each action individually for enhanced lock logic
+  const canAttend = canChangeEventStatus(event, user, isTrainerOrAdmin, 'attending').canChange;
+  const canDecline = canChangeEventStatus(event, user, isTrainerOrAdmin, 'declined').canChange;
+  const canMaybe = canChangeEventStatus(event, user, isTrainerOrAdmin, 'maybe').canChange;
+  
+  // General status check for display
   const statusChangeCheck = canChangeEventStatus(event, user, isTrainerOrAdmin);
   const canChangeStatus = statusChangeCheck.canChange;
 
@@ -604,9 +611,9 @@ export default function EventPage() {
               userResponse?.status === 'attending' 
                 ? 'bg-green-600 text-white ring-2 ring-green-400' 
                 : 'bg-green-500 text-white hover:bg-green-600'
-            } ${!canChangeStatus && 'opacity-50 cursor-not-allowed'}`}
-            disabled={updatingRsvp || !canChangeStatus}
-            title={!canChangeStatus ? statusChangeCheck.reason : ''}
+            } ${!canAttend && 'opacity-50 cursor-not-allowed'}`}
+            disabled={updatingRsvp || !canAttend}
+            title={!canAttend ? canChangeEventStatus(event, user, isTrainerOrAdmin, 'attending').reason : ''}
           >
             {userResponse?.status === 'attending' ? '✓ Attending' : 'Attend'}
           </button>
@@ -619,15 +626,15 @@ export default function EventPage() {
                 userResponse?.status === 'declined' 
                   ? 'bg-red-600 text-white ring-2 ring-red-400' 
                   : 'bg-red-500 text-white hover:bg-red-600'
-              } ${!canChangeStatus && 'opacity-50 cursor-not-allowed'}`}
-              disabled={updatingRsvp || !canChangeStatus}
-              title={!canChangeStatus ? statusChangeCheck.reason : ''}
+              } ${!canDecline && 'opacity-50 cursor-not-allowed'}`}
+              disabled={updatingRsvp || !canDecline}
+              title={!canDecline ? canChangeEventStatus(event, user, isTrainerOrAdmin, 'declined').reason : ''}
             >
               {userResponse?.status === 'declined' ? '✓ Declined' : 'Decline ▼'}
             </button>
 
             {/* Dropdown Menu - Only show if status can be changed */}
-            {showDeclineMenu && canChangeStatus && (
+            {showDeclineMenu && canDecline && (
               <div className="absolute top-full left-0 mt-1 bg-mid-dark border border-white/20 rounded-lg shadow-2xl overflow-hidden z-50 min-w-full">
                 <button
                   onClick={() => {
@@ -659,15 +666,15 @@ export default function EventPage() {
                 userResponse?.status === 'maybe' 
                   ? 'bg-yellow-600 text-white ring-2 ring-yellow-400' 
                   : 'bg-yellow-500 text-white hover:bg-yellow-600'
-              } ${!canChangeStatus && 'opacity-50 cursor-not-allowed'}`}
-              disabled={updatingRsvp || !canChangeStatus}
-              title={!canChangeStatus ? statusChangeCheck.reason : ''}
+              } ${!canMaybe && 'opacity-50 cursor-not-allowed'}`}
+              disabled={updatingRsvp || !canMaybe}
+              title={!canMaybe ? canChangeEventStatus(event, user, isTrainerOrAdmin, 'maybe').reason : ''}
             >
               {userResponse?.status === 'maybe' ? '✓ Maybe' : 'Maybe ▼'}
             </button>
 
             {/* Dropdown Menu - Only show if status can be changed */}
-            {showMaybeMenu && canChangeStatus && (
+            {showMaybeMenu && canMaybe && (
               <div className="absolute top-full left-0 mt-1 bg-mid-dark border border-white/20 rounded-lg shadow-2xl overflow-hidden z-50 min-w-full">
                 <button
                   onClick={() => {

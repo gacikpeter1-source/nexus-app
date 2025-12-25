@@ -375,3 +375,5 @@ Lock event before start:
 
 **Ready to Test!** Refresh your browser and create an event with lock period enabled! 🎊
 
+
+

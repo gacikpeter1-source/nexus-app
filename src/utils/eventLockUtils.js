@@ -101,19 +101,41 @@ export const getTimeUntilLock = (event) => {
 };
 
 /**
- * Check if user can change event status (considering lock period and role)
+ * Check if event has available spots
+ * @param {Object} event - Event object
+ * @returns {boolean} - True if there are free spots
+ */
+export const hasAvailableSpots = (event) => {
+  if (!event || !event.participantLimit) {
+    return true; // No limit means always available
+  }
+
+  const responses = event.responses || {};
+  const attendingCount = Object.values(responses).filter(r => r.status === 'attending').length;
+  
+  return attendingCount < event.participantLimit;
+};
+
+/**
+ * Check if user can change event status (considering lock period, available spots, and role)
  * @param {Object} event - Event object
  * @param {Object} user - Current user object
  * @param {boolean} isTrainer - Whether user is trainer/admin
+ * @param {string} newStatus - The new status user wants to change to (optional)
  * @returns {Object} - { canChange: boolean, reason: string }
  */
-export const canChangeEventStatus = (event, user, isTrainer = false) => {
+export const canChangeEventStatus = (event, user, isTrainer = false, newStatus = null) => {
   // Trainers can always manage events (including past events)
   if (isTrainer) {
     return { canChange: true, reason: '' };
   }
 
-  // ✅ FIX: Check if event is in the past (regular users cannot change status)
+  // Event creator can always manage
+  if (event.createdBy === user?.id) {
+    return { canChange: true, reason: '' };
+  }
+
+  // ✅ Check if event is in the past (regular users cannot change status)
   if (event && event.date && event.time) {
     try {
       const eventDateTime = new Date(`${event.date}T${event.time}`);
@@ -130,17 +152,47 @@ export const canChangeEventStatus = (event, user, isTrainer = false) => {
     }
   }
 
-  // Check if event is locked
+  // ✅ ENHANCED LOCK LOGIC: Check if event is locked
   if (isEventLocked(event)) {
+    const currentStatus = event.responses?.[user?.id]?.status;
+    
+    // ✅ Enhancement: If user wants to ATTEND and there are free spots, allow it
+    if (newStatus === 'attending' && hasAvailableSpots(event)) {
+      return { 
+        canChange: true, 
+        reason: '' 
+      };
+    }
+    
+    // ✅ Block cancellations: If user is currently attending and wants to change, block it
+    if (currentStatus === 'attending' && newStatus && newStatus !== 'attending') {
+      return { 
+        canChange: false, 
+        reason: 'Event is locked. You cannot cancel your attendance during the lock period.' 
+      };
+    }
+    
+    // ✅ Block if trying to attend but event is full
+    if (newStatus === 'attending' && !hasAvailableSpots(event)) {
+      return { 
+        canChange: false, 
+        reason: 'Event is locked and all spots are filled. You cannot join at this time.' 
+      };
+    }
+    
+    // ✅ Block other status changes (maybe, declined, etc.) during lock
+    if (newStatus && newStatus !== 'attending') {
+      return { 
+        canChange: false, 
+        reason: 'Event is locked. Status changes are not allowed during the lock period.' 
+      };
+    }
+    
+    // Default block if no specific status provided
     return { 
       canChange: false, 
       reason: 'Event is locked. Status changes are not allowed.' 
     };
-  }
-
-  // Event creator can always manage
-  if (event.createdBy === user?.id) {
-    return { canChange: true, reason: '' };
   }
 
   return { canChange: true, reason: '' };
