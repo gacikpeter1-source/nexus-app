@@ -192,7 +192,7 @@ export default function MemberCard({
         {!showDetailed ? (
           <div className="relative h-full flex flex-col z-10">
             {/* Large Player Photo */}
-            <div className="relative bg-gradient-to-br from-slate-100 to-slate-200 border-6 border-white m-2" style={{ height: '60%' }}>
+            <div className="relative bg-gradient-to-br from-slate-100 to-slate-200 border-6 border-white m-2" style={{ height: '54%' }}>
               {displayImage && !imageError ? (
                 <img
                   src={displayImage}

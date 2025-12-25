@@ -1,11 +1,10 @@
 // src/pages/Teams.jsx
 import { useMemo, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getTeams } from '../api/localApi';
 import { Link } from 'react-router-dom';
 import { useAuth, ROLES } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
-import { getUserPendingOrders, createOrderResponse } from '../firebase/firestore';
+import { getUserClubs, getUserPendingOrders, createOrderResponse } from '../firebase/firestore';
 import { useToast } from '../contexts/ToastContext';
 
 /**
@@ -30,65 +29,38 @@ export default function Teams() {
   const [orderResponseForm, setOrderResponseForm] = useState({});
   const [respondingToOrder, setRespondingToOrder] = useState(false);
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['teams'],
-    queryFn: getTeams
+  // Load clubs from Firestore (teams are nested inside clubs)
+  const { data: clubs, isLoading, error } = useQuery({
+    queryKey: ['userClubs', user?.id],
+    queryFn: () => getUserClubs(user?.id),
+    enabled: !!user?.id
   });
 
-  // normalize returned shape: data could be object map or array
-  const staticTeamsArr = useMemo(() => {
-    const d = Array.isArray(data) ? data : (data ? Object.values(data) : []);
-    return (d || []).map(t => ({
-      id: t.id || t._id || t.teamId || Math.random().toString(36).slice(2,8),
-      name: t.name || t.title || 'Unnamed Team',
-      sport: t.sport || t.category || t.type || '',
-      trainers: Array.isArray(t.trainers) ? t.trainers : (t.trainer ? [t.trainer] : []),
-      assistants: Array.isArray(t.assistants) ? t.assistants : (t.assistant ? [t.assistant] : []),
-      members: Array.isArray(t.members) ? t.members : (t.member ? [t.member] : []),
-      clubId: t.clubId || null,
-      clubName: t.clubName || null,
-    }));
-  }, [data]);
-
-  // load teams nested under clubs in localStorage
-  const localClubTeams = useMemo(() => {
-    try {
-      const clubs = JSON.parse(localStorage.getItem('clubs') || '[]');
-      if (!Array.isArray(clubs)) return [];
-      const teams = [];
-      for (const c of clubs) {
-        if (!Array.isArray(c.teams)) continue;
-        for (const t of c.teams) {
-          teams.push({
-            id: t.id || t._id || Math.random().toString(36).slice(2,8),
-            name: t.name || t.title || 'Unnamed Team',
-            sport: t.sport || t.category || t.type || '',
-            trainers: Array.isArray(t.trainers) ? t.trainers : (t.trainer ? [t.trainer] : []),
-            assistants: Array.isArray(t.assistants) ? t.assistants : (t.assistant ? [t.assistant] : []),
-            members: Array.isArray(t.members) ? t.members : (t.member ? [t.member] : []),
-            clubId: c.id || null,
-            clubName: c.name || null
-          });
-        }
-      }
-      return teams;
-    } catch (e) {
-      console.warn('Failed to read clubs from localStorage', e);
-      return [];
-    }
-  }, []);
-
-  // merge both sources, dedupe by id
+  // Extract all teams from clubs
   const mergedTeams = useMemo(() => {
-    const map = new Map();
-    for (const t of staticTeamsArr) {
-      map.set(t.id, t);
+    if (!clubs || !Array.isArray(clubs)) return [];
+    
+    const teams = [];
+    for (const club of clubs) {
+      if (!Array.isArray(club.teams)) continue;
+      
+      for (const t of club.teams) {
+        teams.push({
+          id: t.id || t._id || Math.random().toString(36).slice(2,8),
+          name: t.name || t.title || 'Unnamed Team',
+          sport: t.sport || t.category || t.type || '',
+          trainers: Array.isArray(t.trainers) ? t.trainers : (t.trainer ? [t.trainer] : []),
+          assistants: Array.isArray(t.assistants) ? t.assistants : (t.assistant ? [t.assistant] : []),
+          members: Array.isArray(t.members) ? t.members : (t.member ? [t.member] : []),
+          clubId: club.id || null,
+          clubName: club.name || null
+        });
+      }
     }
-    for (const t of localClubTeams) {
-      map.set(t.id, t);
-    }
-    return Array.from(map.values());
-  }, [staticTeamsArr, localClubTeams]);
+    
+    console.log('📦 Extracted teams from Firestore clubs:', teams);
+    return teams;
+  }, [clubs]);
 
   // Filter teams by user access
   const userTeams = useMemo(() => {
@@ -96,12 +68,32 @@ export default function Teams() {
     
     const isAdmin = user.role === ROLES.ADMIN || user.isSuperAdmin;
     
+    console.log('🔍 Teams Page Debug:', {
+      userId: user.id,
+      userRole: user.role,
+      isAdmin,
+      totalMergedTeams: mergedTeams.length,
+      mergedTeamsPreview: mergedTeams.map(t => ({
+        id: t.id,
+        name: t.name,
+        trainers: t.trainers,
+        assistants: t.assistants,
+        members: t.members
+      }))
+    });
+    
     return mergedTeams.filter(t => {
       if (isAdmin) return true;
       const trainers = Array.isArray(t.trainers) ? t.trainers : [];
       const assistants = Array.isArray(t.assistants) ? t.assistants : [];
       const members = Array.isArray(t.members) ? t.members : [];
-      return trainers.includes(user.id) || assistants.includes(user.id) || members.includes(user.id);
+      const hasAccess = trainers.includes(user.id) || assistants.includes(user.id) || members.includes(user.id);
+      
+      if (!hasAccess) {
+        console.log(`❌ No access to team "${t.name}" - User ${user.id} not in trainers/assistants/members`);
+      }
+      
+      return hasAccess;
     });
   }, [mergedTeams, user]);
 
@@ -251,78 +243,66 @@ export default function Teams() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <div className="mb-8 animate-fade-in">
-        <h1 className="font-display text-3xl md:text-5xl lg:text-7xl text-light mb-2 tracking-wider">
-          MY <span className="text-primary">TEAMS</span>
-        </h1>
-        <p className="text-light/60 text-lg">
-          {filteredTeams.length} {filteredTeams.length === 1 ? 'team' : 'teams'}
-        </p>
+      <div className="mb-6 animate-fade-in">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="font-display text-2xl md:text-4xl text-light mb-1">
+              MY <span className="text-primary">TEAMS</span>
+            </h1>
+            <p className="text-light/60 text-sm">
+              {filteredTeams.length} {filteredTeams.length === 1 ? 'team' : 'teams'}
+            </p>
+          </div>
+        </div>
       </div>
 
-            {/* Pending Orders Section */}
+            {/* Pending Orders Section - Minimal */}
       {pendingOrders.length > 0 && (
-        <div className="mb-8 animate-fade-in" style={{ animationDelay: '0.05s' }}>
-          <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-6 mb-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="text-2xl md:text-3xl">📋</div>
-              <div>
-                <h2 className="font-title text-2xl text-light">Pending Orders</h2>
-                <p className="text-sm text-light/60">
-                  You have {pendingOrders.length} order{pendingOrders.length !== 1 ? 's' : ''} waiting for response
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {pendingOrders.map(order => (
-                <div
-                  key={order.id}
-                  className="bg-mid-dark border border-white/10 rounded-xl p-6 hover:border-orange-500/50 transition-all"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <h3 className="font-title text-lg text-light">{order.title}</h3>
-                    <span className="px-2 py-1 text-xs bg-orange-500/20 text-orange-300 rounded-full whitespace-nowrap">
-                      Action Required
+        <div className="mb-4 animate-fade-in" style={{ animationDelay: '0.05s' }}>
+          <div className="space-y-1">
+            {pendingOrders.map(order => (
+              <button
+                key={order.id}
+                onClick={() => {
+                  setSelectedOrder(order);
+                  setShowOrderResponseModal(true);
+                  setOrderResponseForm({});
+                }}
+                className="w-full bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 hover:border-orange-500/50 rounded-lg px-3 py-2 transition-all text-left group"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className="text-sm">📋</span>
+                    <span className="text-xs font-medium text-orange-300 uppercase tracking-wide shrink-0">
+                      Pending Order
                     </span>
-                  </div>
-                  
-                  {order.description && (
-                    <p className="text-sm text-light/60 mb-3 line-clamp-2">{order.description}</p>
-                  )}
-                  
-                  <div className="flex flex-wrap gap-2 mb-4 text-xs text-light/50">
-                    <span>📋 {order.fields.length} fields</span>
+                    <span className="text-xs text-light font-semibold truncate">
+                      {order.title}
+                    </span>
                     {order.deadline && (
-                      <span>⏰ {new Date(order.deadline).toLocaleDateString()}</span>
+                      <span className="hidden sm:inline text-xs text-light/40 shrink-0">
+                        • Due {new Date(order.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
                     )}
                   </div>
-
-                  <button
-                    onClick={() => {
-                      setSelectedOrder(order);
-                      setShowOrderResponseModal(true);
-                      setOrderResponseForm({});
-                    }}
-                    className="w-full px-4 py-2 text-sm bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
-                  >
-                    Respond Now →
-                  </button>
+                  <span className="text-primary opacity-0 group-hover:opacity-100 transition-opacity text-xs shrink-0">
+                    Click to respond →
+                  </span>
                 </div>
-              ))}
-            </div>
+              </button>
+            ))}
           </div>
         </div>
       )}
 
       {/* Filters */}
-      <div className="mb-6 space-y-4 animate-fade-in" style={{ animationDelay: '0.1s' }}>
+      <div className="mb-4 space-y-3 animate-fade-in" style={{ animationDelay: '0.1s' }}>
         {/* Filter Type Selection */}
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2">
           <select
             value={filterType}
             onChange={(e) => { setFilterType(e.target.value); setFilterValue(''); }}
-            className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+            className="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-sm text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
           >
             <option value="all" className="bg-mid-dark">{t('common.all')}</option>
             <option value="club" className="bg-mid-dark">Filter by Club</option>
@@ -337,7 +317,7 @@ export default function Teams() {
             <select
               value={filterValue}
               onChange={(e) => setFilterValue(e.target.value)}
-              className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+              className="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-sm text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
             >
               <option value="" className="bg-mid-dark">
                 {filterType === 'club' ? 'Select Club' : 
@@ -371,7 +351,7 @@ export default function Teams() {
             placeholder="Search teams..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1 min-w-[200px] bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+            className="flex-1 min-w-[200px] bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-sm text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
           />
         </div>
 
@@ -411,20 +391,38 @@ export default function Teams() {
             </h3>
             <p className="text-light/50 text-sm mb-4">
               {userTeams.length === 0 
-                ? 'Join a club or request to join a team to see it here.'
+                ? user?.role === 'trainer' || user?.role === 'assistant'
+                  ? 'Create a team in Club Management or be added to an existing team by a club owner.'
+                  : 'Join a club and create/join a team to see it here.'
                 : 'Try adjusting your filters or search query.'}
             </p>
+            {mergedTeams.length > 0 && userTeams.length === 0 && (
+              <div className="mt-4 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-left">
+                <p className="text-xs text-yellow-200/80 mb-2">
+                  <strong>🔍 Debug Info:</strong>
+                </p>
+                <p className="text-xs text-yellow-200/60">
+                  • Total teams in system: {mergedTeams.length}<br/>
+                  • Your user ID: {user?.id}<br/>
+                  • Your role: {user?.role}<br/>
+                  • Teams you can access: 0<br/>
+                  <br/>
+                  <strong>Why you can't see teams:</strong><br/>
+                  You are not added to any team's trainers, assistants, or members list. Check browser console for details.
+                </p>
+              </div>
+            )}
             {(filterType !== 'all' || searchQuery) && (
               <button
                 onClick={() => { setFilterType('all'); setFilterValue(''); setSearchQuery(''); }}
-                className="btn-secondary"
+                className="btn-secondary mt-4"
               >
                 Clear Filters
               </button>
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4 lg:grid-cols-3">
+          <div className="space-y-2">
             {filteredTeams.map((team) => {
               const totalMembers = (team.trainers || []).length + 
                                  (team.assistants || []).length + 
@@ -433,60 +431,56 @@ export default function Teams() {
               return (
                 <Link
                   key={team.id}
-                  to={`/teams/${team.id}`}
-                  className="group relative cursor-pointer bg-white/5 backdrop-blur-sm border border-white/10 p-6 rounded-xl hover:bg-white/10 hover:border-primary/50 transition-all duration-300 card-hover overflow-hidden"
+                  to={`/team/${team.clubId}/${team.id}`}
+                  className="group flex items-center gap-3 bg-white/5 backdrop-blur-sm border border-white/10 p-3 rounded-lg hover:bg-white/10 hover:border-primary/50 transition-all"
                 >
-                  {/* Shine effect on hover */}
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+                  {/* Team Icon */}
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-accent to-primary flex items-center justify-center text-xl shrink-0">
+                    {team.sport === 'Football' ? '⚽' :
+                     team.sport === 'Basketball' ? '🏀' :
+                     team.sport === 'Volleyball' ? '🏐' :
+                     team.sport === 'Swimming' ? '🏊' :
+                     '🏆'}
                   </div>
 
-                  <div className="relative z-10">
-                    {/* Team Icon */}
-                    <div className="w-12 h-12 md:w-16 md:h-16 rounded-xl bg-gradient-to-br from-accent to-primary flex items-center justify-center text-2xl md:text-3xl mb-4">
-                      {team.sport === 'Football' ? '⚽' :
-                       team.sport === 'Basketball' ? '🏀' :
-                       team.sport === 'Volleyball' ? '🏐' :
-                       team.sport === 'Swimming' ? '🏊' :
-                       '🏆'}
+                  {/* Team Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <h3 className="font-semibold text-light group-hover:text-primary transition-colors truncate">
+                        {team.name}
+                      </h3>
+                      {team.sport && (
+                        <span className="text-xs text-light/50">• {team.sport}</span>
+                      )}
                     </div>
-
-                    <h3 className="font-title text-2xl text-light group-hover:text-primary transition-colors mb-1">
-                      {team.name}
-                    </h3>
-                    
-                    {team.sport && (
-                      <p className="text-sm text-light/60 mb-2">{team.sport}</p>
-                    )}
-
                     {team.clubName && (
-                      <p className="text-xs text-light/40 mb-4">{team.clubName}</p>
+                      <p className="text-xs text-light/40 truncate">{team.clubName}</p>
                     )}
+                  </div>
 
-                    {/* Stats */}
-                    <div className="flex gap-6 mt-4">
-                      <div>
-                        <div className="text-2xl font-bold text-primary">
-                          {(team.trainers || []).length}
-                        </div>
-                        <div className="text-xs text-light/50 uppercase tracking-wider">
-                          {t('team.trainers')}
-                        </div>
+                  {/* Stats */}
+                  <div className="flex items-center gap-4 shrink-0">
+                    <div className="text-center">
+                      <div className="text-sm font-bold text-primary">
+                        {(team.trainers || []).length}
                       </div>
-                      <div>
-                        <div className="text-2xl font-bold text-accent">
-                          {totalMembers}
-                        </div>
-                        <div className="text-xs text-light/50 uppercase tracking-wider">
-                          {t('team.members')}
-                        </div>
+                      <div className="text-xs text-light/50">
+                        {t('team.trainers')}
                       </div>
                     </div>
-
-                    {/* Arrow indicator */}
-                    <div className="absolute bottom-6 right-6 text-primary opacity-0 group-hover:opacity-100 transform translate-x-2 group-hover:translate-x-0 transition-all">
-                      →
+                    <div className="text-center">
+                      <div className="text-sm font-bold text-accent">
+                        {totalMembers}
+                      </div>
+                      <div className="text-xs text-light/50">
+                        {t('team.members')}
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Arrow indicator */}
+                  <div className="text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                    →
                   </div>
                 </Link>
               );
@@ -496,28 +490,61 @@ export default function Teams() {
       </section>
             {/* Order Response Modal */}
       {showOrderResponseModal && selectedOrder && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="font-title text-2xl text-light">{selectedOrder.title}</h3>
+        <div 
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={() => {
+            if (!respondingToOrder) {
+              setShowOrderResponseModal(false);
+              setSelectedOrder(null);
+              setOrderResponseForm({});
+            }
+          }}
+        >
+          <div 
+            className="bg-mid-dark border border-orange-500/30 rounded-xl shadow-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between mb-4 pb-4 border-b border-white/10">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-lg">📋</span>
+                  <span className="text-xs font-semibold text-orange-300 uppercase tracking-wide">
+                    Pending Order
+                  </span>
+                </div>
+                <h3 className="font-title text-xl text-light">{selectedOrder.title}</h3>
+              </div>
               <button
                 onClick={() => {
                   setShowOrderResponseModal(false);
                   setSelectedOrder(null);
                   setOrderResponseForm({});
                 }}
-                className="text-light/60 hover:text-light transition-colors"
+                className="text-light/60 hover:text-light transition-colors p-1"
+                disabled={respondingToOrder}
               >
-                ✕
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
 
+            {/* Order Info */}
+            <div className="flex items-center gap-3 mb-4 text-xs text-light/60">
+              <span>📋 {selectedOrder.fields.length} field{selectedOrder.fields.length !== 1 ? 's' : ''}</span>
+              {selectedOrder.deadline && (
+                <span>⏰ Due {new Date(selectedOrder.deadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+              )}
+            </div>
+
             {selectedOrder.description && (
-              <p className="text-sm text-light/70 mb-6 pb-6 border-b border-white/10">
-                {selectedOrder.description}
-              </p>
+              <div className="bg-white/5 border border-white/10 rounded-lg p-3 mb-6">
+                <p className="text-sm text-light/80">{selectedOrder.description}</p>
+              </div>
             )}
 
+            {/* Form Fields */}
             <div className="space-y-4 mb-6">
               {selectedOrder.fields.map(field => (
                 <div key={field.id}>
@@ -536,6 +563,7 @@ export default function Teams() {
                         [field.id]: e.target.value 
                       }))}
                       required={field.required}
+                      disabled={respondingToOrder}
                     />
                   )}
 
@@ -549,6 +577,7 @@ export default function Teams() {
                         [field.id]: e.target.value 
                       }))}
                       required={field.required}
+                      disabled={respondingToOrder}
                     />
                   )}
 
@@ -561,6 +590,7 @@ export default function Teams() {
                         [field.id]: e.target.value 
                       }))}
                       required={field.required}
+                      disabled={respondingToOrder}
                     >
                       <option value="" className="bg-mid-dark">Select...</option>
                       {field.options?.map((opt, idx) => (
@@ -581,26 +611,39 @@ export default function Teams() {
                         [field.id]: e.target.value 
                       }))}
                       required={field.required}
+                      disabled={respondingToOrder}
                     />
                   )}
                 </div>
               ))}
             </div>
 
-            <div className="flex gap-3">
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-white/10">
               <button
                 onClick={() => handleSubmitOrderResponse('accepted')}
-                className="flex-1 px-3 py-2 md:px-4 md:py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm md:text-base font-medium transition-all disabled:opacity-50"
+                className="flex-1 px-4 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={respondingToOrder}
               >
                 {respondingToOrder ? 'Submitting...' : '✓ Accept & Submit'}
               </button>
               <button
                 onClick={() => handleSubmitOrderResponse('declined')}
-                className="px-3 py-2 md:px-4 md:py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm md:text-base font-medium transition-all disabled:opacity-50"
+                className="px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={respondingToOrder}
               >
                 ✗ Decline
+              </button>
+              <button
+                onClick={() => {
+                  setShowOrderResponseModal(false);
+                  setSelectedOrder(null);
+                  setOrderResponseForm({});
+                }}
+                className="px-4 py-3 bg-white/10 hover:bg-white/15 text-light rounded-lg font-medium transition-all disabled:opacity-50"
+                disabled={respondingToOrder}
+              >
+                Close
               </button>
             </div>
           </div>

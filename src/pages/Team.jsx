@@ -637,12 +637,20 @@ const handleCreateTeamChat = async () => {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {upcomingEvents.map((event, idx) => (
-                    <div
-                      key={event.id || idx}
-                      onClick={() => navigate(`/event/${event.id}`)}
-                      className="bg-white/5 border border-white/10 rounded-lg p-4 hover:bg-white/10 hover:border-primary/50 transition-all cursor-pointer group"
-                    >
+                  {upcomingEvents.map((event, idx) => {
+                    const userResponse = event.responses?.[user?.id];
+                    const isAttending = userResponse?.status === 'attending';
+                    
+                    return (
+                      <div
+                        key={event.id || idx}
+                        onClick={() => navigate(`/event/${event.id}`)}
+                        className={`bg-white/5 border rounded-lg p-4 hover:bg-white/10 transition-all cursor-pointer group ${
+                          isAttending 
+                            ? 'border-green-500/50 bg-green-500/5 shadow-[0_0_10px_rgba(34,197,94,0.3)] hover:border-green-500/70' 
+                            : 'border-white/10 hover:border-primary/50'
+                        }`}
+                      >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
@@ -656,12 +664,19 @@ const handleCreateTeamChat = async () => {
                               {event.title}
                             </h3>
                           </div>
-                          <p className="text-sm text-light/60 capitalize">{event.type || 'Event'}</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm text-light/60 capitalize">{event.type || 'Event'}</p>
+                            {isAttending && (
+                              <span className="px-2 py-0.5 bg-green-500/20 text-green-300 rounded text-xs font-medium">
+                                ✓ You are registered
+                              </span>
+                            )}
+                          </div>
                           {event.location && (
                             <p className="text-xs text-light/50 mt-1">📍 {event.location}</p>
                           )}
                         </div>
-                        <div className="text-right">
+                        <div className="text-right space-y-1">
                           <div className="text-sm text-light/80 font-medium">
                             {new Date(event.date).toLocaleDateString('en-US', { 
                               month: 'short', 
@@ -671,10 +686,29 @@ const handleCreateTeamChat = async () => {
                           {event.time && (
                             <div className="text-xs text-light/60">{event.time}</div>
                           )}
+                          {/* Attendance Count */}
+                          {(() => {
+                            const attendingCount = event.responses 
+                              ? Object.values(event.responses).filter(r => r.status === 'attending').length 
+                              : 0;
+                            const totalLimit = event.participantLimit || '∞';
+                            const isFull = event.participantLimit && attendingCount >= event.participantLimit;
+                            
+                            return (
+                              <div className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
+                                isFull 
+                                  ? 'bg-red-500/20 text-red-300 border border-red-500/30' 
+                                  : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                              }`}>
+                                {attendingCount}/{totalLimit}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

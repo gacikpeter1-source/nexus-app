@@ -1,5 +1,6 @@
 // src/pages/ClubManagement.jsx
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, ROLES } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
@@ -103,6 +104,8 @@ export default function ClubManagement() {
 
   // Team action dropdown state
   const [teamActionDropdown, setTeamActionDropdown] = useState(null);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
+  const actionButtonRefs = useRef({});
 
   // Rename Team modal state
   const [showRenameTeamModal, setShowRenameTeamModal] = useState(false);
@@ -170,6 +173,23 @@ const [orderSearchQuery, setOrderSearchQuery] = useState('');
   useEffect(() => {
     loadInitialData();
   }, [user]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!teamActionDropdown) return;
+
+    const handleClickOutside = (e) => {
+      const isClickOnButton = Object.values(actionButtonRefs.current).some(
+        ref => ref?.contains(e.target)
+      );
+      if (!isClickOnButton) {
+        setTeamActionDropdown(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [teamActionDropdown]);
 
   async function loadInitialData() {
     try {
@@ -1651,7 +1671,7 @@ const filteredOrderResponses = useMemo(() => {
           <>
             {/* Teams List - Enhanced */}
             {selectedClubId && clubTeams.length > 0 && (
-              <div className="mb-6 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+              <div className="mb-6 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 overflow-visible">
                 <h2 className="font-title text-xl md:text-2xl text-light mb-4">Teams in this Club</h2>
                 
                 {/* Filter by Trainer/Assistant */}
@@ -1718,7 +1738,7 @@ const filteredOrderResponses = useMemo(() => {
                   </select>
                 </div>
 
-                <div className="grid gap-3">
+                <div className="grid gap-3 overflow-visible">
                   {clubTeams
                     .filter(t => {
                       if (!teamTrainerFilter) return true;
@@ -1731,7 +1751,7 @@ const filteredOrderResponses = useMemo(() => {
                       const assistantCount = (t.assistants || []).length;
                       
                       return (
-                        <div key={t.id} className="bg-white/5 border border-white/10 rounded-lg p-4 hover:bg-white/10 transition-all">
+                        <div key={t.id} className="bg-white/5 border border-white/10 rounded-lg p-4 hover:bg-white/10 transition-all overflow-visible">
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <h3 
@@ -1759,9 +1779,23 @@ const filteredOrderResponses = useMemo(() => {
                             {isClubManager(clubs.find(c => c.id === selectedClubId)) && (
                               <div className="relative">
                                 <button 
+                                  ref={(el) => {
+                                    if (el) actionButtonRefs.current[t.id] = el;
+                                  }}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setTeamActionDropdown(teamActionDropdown === t.id ? null : t.id);
+                                    if (teamActionDropdown === t.id) {
+                                      setTeamActionDropdown(null);
+                                    } else {
+                                      const rect = actionButtonRefs.current[t.id]?.getBoundingClientRect();
+                                      if (rect) {
+                                        setDropdownPosition({
+                                          top: rect.bottom + window.scrollY + 8,
+                                          right: window.innerWidth - rect.right + window.scrollX
+                                        });
+                                      }
+                                      setTeamActionDropdown(t.id);
+                                    }
                                   }}
                                   className="px-4 py-2 bg-white/10 hover:bg-white/15 text-light rounded-lg text-sm font-medium transition-all flex items-center gap-2"
                                 >
@@ -1769,11 +1803,17 @@ const filteredOrderResponses = useMemo(() => {
                                   <span className="text-xs">▼</span>
                                 </button>
 
-                                {/* Dropdown Menu */}
-                                {teamActionDropdown === t.id && (
+                                {/* Dropdown Menu - Rendered via Portal */}
+                                {teamActionDropdown === t.id && createPortal(
                                   <div 
                                     onClick={(e) => e.stopPropagation()}
-                                    className="absolute right-0 mt-2 w-48 bg-mid-dark border border-white/20 rounded-lg shadow-xl z-10"
+                                    style={{
+                                      position: 'fixed',
+                                      top: `${dropdownPosition.top}px`,
+                                      right: `${dropdownPosition.right}px`,
+                                      zIndex: 9999
+                                    }}
+                                    className="w-48 bg-mid-dark border border-white/20 rounded-lg shadow-xl"
                                   >
                                     <button
                                       onClick={() => {
@@ -1831,7 +1871,8 @@ const filteredOrderResponses = useMemo(() => {
                                       <span>🗑️</span>
                                       <span>Delete Team</span>
                                     </button>
-                                  </div>
+                                  </div>,
+                                  document.body
                                 )}
                               </div>
                             )}

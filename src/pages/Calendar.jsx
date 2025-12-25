@@ -355,16 +355,19 @@ export default function Calendar() {
             ) : (
               <div className="grid gap-4">
                 {upcomingEvents.map(event => {
-                  // Check if current user declined this event
+                  // Check if current user declined or attending this event
                   const userResponse = event.responses?.[user?.id];
                   const isDeclined = userResponse?.status === 'declined';
+                  const isAttending = userResponse?.status === 'attending';
                   
                   return (
                     <Link
                       key={event.id}
                       to={`/event/${event.id}`}
-                      className={`group bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5 hover:bg-white/10 hover:border-primary/50 transition-all ${
-                        isDeclined ? 'opacity-50' : ''
+                      className={`group bg-white/5 backdrop-blur-sm border rounded-xl p-5 hover:bg-white/10 transition-all ${
+                        isDeclined ? 'opacity-50 border-white/10' : 
+                        isAttending ? 'border-green-500/50 bg-green-500/5 shadow-[0_0_15px_rgba(34,197,94,0.3)] hover:border-green-500/70' : 
+                        'border-white/10 hover:border-primary/50'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-4">
@@ -379,6 +382,11 @@ export default function Calendar() {
                             }`}>
                               {event.title}
                             </h3>
+                            {isAttending && (
+                              <div className="inline-block px-2 py-1 bg-green-500/20 text-green-300 rounded text-xs font-medium mb-2">
+                                ✓ You are registered
+                              </div>
+                            )}
                             {isDeclined && (
                               <div className="inline-block px-2 py-1 bg-red-500/20 text-red-300 rounded text-xs font-medium mb-2">
                                 ❌ Declined
@@ -397,11 +405,24 @@ export default function Calendar() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          {event.responses && Object.keys(event.responses).length > 0 && (
-                            <div className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium">
-                              {Object.values(event.responses).filter(r => r.status === 'attending').length} attending
-                            </div>
-                          )}
+                          {/* Attendance Count Badge */}
+                          {(() => {
+                            const attendingCount = event.responses 
+                              ? Object.values(event.responses).filter(r => r.status === 'attending').length 
+                              : 0;
+                            const totalLimit = event.participantLimit || '∞';
+                            const isFull = event.participantLimit && attendingCount >= event.participantLimit;
+                            
+                            return (
+                              <div className={`px-3 py-1 rounded-full text-xs font-bold ${
+                                isFull 
+                                  ? 'bg-red-500/20 text-red-300 border border-red-500/30' 
+                                  : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                              }`}>
+                                {attendingCount}/{totalLimit}
+                              </div>
+                            );
+                          })()}
                           <span className="text-primary opacity-0 group-hover:opacity-100 transition-opacity">→</span>
                         </div>
                       </div>
@@ -424,13 +445,16 @@ export default function Calendar() {
                 {pastEvents.slice(0, 10).map(event => {
                   const userResponse = event.responses?.[user?.id];
                   const isDeclined = userResponse?.status === 'declined';
+                  const isAttending = userResponse?.status === 'attending';
                   
                   return (
                     <Link
                       key={event.id}
                       to={`/event/${event.id}`}
-                      className={`group bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5 hover:bg-white/10 transition-all ${
-                        isDeclined ? 'opacity-40' : 'opacity-60 hover:opacity-100'
+                      className={`group bg-white/5 backdrop-blur-sm border rounded-xl p-5 hover:bg-white/10 transition-all ${
+                        isDeclined ? 'opacity-40 border-white/10' : 
+                        isAttending ? 'opacity-60 hover:opacity-100 border-green-500/30 bg-green-500/5' : 
+                        'opacity-60 hover:opacity-100 border-white/10'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-4">
@@ -445,13 +469,21 @@ export default function Calendar() {
                             }`}>
                               {event.title}
                             </h3>
-                            <div className="flex gap-3 text-xs text-light/60">
+                            <div className="flex gap-3 text-xs text-light/60 items-center">
                               <span>📅 {new Date(event.date).toLocaleDateString()}</span>
-                              {event.responses && !isDeclined && (
-                                <span className="text-green-400">
-                                  ✅ {Object.values(event.responses).filter(r => r.status === 'attending').length} attended
-                                </span>
-                              )}
+                              {/* Attendance Count */}
+                              {(() => {
+                                const attendingCount = event.responses 
+                                  ? Object.values(event.responses).filter(r => r.status === 'attending').length 
+                                  : 0;
+                                const totalLimit = event.participantLimit || '∞';
+                                
+                                return (
+                                  <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded text-xs font-semibold">
+                                    {attendingCount}/{totalLimit}
+                                  </span>
+                                );
+                              })()}
                               {isDeclined && (
                                 <span className="text-red-400">❌ Declined</span>
                               )}
@@ -523,16 +555,38 @@ export default function Calendar() {
                     {day}
                   </div>
                   <div className="space-y-1">
-                    {dayEvents.slice(0, 2).map(event => (
-                      <Link
-                        key={event.id}
-                        to={`/event/${event.id}`}
-                        className="block text-xs px-1 py-0.5 bg-primary/30 text-light rounded truncate hover:bg-primary/50 transition-all"
-                        title={event.title}
-                      >
-                        {getEventIcon(event.type)} {event.title}
-                      </Link>
-                    ))}
+                    {dayEvents.slice(0, 2).map(event => {
+                      const userResponse = event.responses?.[user?.id];
+                      const isAttending = userResponse?.status === 'attending';
+                      
+                      const attendingCount = event.responses 
+                        ? Object.values(event.responses).filter(r => r.status === 'attending').length 
+                        : 0;
+                      const totalLimit = event.participantLimit || '∞';
+                      const isFull = event.participantLimit && attendingCount >= event.participantLimit;
+                      
+                      return (
+                        <Link
+                          key={event.id}
+                          to={`/event/${event.id}`}
+                          className={`block text-xs px-1 py-0.5 rounded truncate transition-all ${
+                            isAttending 
+                              ? 'bg-green-500/30 text-green-200 border border-green-500/50 hover:bg-green-500/50' 
+                              : 'bg-primary/30 text-light hover:bg-primary/50'
+                          }`}
+                          title={`${isAttending ? '✓ ' : ''}${event.title} (${attendingCount}/${totalLimit})`}
+                        >
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="truncate">
+                              {isAttending && '✓ '}{getEventIcon(event.type)} {event.title}
+                            </span>
+                            <span className={`shrink-0 font-bold ${isFull ? 'text-red-300' : ''}`}>
+                              {attendingCount}/{totalLimit}
+                            </span>
+                          </div>
+                        </Link>
+                      );
+                    })}
                     {dayEvents.length > 2 && (
                       <div className="text-xs text-light/60 px-1">
                         +{dayEvents.length - 2} more
@@ -551,12 +605,12 @@ export default function Calendar() {
         <>
           {/* Desktop: Week View (≥1024px) */}
           <div className="hidden lg:block">
-            <WeekView events={filteredEvents} />
+            <WeekView events={filteredEvents} user={user} />
           </div>
           
           {/* Mobile/Tablet: Day View (<1024px) */}
           <div className="block lg:hidden">
-            <DayView events={filteredEvents} />
+            <DayView events={filteredEvents} user={user} />
           </div>
         </>
       )}

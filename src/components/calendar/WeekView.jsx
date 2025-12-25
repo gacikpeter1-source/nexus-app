@@ -2,7 +2,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useMemo, useState } from 'react';
 
-export default function WeekView({ events }) {
+export default function WeekView({ events, user }) {
   const navigate = useNavigate();
   const [currentWeek, setCurrentWeek] = useState(new Date());
 
@@ -30,7 +30,11 @@ export default function WeekView({ events }) {
 
   // Get events for a specific day
   const getEventsForDay = (date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    // Format date in local timezone (avoid UTC conversion issues)
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
     return events.filter(e => e.date === dateStr);
   };
 
@@ -55,7 +59,11 @@ export default function WeekView({ events }) {
 
   // Handle empty slot click
   const handleSlotClick = (date, hour) => {
-    const dateStr = date.toISOString().split('T')[0];
+    // Format date in local timezone (avoid UTC conversion issues)
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
     const timeStr = `${hour.toString().padStart(2, '0')}:00`;
     navigate(`/new-event?date=${dateStr}&time=${timeStr}`);
   };
@@ -163,14 +171,35 @@ export default function WeekView({ events }) {
                       {dayEvents.length > 0 && (
                         <div className="absolute inset-0 p-0.5 overflow-hidden">
                           {dayEvents.map((event) => {
+                            const userResponse = event.responses?.[user?.id];
+                            const isAttending = userResponse?.status === 'attending';
+                            const attendingCount = event.responses 
+                              ? Object.values(event.responses).filter(r => r.status === 'attending').length 
+                              : 0;
+                            const totalLimit = event.participantLimit || '∞';
+                            const isFull = event.participantLimit && attendingCount >= event.participantLimit;
+                            
                             return (
                               <Link
                                 key={event.id}
                                 to={`/event/${event.id}`}
-                                className={`block w-full rounded px-2 py-1 mb-0.5 text-white text-xs overflow-hidden ${getEventColor(event.type)} hover:opacity-90 transition-all`}
+                                className={`block w-full rounded px-2 py-1 mb-0.5 text-white text-xs overflow-hidden transition-all ${
+                                  isAttending 
+                                    ? 'bg-green-500 border-2 border-green-300 shadow-[0_0_8px_rgba(34,197,94,0.6)] hover:shadow-[0_0_12px_rgba(34,197,94,0.8)]' 
+                                    : `${getEventColor(event.type)} hover:opacity-90`
+                                }`}
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <div className="font-semibold truncate">{event.time}</div>
+                                <div className="flex items-center justify-between gap-1">
+                                  <div className="font-semibold truncate">
+                                    {isAttending && '✓ '}{event.time}
+                                  </div>
+                                  <div className={`shrink-0 font-bold text-[10px] px-1 rounded ${
+                                    isFull ? 'bg-red-600/80' : 'bg-black/30'
+                                  }`}>
+                                    {attendingCount}/{totalLimit}
+                                  </div>
+                                </div>
                                 <div className="truncate">{event.title}</div>
                                 {event.location && (
                                   <div className="text-[10px] opacity-75 truncate">📍 {event.location}</div>

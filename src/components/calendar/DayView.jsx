@@ -2,7 +2,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useMemo, useState } from 'react';
 
-export default function DayView({ events }) {
+export default function DayView({ events, user }) {
   const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -13,7 +13,11 @@ export default function DayView({ events }) {
 
   // Get events for current day
   const dayEvents = useMemo(() => {
-    const dateStr = currentDate.toISOString().split('T')[0];
+    // Format date in local timezone (avoid UTC conversion issues)
+    const year = currentDate.getFullYear();
+    const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+    const day = String(currentDate.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
     return events.filter(e => e.date === dateStr);
   }, [events, currentDate]);
 
@@ -47,7 +51,11 @@ export default function DayView({ events }) {
 
   // Handle empty slot click
   const handleSlotClick = (hour) => {
-    const dateStr = currentDate.toISOString().split('T')[0];
+    // Format date in local timezone (avoid UTC conversion issues)
+    const year = currentDate.getFullYear();
+    const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+    const day = String(currentDate.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
     const timeStr = `${hour.toString().padStart(2, '0')}:00`;
     navigate(`/new-event?date=${dateStr}&time=${timeStr}`);
   };
@@ -143,26 +151,52 @@ export default function DayView({ events }) {
                     </div>
                   ) : (
                     <div className="space-y-1">
-                      {hourEvents.map((event) => (
-                        <Link
-                          key={event.id}
-                          to={`/event/${event.id}`}
-                          className={`block rounded-lg px-3 py-2 text-white ${getEventColor(event.type)} hover:opacity-90 transition-all`}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <div className="font-semibold text-sm mb-1">
-                            {event.time} - {event.title}
-                          </div>
-                          {event.location && (
-                            <div className="text-xs opacity-90">📍 {event.location}</div>
-                          )}
-                          {event.type && (
-                            <div className="text-xs opacity-75 capitalize mt-1">
-                              {event.type}
+                      {hourEvents.map((event) => {
+                        const userResponse = event.responses?.[user?.id];
+                        const isAttending = userResponse?.status === 'attending';
+                        const attendingCount = event.responses 
+                          ? Object.values(event.responses).filter(r => r.status === 'attending').length 
+                          : 0;
+                        const totalLimit = event.participantLimit || '∞';
+                        const isFull = event.participantLimit && attendingCount >= event.participantLimit;
+                        
+                        return (
+                          <Link
+                            key={event.id}
+                            to={`/event/${event.id}`}
+                            className={`block rounded-lg px-3 py-2 text-white transition-all ${
+                              isAttending 
+                                ? 'bg-green-500 border-2 border-green-300 shadow-[0_0_10px_rgba(34,197,94,0.6)] hover:shadow-[0_0_15px_rgba(34,197,94,0.8)]' 
+                                : `${getEventColor(event.type)} hover:opacity-90`
+                            }`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <div className="font-semibold text-sm truncate">
+                                {isAttending && '✓ '}{event.time} - {event.title}
+                              </div>
+                              <div className={`shrink-0 px-2 py-0.5 rounded font-bold text-xs ${
+                                isFull ? 'bg-red-600/90 text-white' : 'bg-black/40'
+                              }`}>
+                                {attendingCount}/{totalLimit}
+                              </div>
                             </div>
-                          )}
-                        </Link>
-                      ))}
+                            {isAttending && (
+                              <div className="text-xs font-medium bg-green-600/50 px-2 py-0.5 rounded inline-block mb-1">
+                                You are registered
+                              </div>
+                            )}
+                            {event.location && (
+                              <div className="text-xs opacity-90">📍 {event.location}</div>
+                            )}
+                            {event.type && (
+                              <div className="text-xs opacity-75 capitalize mt-1">
+                                {event.type}
+                              </div>
+                            )}
+                          </Link>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
