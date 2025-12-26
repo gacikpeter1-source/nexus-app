@@ -14,6 +14,9 @@ import Calendar from './pages/Calendar';
 import NewEvent from './pages/NewEvent';
 import EditEvent from './pages/EditEvent';
 import Event from './pages/Event';
+import TrainingLibrary from './pages/TrainingLibrary';
+import TrainingForm from './pages/TrainingForm';
+import TrainingDetail from './pages/TrainingDetail';
 import Team from './pages/Team';
 import Teams from './pages/Teams';
 import TeamStatistics from './pages/TeamStatistics';
@@ -104,6 +107,38 @@ function App() {
                         element={
                           <ProtectedRoute>
                             <Event />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/training-library"
+                        element={
+                          <ProtectedRoute>
+                            <TrainingLibrary />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/training-library/new"
+                        element={
+                          <ProtectedRoute>
+                            <TrainingForm />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/training-library/:id"
+                        element={
+                          <ProtectedRoute>
+                            <TrainingDetail />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/training-library/:id/edit"
+                        element={
+                          <ProtectedRoute>
+                            <TrainingForm />
                           </ProtectedRoute>
                         }
                       />

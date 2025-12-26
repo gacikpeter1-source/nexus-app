@@ -512,6 +512,28 @@ service cloud.firestore {
     }
     
     /* ===========================
+       TRAINING LIBRARY
+       =========================== */
+    
+    match /trainings/{trainingId} {
+      // Any authenticated user can create trainings (they will own them)
+      allow create: if isAuthenticated() && 
+                      request.resource.data.ownerId == request.auth.uid;
+      
+      // Users can read their own trainings
+      allow read: if isAuthenticated() && 
+                    resource.data.ownerId == request.auth.uid;
+      
+      // Users can update their own trainings
+      allow update: if isAuthenticated() && 
+                      resource.data.ownerId == request.auth.uid;
+      
+      // Users can delete their own trainings
+      allow delete: if isAuthenticated() && 
+                      resource.data.ownerId == request.auth.uid;
+    }
+    
+    /* ===========================
        DEFAULT DENY ALL
        =========================== */
     

@@ -808,6 +808,63 @@ export default function EventPage() {
                 {event.description}
               </div>
             )}
+
+            {/* Attached Training Plans */}
+            {event.attachedTrainings && event.attachedTrainings.length > 0 && (
+              <div className="mt-6">
+                <h3 className="font-title text-lg text-light mb-3">📚 Training Plans</h3>
+                <div className="space-y-3">
+                  {event.attachedTrainings.map((training, index) => (
+                    <div
+                      key={training.id || index}
+                      className="bg-white/5 border border-white/10 rounded-lg overflow-hidden"
+                    >
+                      {/* Training Header */}
+                      <div className="p-4">
+                        <h4 className="font-semibold text-light mb-2">{training.title}</h4>
+                        {training.description && (
+                          <p className="text-sm text-light/70 mb-3 whitespace-pre-wrap">
+                            {training.description}
+                          </p>
+                        )}
+                        
+                        {/* Categories */}
+                        {training.categories && training.categories.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mb-3">
+                            {training.categories.map((cat, idx) => (
+                              <span
+                                key={idx}
+                                className="px-2 py-1 bg-primary/20 text-primary text-xs rounded-full"
+                              >
+                                {cat}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Training Images */}
+                      {training.pictures && training.pictures.length > 0 && (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-4 pt-0">
+                          {training.pictures.map((pic, picIdx) => (
+                            <div
+                              key={picIdx}
+                              className="relative h-24 rounded-lg overflow-hidden bg-gradient-to-br from-primary/20 to-accent/20"
+                            >
+                              <img
+                                src={pic}
+                                alt={`Training ${index + 1} - Drill ${picIdx + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>     
         </div>
 

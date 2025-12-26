@@ -233,6 +233,14 @@ export default function Sidebar() {
       active: location.pathname === '/calendar'
     },
     {
+      key: 'training-library',
+      label: 'Training Library',
+      icon: '📚',
+      path: '/training-library',
+      active: location.pathname.includes('/training-library'),
+      visible: isManager()
+    },
+    {
       key: 'teams',
       label: 'Teams',
       icon: '👥',

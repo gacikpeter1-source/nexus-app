@@ -1738,4 +1738,93 @@ export default {
   getTeamBadgeSettings,
   calculateMemberBadges,
   
+  // Training Library functions
+  createTraining,
+  getTraining,
+  getTrainerTrainings,
+  updateTraining,
+  deleteTraining,
+  
 };
+
+/* ===========================
+   TRAINING LIBRARY
+   =========================== */
+
+// Create a new training
+export async function createTraining(trainingData) {
+  try {
+    const trainingRef = await addDoc(collection(db, 'trainings'), {
+      ...trainingData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      statistics: {
+        timesUsed: 0,
+        eventsUsed: [],
+        totalParticipants: 0
+      }
+    });
+    return { id: trainingRef.id, ...trainingData };
+  } catch (error) {
+    console.error('Error creating training:', error);
+    throw error;
+  }
+}
+
+// Get single training by ID
+export async function getTraining(trainingId) {
+  try {
+    const trainingDoc = await getDoc(doc(db, 'trainings', trainingId));
+    if (trainingDoc.exists()) {
+      return { id: trainingDoc.id, ...trainingDoc.data() };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting training:', error);
+    throw error;
+  }
+}
+
+// Get all trainings for a trainer
+export async function getTrainerTrainings(trainerId) {
+  try {
+    const q = query(
+      collection(db, 'trainings'),
+      where('ownerId', '==', trainerId),
+      orderBy('createdAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (error) {
+    console.error('Error getting trainer trainings:', error);
+    throw error;
+  }
+}
+
+// Update training
+export async function updateTraining(trainingId, updates) {
+  try {
+    await updateDoc(doc(db, 'trainings', trainingId), {
+      ...updates,
+      updatedAt: serverTimestamp()
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating training:', error);
+    throw error;
+  }
+}
+
+// Delete training
+export async function deleteTraining(trainingId) {
+  try {
+    await deleteDoc(doc(db, 'trainings', trainingId));
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting training:', error);
+    throw error;
+  }
+}

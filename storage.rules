@@ -1,0 +1,66 @@
+rules_version = '2';
+
+// Craft rules based on data in your Firestore database
+// allow write: if firestore.get(
+//    /databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin;
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user owns the resource
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // Training images - trainers can upload to their own folder
+    match /trainings/{userId}/{filename} {
+      // Allow authenticated users to read all training images
+      allow read: if isAuthenticated();
+      
+      // Allow users to upload to their own folder
+      allow write: if isAuthenticated() && isOwner(userId);
+      
+      // Allow users to delete their own images
+      allow delete: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // User profile pictures
+    match /users/{userId}/{filename} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isOwner(userId);
+      allow delete: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // Team/club images
+    match /teams/{teamId}/{filename} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+      allow delete: if isAuthenticated();
+    }
+    
+    // Club images
+    match /clubs/{clubId}/{filename} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+      allow delete: if isAuthenticated();
+    }
+    
+    // Event attachments
+    match /events/{eventId}/{filename} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+      allow delete: if isAuthenticated();
+    }
+    
+    // Default: deny all other access
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+

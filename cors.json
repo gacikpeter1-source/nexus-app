@@ -1,0 +1,9 @@
+[
+  {
+    "origin": ["http://localhost:5173", "http://localhost:5174", "https://nexus-app-c69da.web.app", "https://nexus-app-c69da.firebaseapp.com"],
+    "method": ["GET", "POST", "PUT", "DELETE", "HEAD"],
+    "maxAgeSeconds": 3600
+  }
+]
+
+

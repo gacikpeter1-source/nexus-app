@@ -612,11 +612,16 @@ exports.onEventCreated = functions.firestore
         if (tokens.length > 0) {
           console.log(`🔔 Sending push to ${tokens.length} devices`);
 
+          // Format date and time for notification
+          const eventDate = event.date ? new Date(event.date).toLocaleDateString() : 'TBD';
+          const eventTime = event.startTime || event.time || '';
+          const dateTimeText = eventTime ? `${eventDate} at ${eventTime}` : eventDate;
+          
           const result = await sendMulticastNotification(
             tokens,
             {
               title: '📅 New Event Created',
-              body: `${event.title} - ${new Date(event.start).toLocaleDateString()}`
+              body: `${event.title} - ${dateTimeText}`
             },
             {
               type: 'event_new',
@@ -635,10 +640,14 @@ exports.onEventCreated = functions.firestore
 
       // Send email notifications to users who want them
       if (emailEnabled && filteredUsers.email.length > 0) {
+        // Format date and time for email
+        const eventDate = event.date ? new Date(event.date).toLocaleDateString() : 'TBD';
+        const eventTime = event.startTime || event.time || 'Not specified';
+        
         await sendEmailNotification(
           filteredUsers.email,
           `📅 New Event: ${event.title}`,
-          `A new event has been created:\n\n${event.title}\n${new Date(event.start).toLocaleDateString()}\n\nLocation: ${event.location || 'TBD'}\n\nCheck the app for more details.`,
+          `A new event has been created:\n\n${event.title}\nDate: ${eventDate}\nTime: ${eventTime}\nLocation: ${event.location || 'TBD'}\n\nCheck the app for more details.`,
           'eventCreated',
           event.clubId,
           event.teamId

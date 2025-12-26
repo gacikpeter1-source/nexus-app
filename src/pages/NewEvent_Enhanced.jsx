@@ -531,47 +531,13 @@ export default function NewEvent() {
         {/* 🆕 NEW: Start Time + Duration + End Time (3-column compact layout) */}
         <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-light/80 mb-1">Start Time (24h)</label>
-            <div className="flex gap-2">
-              {/* Hour Dropdown */}
-              <select
-                value={form.startTime ? form.startTime.split(':')[0] : ''}
-                onChange={(e) => {
-                  const hour = e.target.value;
-                  const minute = form.startTime ? form.startTime.split(':')[1] : '00';
-                  setForm(f => ({ ...f, startTime: `${hour}:${minute}` }));
-                }}
-                className="flex-1 bg-white/10 border border-white/20 rounded-lg px-2 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm"
-              >
-                <option value="" className="bg-mid-dark">Hour</option>
-                {Array.from({ length: 24 }, (_, i) => {
-                  const hour = String(i).padStart(2, '0');
-                  return (
-                    <option key={hour} value={hour} className="bg-mid-dark">
-                      {hour}
-                    </option>
-                  );
-                })}
-              </select>
-              
-              <span className="text-light/50 text-lg self-center">:</span>
-              
-              {/* Minute Dropdown */}
-              <select
-                value={form.startTime ? form.startTime.split(':')[1] : '00'}
-                onChange={(e) => {
-                  const hour = form.startTime ? form.startTime.split(':')[0] : '00';
-                  const minute = e.target.value;
-                  setForm(f => ({ ...f, startTime: `${hour}:${minute}` }));
-                }}
-                className="flex-1 bg-white/10 border border-white/20 rounded-lg px-2 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm"
-              >
-                <option value="00" className="bg-mid-dark">00</option>
-                <option value="15" className="bg-mid-dark">15</option>
-                <option value="30" className="bg-mid-dark">30</option>
-                <option value="45" className="bg-mid-dark">45</option>
-              </select>
-            </div>
+            <label className="block text-sm font-medium text-light/80 mb-1">Start Time</label>
+            <input
+              type="time"
+              value={form.startTime}
+              onChange={(e) => setForm(f => ({ ...f, startTime: e.target.value }))}
+              className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm"
+            />
           </div>
 
           <div className="md:col-span-3">
@@ -1123,4 +1089,5 @@ export default function NewEvent() {
     </div>
   );
 }
+
 
