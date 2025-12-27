@@ -102,7 +102,7 @@ export default function Profile() {
     };
     localStorage.setItem('currentUser', JSON.stringify(updatedUser));
 
-    alert('Profile updated successfully!');
+    alert(t('profile.profileUpdated'));
     window.location.reload(); // Reload to update navbar
   };
 
@@ -224,9 +224,9 @@ export default function Profile() {
                   : 'text-light/60 hover:text-light'
               }`}
             >
-              {tab === 'profile' && '👤 Profile'}
-              {tab === 'notifications' && '🔔 Notifications'}
-              {tab === 'subscription' && '💳 Subscription'}
+              {tab === 'profile' && '👤' + t('profile.title')}
+              {tab === 'notifications' && '🔔' + t('profile.notificationTab')}
+              {tab === 'subscription' && '💳' + t('profile.subscriptionTab')}
             </button>
           ))}
         </div>
@@ -325,16 +325,16 @@ export default function Profile() {
                 <div>
                   <label className="block text-sm font-medium text-light/80 mb-2">Email</label>
                   <input
-                    type="email"
+                    type={t('profile.email')}
                     value={user.email}
                     disabled
                     className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 md:px-4 md:py-3 text-light/50 cursor-not-allowed"
                   />
-                  <p className="text-xs text-light/50 mt-1">Email cannot be changed</p>
+                  <p className="text-xs text-light/50 mt-1">{t('profile.emailCannotChange')}</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-light/80 mb-2">Phone</label>
+                  <label className="block text-sm font-medium text-light/80 mb-2">{t('profile.phone')}</label>
                   <input
                     type="tel"
                     value={form.phone}
@@ -350,14 +350,14 @@ export default function Profile() {
             <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
               <h2 className="font-title text-2xl text-light mb-4 flex items-center gap-3">
                 <span className="w-1 h-6 bg-primary rounded"></span>
-                Bio
+                {t('profile.bio')}
               </h2>
 
               <div>
                 <textarea
                   value={form.bio}
                   onChange={(e) => setForm(f => ({ ...f, bio: e.target.value }))}
-                  placeholder="Write a short bio..."
+                  placeholder={t('profile.bioPlaceholder')}
                   rows={4}
                   className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 md:px-4 md:py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none"
                 />
@@ -369,7 +369,7 @@ export default function Profile() {
               userData={user}
               onUpdate={async (profileData) => {
                 await updateUserMemberProfile(user.id, profileData);
-                alert('Profile updated successfully!');
+                alert(t('profile.profileUpdated'));
                 window.location.reload();
               }}
             />
@@ -380,14 +380,14 @@ export default function Profile() {
                 type="submit"
                 className="flex-1 btn-primary py-2 md:py-4 text-base md:text-lg font-semibold"
               >
-                💾 Save Changes
+                💾 {t('profile.saveChanges')}
               </button>
               <button
                 type="button"
                 onClick={() => navigate(-1)}
                 className="px-4 py-2 md:px-6 md:py-4 bg-white/10 hover:bg-white/20 text-light rounded-lg text-sm md:text-base transition-colors"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
           </form>

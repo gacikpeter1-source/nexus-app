@@ -6,6 +6,7 @@ import { useChat } from '../contexts/ChatContext';
 import { getClub, getUser, getAllUsers } from '../firebase/firestore';
 import { addChatMember, removeChatMember } from '../firebase/chats';
 import { useIsAdmin } from '../hooks/usePermissions';
+import { useLanguage } from '../contexts/LanguageContext'
 
 export default function Chats() {
   const { user } = useAuth();
@@ -152,6 +153,8 @@ export default function Chats() {
       </div>
     );
   }
+
+  const { t } = useLanguage();
 
   return (
     <div className="min-h-screen text-light">

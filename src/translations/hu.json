@@ -48,6 +48,28 @@
     "logout": "Kijelentkezés",
     "dashboard": "Irányítópult"
   },
+    "notifMsq": {
+	"pushnotif": "Push Értesítések",
+	"notifblocked": "Értesítések Letiltva",
+	"enablenotif": "Az értesítések engedélyezéséhez:",
+	"lockicon": "Kattintson a lakat ikonra 🔒 a böngésző címsorában",
+	"notifpermission": "Keresse meg az Értesítéseket az engedélyekben",
+	"blocktoallow": "Változtassa Letiltásról Engedélyezésre",
+	"refreshpage": "Frissítse ezt az oldalt",
+	"notifenabled": "Értesítések Engedélyezve",
+	"notiffor": "Értesítéseket fog kapni a következőkről:",
+	"neweventsinform": "Új események a klubjaidban",
+	"eventchangesinform": "Esemény változások és frissítések",
+	"eventcancelationinstruct": "Esemény törlések",
+	"neorderdeadlinenotifinstruct": "Új rendelések és határidők",
+	"stayupdated": "Maradjon Naprakész",
+	"enablednotifforupdatesabout": "Engedélyezze az értesítéseket a frissítések fogadásához:",
+	"neweventnotif": "Új események",
+	"eventchangesnotif": "Esemény változások",
+	"cancelationnotif": "Törlések",
+	"orderandremindersnotif": "Rendelések és emlékeztetők",
+	"enablednotifications": "Értesítések Engedélyezése"  
+  },
   "userMenu": {
     "profile": "Profil",
     "profileDesc": "Profil és avatar szerkesztése",

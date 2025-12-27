@@ -32,9 +32,6 @@ export default function EditEvent() {
     type: '',
     date: '',
     time: '',
-    startTime: '', // 🆕 NEW
-    duration: 60, // 🆕 NEW
-    endTime: '', // 🆕 NEW
     occurrence: 'once',
     recurrenceConfig: {
       weekdays: [],
@@ -45,7 +42,6 @@ export default function EditEvent() {
     location: '',
     description: '',
     participantLimit: null,
-    waitlistNotificationMode: 'one_by_one', // 🆕 NEW
     attachmentUrl: null,
     attachmentName: null
   });
@@ -53,37 +49,6 @@ export default function EditEvent() {
   useEffect(() => {
     loadEvent();
   }, [eventId]);
-
-  // 🆕 NEW: Calculate end time when start time or duration changes
-  useEffect(() => {
-    if (form.startTime && form.duration) {
-      const calculated = calculateEndTime(form.startTime, form.duration);
-      setForm(f => ({
-        ...f,
-        endTime: calculated.time,
-        time: form.startTime // Keep 'time' in sync for backward compatibility
-      }));
-    }
-  }, [form.startTime, form.duration]);
-
-  // 🆕 NEW: Calculate end time function
-  function calculateEndTime(startTime, durationMinutes) {
-    if (!startTime) return { time: '', daysOffset: 0 };
-
-    const [hours, minutes] = startTime.split(':').map(Number);
-    const totalMinutes = hours * 60 + minutes + durationMinutes;
-
-    const daysOffset = Math.floor(totalMinutes / 1440); // 1440 min = 1 day
-    const endMinutesInDay = totalMinutes % 1440;
-
-    const endHours = Math.floor(endMinutesInDay / 60);
-    const endMinutes = endMinutesInDay % 60;
-
-    return {
-      time: `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`,
-      daysOffset
-    };
-  }
 
   async function loadEvent() {
     try {
@@ -104,9 +69,6 @@ export default function EditEvent() {
         type: eventData.type || '',
         date: eventData.date || '',
         time: eventData.time || '',
-        startTime: eventData.startTime || eventData.time || '', // 🆕 NEW: Use startTime or fallback to time
-        duration: eventData.duration || 60, // 🆕 NEW: Default to 60 minutes if not set
-        endTime: eventData.endTime || '', // 🆕 NEW
         occurrence: eventData.occurrence || 'once',
         recurrenceConfig: eventData.recurrenceConfig || {
           weekdays: [],
@@ -117,7 +79,6 @@ export default function EditEvent() {
         location: eventData.location || '',
         description: eventData.description || '',
         participantLimit: eventData.participantLimit || null,
-        waitlistNotificationMode: eventData.waitlistNotificationMode || 'one_by_one', // 🆕 NEW
         attachmentUrl: eventData.attachmentUrl || null,
         attachmentName: eventData.attachmentName || null
       });
@@ -166,16 +127,12 @@ export default function EditEvent() {
         title: form.title.trim(),
         type: form.type.trim() || 'Other',
         date: form.date,
-        time: form.startTime || form.time, // 🔄 Use startTime if available, fallback to time
-        startTime: form.startTime || form.time, // 🆕 NEW
-        duration: form.duration, // 🆕 NEW
-        endTime: form.endTime, // 🆕 NEW
+        time: form.time,
         occurrence: form.occurrence,
         recurrenceConfig: form.recurrenceConfig,
         location: form.location,
         description: form.description,
-        participantLimit: form.participantLimit || null,
-        waitlistNotificationMode: form.waitlistNotificationMode // 🆕 NEW
+        participantLimit: form.participantLimit || null
       };
 
       // Add attachment if exists
@@ -282,7 +239,7 @@ export default function EditEvent() {
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl mx-auto">
+    <div className="p-6 max-w-4xl mx-auto">
       <button
         onClick={() => navigate(`/event/${eventId}`)}
         className="mb-4 flex items-center gap-2 text-sm text-light/60 hover:text-light transition-colors"
@@ -291,12 +248,12 @@ export default function EditEvent() {
         <span>Back to Event</span>
       </button>
 
-      <h1 className="font-title text-2xl md:text-3xl text-light mb-4 md:mb-6 flex items-center gap-3">
-        <span className="w-1 h-6 md:h-8 bg-primary rounded"></span>
+      <h1 className="font-title text-3xl text-light mb-6 flex items-center gap-3">
+        <span className="w-1 h-8 bg-primary rounded"></span>
         Edit Event
       </h1>
 
-      <form onSubmit={handleSubmit} className="space-y-4 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 md:p-6 shadow-2xl">
+      <form onSubmit={handleSubmit} className="space-y-4 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 shadow-2xl">
         {/* Event Type Badge */}
         {event.visibilityLevel && (
           <div className="p-4 bg-primary/10 border border-primary/30 rounded-lg">
@@ -314,27 +271,30 @@ export default function EditEvent() {
 
         {/* Title */}
         <div>
-          <label className="block text-sm font-medium text-light/80 mb-1">Title *</label>
+          <label className="block font-medium text-light/80 mb-1">Title *</label>
           <input
             type="text"
-            className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm"
+            className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
             value={form.title}
             onChange={update('title')}
+            placeholder="e.g., Big Football Match"
             required
           />
         </div>
 
-        {/* 🎨 COMPACT ROW: Type + Participant Limit */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {/* Type and Limit - Compact Row */}
+        <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm font-medium text-light/80 mb-1">Type</label>
+            <label className="block font-medium text-light/80 mb-1">Type</label>
             <input
               type="text"
               list="type-suggestions"
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm"
+              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
               value={form.type}
-              onChange={(e) => setForm(f => ({ ...f, type: e.target.value }))}
-              placeholder="Training"
+              onChange={(e) => {
+                setForm(f => ({ ...f, type: e.target.value }));
+              }}
+              placeholder="Type or select..."
               autoComplete="off"
             />
             <datalist id="type-suggestions">
@@ -347,12 +307,12 @@ export default function EditEvent() {
             </datalist>
           </div>
 
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-light/80 mb-1">Participant Limit</label>
+          <div className="col-span-2">
+            <label className="block font-medium text-light/80 mb-1">Participant Limit</label>
             <input
               type="text"
               list="limit-suggestions"
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm"
+              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
               value={form.participantLimit === null ? '' : form.participantLimit}
               onChange={(e) => {
                 const value = e.target.value.trim();
@@ -369,6 +329,7 @@ export default function EditEvent() {
             />
             <datalist id="limit-suggestions">
               <option value="No limit" />
+              <option value="5" />
               <option value="10" />
               <option value="15" />
               <option value="20" />
@@ -383,60 +344,31 @@ export default function EditEvent() {
           </div>
         </div>
 
-        {/* 🆕 NEW: Waitlist Notification Mode (only show if participant limit is set) */}
-        {form.participantLimit && (
-          <div className="bg-white/5 border border-white/10 rounded-lg p-3">
-            <label className="block text-sm font-medium text-light/80 mb-2">
-              Waitlist Notifications
-            </label>
-            <div className="space-y-2">
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="radio"
-                  name="waitlistMode"
-                  value="one_by_one"
-                  checked={form.waitlistNotificationMode === 'one_by_one'}
-                  onChange={(e) => setForm(f => ({ ...f, waitlistNotificationMode: e.target.value }))}
-                  className="mt-1"
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-light">Notify one by one</div>
-                  <div className="text-xs text-light/60">First person gets 24h to respond, then next</div>
-                </div>
-              </label>
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="radio"
-                  name="waitlistMode"
-                  value="all_at_once"
-                  checked={form.waitlistNotificationMode === 'all_at_once'}
-                  onChange={(e) => setForm(f => ({ ...f, waitlistNotificationMode: e.target.value }))}
-                  className="mt-1"
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-light">Notify all at once</div>
-                  <div className="text-xs text-light/60">Everyone on waitlist gets notified - first to respond gets spot</div>
-                </div>
-              </label>
-            </div>
-          </div>
-        )}
-
-        {/* 🎨 COMPACT ROW: Date + Occurrence */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm font-medium text-light/80 mb-1">Date *</label>
+        {/* Date, Time, Occurrence - Compact Row */}
+        <div className="grid grid-cols-4 gap-4">
+          <label className="block">
+            <div className="text-sm font-medium text-light/80 mb-1">Date *</div>
             <input
               type="date"
               value={form.date}
               onChange={update('date')}
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm"
+              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
               required
             />
-          </div>
+          </label>
 
-          <div>
-            <label className="block text-sm font-medium text-light/80 mb-1">Occurrence</label>
+          <label className="block">
+            <div className="text-sm font-medium text-light/80 mb-1">Time</div>
+            <input
+              type="time"
+              value={form.time}
+              onChange={update('time')}
+              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+            />
+          </label>
+
+          <label className="block col-span-2">
+            <div className="text-sm font-medium text-light/80 mb-1">Occurrence</div>
             <select
               value={form.occurrence}
               onChange={(e) => {
@@ -447,94 +379,14 @@ export default function EditEvent() {
                   setSelectedWeekdays([]);
                 }
               }}
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm"
+              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
             >
-              <option value="once" className="bg-mid-dark">Once</option>
-              <option value="daily" className="bg-mid-dark">Daily</option>
-              <option value="weekly" className="bg-mid-dark">Weekly</option>
-              <option value="monthly" className="bg-mid-dark">Monthly</option>
+              <option value="once" className="bg-mid-dark text-light">Once</option>
+              <option value="daily" className="bg-mid-dark text-light">Daily</option>
+              <option value="weekly" className="bg-mid-dark text-light">Weekly</option>
+              <option value="monthly" className="bg-mid-dark text-light">Monthly</option>
             </select>
-          </div>
-        </div>
-
-        {/* 🆕 NEW: Start Time + Duration + End Time (3-column compact layout) */}
-        <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-light/80 mb-1">Start Time (24h)</label>
-            <div className="flex gap-2">
-              {/* Hour Dropdown */}
-              <select
-                value={form.startTime ? form.startTime.split(':')[0] : ''}
-                onChange={(e) => {
-                  const hour = e.target.value;
-                  const minute = form.startTime ? form.startTime.split(':')[1] : '00';
-                  setForm(f => ({ ...f, startTime: `${hour}:${minute}` }));
-                }}
-                className="flex-1 bg-white/10 border border-white/20 rounded-lg px-2 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm"
-              >
-                <option value="" className="bg-mid-dark">Hour</option>
-                {Array.from({ length: 24 }, (_, i) => {
-                  const hour = String(i).padStart(2, '0');
-                  return (
-                    <option key={hour} value={hour} className="bg-mid-dark">
-                      {hour}
-                    </option>
-                  );
-                })}
-              </select>
-              
-              <span className="text-light/50 text-lg self-center">:</span>
-              
-              {/* Minute Dropdown */}
-              <select
-                value={form.startTime ? form.startTime.split(':')[1] : '00'}
-                onChange={(e) => {
-                  const hour = form.startTime ? form.startTime.split(':')[0] : '00';
-                  const minute = e.target.value;
-                  setForm(f => ({ ...f, startTime: `${hour}:${minute}` }));
-                }}
-                className="flex-1 bg-white/10 border border-white/20 rounded-lg px-2 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm"
-              >
-                <option value="00" className="bg-mid-dark">00</option>
-                <option value="15" className="bg-mid-dark">15</option>
-                <option value="30" className="bg-mid-dark">30</option>
-                <option value="45" className="bg-mid-dark">45</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="md:col-span-3">
-            <label className="block text-sm font-medium text-light/80 mb-1">Duration</label>
-            <select
-              value={form.duration}
-              onChange={(e) => setForm(f => ({ ...f, duration: parseInt(e.target.value) }))}
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm"
-            >
-              <option value="30">30 minutes</option>
-              <option value="45">45 minutes</option>
-              <option value="60">1 hour</option>
-              <option value="90">1.5 hours</option>
-              <option value="120">2 hours</option>
-              <option value="150">2.5 hours</option>
-              <option value="180">3 hours</option>
-            </select>
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-light/80 mb-1">End Time</label>
-            <div className="relative">
-              <input
-                type="time"
-                value={form.endTime}
-                readOnly
-                className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-light/70 cursor-not-allowed text-sm"
-                title="Automatically calculated from start time + duration"
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-primary" title="Auto-calculated">
-                ⚡
-              </span>
-            </div>
-          </div>
+          </label>
         </div>
 
         {/* Advanced Recurrence Configuration */}
@@ -659,22 +511,22 @@ export default function EditEvent() {
 
         {/* Location */}
         <div>
-          <label className="block text-sm font-medium text-light/80 mb-1">Location</label>
+          <label className="block font-medium text-light/80 mb-1">Location</label>
           <input
             type="text"
-            className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-sm"
+            className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
             value={form.location}
             onChange={update('location')}
-            placeholder="e.g., Main Stadium, Field 2"
+            placeholder="e.g., Stadium, Training Ground..."
           />
         </div>
 
         {/* Description */}
         <div>
-          <label className="block text-sm font-medium text-light/80 mb-1">Description</label>
+          <label className="block font-medium text-light/80 mb-1">Description</label>
           <textarea
             rows={3}
-            className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none text-sm"
+            className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
             value={form.description}
             onChange={update('description')}
             placeholder="Add event details, notes, instructions..."

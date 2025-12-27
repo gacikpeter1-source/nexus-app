@@ -3,12 +3,14 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useIsAdmin } from '../hooks/usePermissions';
+import { useLanguage } from '../contexts/LanguageContext';
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const isUserAdmin = useIsAdmin();
+  const { t } = useLanguage();
   
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [expandedMenu, setExpandedMenu] = useState(null);
@@ -212,14 +214,14 @@ export default function Sidebar() {
   const menuItems = [
     {
       key: 'dashboard',
-      label: 'My Clubs',
+      label: t('nav.myClubs'),
       icon: '🏠',
       path: '/',
       active: location.pathname === '/'
     },
     {
       key: 'club-management',
-      label: 'Club Management',
+      label: t('nav.clubMgmt'),
       icon: '⚙️',
       path: '/club-management',
       active: location.pathname.includes('/club-management') || location.pathname.includes('/club/'),
@@ -227,14 +229,14 @@ export default function Sidebar() {
     },
     {
       key: 'calendar',
-      label: 'Calendar',
+      label: t('nav.calendar'),
       icon: '📅',
       path: '/calendar',
       active: location.pathname === '/calendar'
     },
     {
       key: 'training-library',
-      label: 'Training Library',
+      label: t('nav.trainingLibrary'),
       icon: '📚',
       path: '/training-library',
       active: location.pathname.includes('/training-library'),
@@ -242,7 +244,7 @@ export default function Sidebar() {
     },
     {
       key: 'teams',
-      label: 'Teams',
+      label: t('nav.teams'),
       icon: '👥',
       path: '/teams',
       active: location.pathname === '/teams' || location.pathname.includes('/team/')
@@ -256,7 +258,7 @@ export default function Sidebar() {
     },
     {
       key: 'profile',
-      label: 'My Account',
+      label: t('userMenu.profile'),
       icon: '👤',
       hasSubmenu: true,
       submenu: [
@@ -270,7 +272,7 @@ export default function Sidebar() {
     },
     {
       key: 'pending-requests',
-      label: 'Join Requests',
+      label: t('nav.joinRequest'),
       icon: '📨',
       path: '/pending-requests',
       active: location.pathname === '/pending-requests',
@@ -485,7 +487,7 @@ export default function Sidebar() {
               text-sm font-medium text-red-400 hover:bg-red-500/10 transition-all"
           >
             <span className="text-lg">🚪</span>
-            <span>Logout</span>
+            <span>{t('nav.logout')}</span>
           </button>
         </div>
       </aside>

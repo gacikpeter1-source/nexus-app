@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useNotifications } from '../contexts/NotificationContext';
 import UserNotificationPreferences from './UserNotificationPreferences';
-
+import { useLanguage } from '../contexts/LanguageContext';
 export default function NotificationSettings() {
   const { 
     notificationPermission, 
@@ -13,7 +13,7 @@ export default function NotificationSettings() {
   
   const [showInfo, setShowInfo] = useState(false);
   const [showDetailedPreferences, setShowDetailedPreferences] = useState(false);
-
+  const { t } = useLanguage();
   // Handle toggle switch
   const handleToggle = async () => {
     if (notificationPermission === 'denied') {
@@ -31,7 +31,7 @@ export default function NotificationSettings() {
       <div className="flex items-center justify-between py-2">
         <div className="flex items-center gap-2">
           <span className="text-xl">🔔</span>
-          <span className="text-light text-sm">Push Notifications</span>
+          <span className="text-light text-sm">{t(notifications.pushNotifications)}</span>
         </div>
         <div className="w-11 h-6 bg-white/20 rounded-full animate-pulse" />
       </div>
@@ -50,7 +50,7 @@ export default function NotificationSettings() {
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          <span>Back to Profile</span>
+          <span>{t('notifications.backToProfile')}</span>
         </button>
         
         {/* Detailed Preferences */}
@@ -70,7 +70,7 @@ export default function NotificationSettings() {
               {notificationPermission === 'denied' ? '🔕' : '🔔'}
             </span>
             <div>
-              <div className="text-light font-semibold">Browser Push Notifications</div>
+            <div className="text-light font-semibold">{t('notifications.pushNotifications')}</div>
               <div className="text-light/60 text-sm">
                 {isNotificationsEnabled ? 'Enabled' : 'Disabled'}
               </div>
@@ -120,9 +120,9 @@ export default function NotificationSettings() {
           <div className="flex items-center gap-3">
             <span className="text-2xl">⚙️</span>
             <div className="text-left">
-              <div className="text-light font-semibold">Detailed Notification Preferences</div>
+              <div className="text-light font-semibold">{t('notifications.detailedNotificationPrefernces')}</div>
               <div className="text-light/60 text-sm">
-                Customize per notification type, quiet hours, mute clubs & more
+                {t('notifications.shortDescribtionNotifications')}
               </div>
             </div>
           </div>
@@ -166,46 +166,46 @@ export default function NotificationSettings() {
             {/* Header */}
             <div className="flex items-center gap-3 mb-4">
               <div className="text-3xl">🔔</div>
-              <h3 className="text-xl font-bold text-light">Push Notifications</h3>
+              <h3 className="text-xl font-bold text-light">{t('notifMsq.pushnotif')}</h3>
             </div>
 
             {/* Content */}
             {notificationPermission === 'denied' ? (
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-                <p className="text-red-400 font-semibold mb-2">Notifications Blocked</p>
+                <p className="text-red-400 font-semibold mb-2">{t('notifMsq.notifblocked')}</p>
                 <p className="text-light/70 text-sm mb-3">
-                  To enable notifications:
+                  {t('notifMsq.enablenotif')}
                 </p>
                 <ol className="text-light/60 text-sm space-y-2 list-decimal list-inside">
-                  <li>Click the lock icon 🔒 in your browser's address bar</li>
-                  <li>Find "Notifications" in permissions</li>
-                  <li>Change from "Block" to "Allow"</li>
-                  <li>Refresh this page</li>
+                  <li>{t('notifMsq.lockicon')}</li>
+                  <li>{t('notifMsq.notifpermission')}</li>
+                  <li>{t('notifMsq.blocktoallow')}</li>
+                  <li>{t('notifMsq.refreshpage')}</li>
                 </ol>
               </div>
             ) : isNotificationsEnabled ? (
               <div className="space-y-4">
                 <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
-                  <p className="text-green-400 font-semibold mb-2">✅ Notifications Enabled</p>
+                  <p className="text-green-400 font-semibold mb-2">✅ {t('notifMsq.notifenabled')}</p>
                   <p className="text-light/70 text-sm mb-3">
-                    You will receive notifications for:
+                  {t('notifMsq.notiffor')}
                   </p>
                   <ul className="space-y-1.5 text-light/60 text-sm">
                     <li className="flex items-center gap-2">
                       <span className="text-green-400">•</span>
-                      <span>New events in your clubs/teams</span>
+                      <span>{t('notifMsq.neweventsinform')}</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <span className="text-green-400">•</span>
-                      <span>Event changes and updates</span>
+                      <span>{t('notifMsq.eventchangesinform')}</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <span className="text-green-400">•</span>
-                      <span>Event cancellations</span>
+                      <span>{t('notifMsq.eventcancelationinstruct')}</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <span className="text-green-400">•</span>
-                      <span>New orders and deadlines</span>
+                      <span>{t('notifMsq.neorderdeadlinenotifinstruct')}</span>
                     </li>
                   </ul>
                 </div>
@@ -213,26 +213,26 @@ export default function NotificationSettings() {
             ) : (
               <div className="space-y-4">
                 <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-                  <p className="text-blue-400 font-semibold mb-2">Stay Updated</p>
+                  <p className="text-blue-400 font-semibold mb-2">{t('notifMsq.stayupdated')}</p>
                   <p className="text-light/70 text-sm mb-3">
-                    Enable notifications to receive updates about:
+                  {t('notifMsq.enablednotifforupdatesabout')}
                   </p>
                   <ul className="space-y-1.5 text-light/60 text-sm">
                     <li className="flex items-center gap-2">
                       <span className="text-blue-400">•</span>
-                      <span>New events</span>
+                      <span>{t('notifMsq.neweventnotif')}</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <span className="text-blue-400">•</span>
-                      <span>Event changes</span>
+                      <span>{t('notifMsq.eventchangesnotif')}</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <span className="text-blue-400">•</span>
-                      <span>Cancellations</span>
+                      <span>{t('notifMsq.cancelationnotif')}</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <span className="text-blue-400">•</span>
-                      <span>Orders and reminders</span>
+                      <span>{t('notifMsq.orderandremindersnotif')}</span>
                     </li>
                   </ul>
                 </div>
@@ -244,7 +244,7 @@ export default function NotificationSettings() {
                   }}
                   className="w-full px-6 py-3 bg-gradient-to-r from-primary to-accent text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200"
                 >
-                  Enable Notifications
+                  {t('notifMsq.enablednotifications')}
                 </button>
               </div>
             )}

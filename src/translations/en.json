@@ -36,7 +36,10 @@
     "finish": "Finish",
     "apply": "Apply",
     "reset": "Reset",
-    "table": "Table"
+    "table": "Table",
+	"denied": "Denied",
+	"enabled": "Enabled",
+	"disabled": "Disabled"
   },
   "nav": {
     "teams": "Teams",
@@ -46,7 +49,12 @@
     "requests": "Requests",
     "admin": "Admin",
     "logout": "Logout",
-    "dashboard": "Dashboard"
+    "dashboard": "Dashboard",
+	"trainingLibrary": "Training Library",
+	"myAccount": " My Account",
+	"joinRequest": "Join Request",
+	"myClubs": "My Clubs",
+	"logout": "Logout"
   },
   "userMenu": {
     "profile": "Profile",
@@ -95,6 +103,8 @@
   },
   "profile": {
     "title": "PROFILE",
+	"notificationTab": "Notifications",
+	"subscriptionTab": "Subscriptions",
     "subtitle": "Customize your profile and appearance",
     "avatarSection": "Avatar / Picture",
     "uploadAvatar": "Upload a profile picture or use the default avatar with your initial",
@@ -115,6 +125,67 @@
     "submittedBy": "Submitted By",
     "notSet": "Not set"
   },
+  "notifMsq": {
+	  "pushnotif": "Push Notifications",
+	  "notifblocked": "otifications Blocked",
+	  "enablenotif": "To enable notifications:",
+	  "lockicon": "Click the lock icon 🔒 in your browser's address bar",
+	  "notifpermission": "Find Notifications in permissions",
+	  "blocktoallow": "Change from Block to Allow",
+	  "refreshpage": "Refresh this page",
+	  "notifenabled": "Notifications Enabled",
+	  "notiffor": "You will receive notifications for:",
+	  "neweventsinform": "New events in your clubs",
+	  "eventchangesinform": "Event changes and updates:",
+	  "eventcancelationinstruct": "Event cancellations",
+	  "neorderdeadlinenotifinstruct": "New orders and deadlines",
+	  "stayupdated": "Stay Updated",
+	  "enablednotifforupdatesabout": "Enable notifications to receive updates about:",
+	  "neweventnotif": "New events",
+	  "eventchangesnotif": "Event changes",
+	  "cancelationnotif": "Cancellations",
+	  "orderandremindersnotif": "Orders and reminders",
+	  "enablednotifications": "Enable Notifications"
+  },  
+"notifTab": {
+  "success": "Successfully",
+  "error": "Error",
+  "errorLoadingSettings": "Error loading settings",
+  "failedToLoadSettings": "Failed to load notification settings",
+  "settingsSaved": "Notification settings saved",
+  "configureNotificationsFor": "Configure notifications for:",
+  "entireClubDefault": "Entire Club (Default Settings)",
+  "pushNotifications": "Push Notifications",
+  "sendToMobileDevices": "Send notifications to mobile devices",
+  "events": "Events",
+  "newEventsCreated": "New events created",
+  "eventsUpdated": "Events updated",
+  "eventsDeleted": "Events deleted",
+  "newOrdersCreated": "New orders created",
+  "orderDeadlines": "Order deadlines",
+  "emailNotifications": "Email Notifications",
+  "sendViaEmail": "Send notifications via email",
+  "newOrdersCreatedEmail": "New orders created",
+  "orderDeadlinesEmail": "Order deadlines",
+  "actionRequiredNotifications": "Action Required Notifications",
+  "persistentNotifications": "Persistent notifications requiring user response",
+  "actionRequiredDesc": "Action Required notifications:",
+  "stayVisibleUntilResponse": "Stay visible until user responds (Accept/Decline)",
+  "includeActionButtons": "Include direct action buttons",
+  "perfectFor": "Perfect for event attendance and order confirmations",
+  "autoExpireAfterDeadline": "Automatically expire after deadline",
+  "sendFor": "Send for:",
+  "eventAttendanceConfirmations": "Event attendance confirmations",
+  "orderResponseRequests": "Order response requests",
+  "saving": "Saving...",
+  "saveSettings": "Save Settings",
+  "howItWorks": "How It Works",
+  "applyToAllTeams": "Apply to all teams by default",
+  "overrideClubSettings": "Override club settings for specific teams",
+  "canBeConfiguredIndependently": "Can be configured independently",
+  "usersCanDisable": "Individual users can disable their own notifications in Profile",
+  "createsInteractiveNotifications": "Creates interactive notifications with Accept/Decline buttons"
+},
   "changePassword": {
     "title": "CHANGE PASSWORD",
     "subtitle": "Update your account password",
@@ -369,13 +440,18 @@
     "denyFailed": "Failed to deny request"
   },
   "notifications": {
-    "success": "Success!",
+	"success": "Success!",
     "error": "Error!",
     "warning": "Warning!",
     "info": "Info",
     "saved": "Saved successfully",
     "deleted": "Deleted successfully",
     "updated": "Updated successfully",
-    "created": "Created successfully"
+    "created": "Created successfully",
+	"pushNotifications": "Push Notifications",
+	"backToProfile": "Back to Profile",
+	"detailedNotificationPrefernces": "Detailed Notification Preferences",
+	"shortDescribtionNotifications": "Customize per notification type, quiet hours, mute clubs & more"
+	
   }
 }

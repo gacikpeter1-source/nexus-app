@@ -11,6 +11,7 @@ import {
   updateAttendance,
   getTeamEvents
 } from '../firebase/firestore';
+import { useLanguage } from '../contexts/LanguageContext';
 
 export default function AttendanceEntry() {
   const { clubId, teamId } = useParams();
@@ -523,6 +524,8 @@ export default function AttendanceEntry() {
     );
   }
 
+  const { t } = useLanguage();
+
   return (
     <div className="min-h-screen p-6">
       {/* Header */}
@@ -536,7 +539,7 @@ export default function AttendanceEntry() {
           </button>
           <div>
             <h1 className="font-display text-4xl text-light mb-1">
-              📋 <span className="text-primary">ATTENDANCE</span>
+              📋 <span className="text-primary">{t('event.attendance')}</span>
             </h1>
             <p className="text-light/60">
               {team.name} • {team.clubName}

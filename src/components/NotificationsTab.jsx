@@ -8,13 +8,14 @@ import {
   updateNotificationSettings,
   getDefaultNotificationSettings
 } from '../firebase/notificationSettings';
+import { useLanguage } from '../contexts/LanguageContext';
 
 export default function NotificationsTab({ clubId, clubTeams, userRole }) {
   const { showToast } = useToast();
   const [selectedScope, setSelectedScope] = useState('club'); // 'club' or team ID
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  
+  const { t } = useLanguage();
   // Notification settings state
   const [settings, setSettings] = useState(getDefaultNotificationSettings());
 
@@ -44,7 +45,7 @@ export default function NotificationsTab({ clubId, clubTeams, userRole }) {
     try {
       const teamId = selectedScope === 'club' ? null : selectedScope;
       await updateNotificationSettings(clubId, teamId, settings);
-      showToast('✅ Notification settings saved', 'success');
+      showToast('✅ ' + t('notifTab.settingsSaved'), t('notifTab.success'));
     } catch (error) {
       console.error('Error saving settings:', error);
       showToast('Failed to save settings', 'error');
@@ -151,14 +152,14 @@ export default function NotificationsTab({ clubId, clubTeams, userRole }) {
       {/* Scope Selector */}
       <div className="bg-white/5 rounded-lg p-4 border border-white/10">
         <label className="block text-light text-sm font-medium mb-2">
-          Configure notifications for:
+        {t('notifTab.configureNotificationsFor')}
         </label>
         <select
           value={selectedScope}
           onChange={(e) => setSelectedScope(e.target.value)}
           className="w-full px-4 py-2 bg-dark border border-white/20 text-light rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
         >
-          <option value="club">📋 Entire Club (Default Settings)</option>
+          <option value="club">📋 {t('notifTab.entireClubDefault')}</option>
           {clubTeams.map(team => (
             <option key={team.id} value={team.id}>
               👥 {team.name}
@@ -178,8 +179,8 @@ export default function NotificationsTab({ clubId, clubTeams, userRole }) {
           <div className="flex items-center gap-3">
             <span className="text-2xl">🔔</span>
             <div>
-              <h3 className="text-light font-bold text-lg">Push Notifications</h3>
-              <p className="text-light/60 text-sm">Send notifications to mobile devices</p>
+              <h3 className="text-light font-bold text-lg">{t('notifTab.pushNotifications')}</h3>
+              <p className="text-light/60 text-sm">{t('notifTab.sendToMobileDevices')}</p>
             </div>
           </div>
           <ToggleSwitch
@@ -190,22 +191,22 @@ export default function NotificationsTab({ clubId, clubTeams, userRole }) {
 
         {settings.push?.enabled && (
           <div className="mt-4 pl-11 space-y-1">
-            <h4 className="text-light/80 text-sm font-semibold mb-2">Events</h4>
+            <h4 className="text-light/80 text-sm font-semibold mb-2">{t('notifTab.events')}</h4>
             <SettingRow
               icon="📅"
-              label="New events created"
+              label={t('notifTab.newEventsCreated')}
               settingPath="push.events.created"
               description="Notify when new events are created"
             />
             <SettingRow
               icon="📝"
-              label="Events updated"
+              label={t('notifTab.eventsUpdated')}
               settingPath="push.events.updated"
               description="Notify when events are modified"
             />
             <SettingRow
               icon="❌"
-              label="Events deleted"
+              label={t('notifTab.eventsDeleted')}
               settingPath="push.events.deleted"
               description="Notify when events are cancelled"
             />
@@ -213,13 +214,13 @@ export default function NotificationsTab({ clubId, clubTeams, userRole }) {
             <h4 className="text-light/80 text-sm font-semibold mb-2 mt-4">Orders</h4>
             <SettingRow
               icon="🛒"
-              label="New orders created"
+              label={t('notifTab.newOrdersCreatedEmail')}
               settingPath="push.orders.created"
               description="Notify when new orders are available"
             />
             <SettingRow
               icon="⏰"
-              label="Order deadlines"
+              label={t('notifTab.orderDeadlinesEmail')}
               settingPath="push.orders.deadline"
               description="Remind about upcoming order deadlines"
             />
@@ -233,8 +234,8 @@ export default function NotificationsTab({ clubId, clubTeams, userRole }) {
           <div className="flex items-center gap-3">
             <span className="text-2xl">📧</span>
             <div>
-              <h3 className="text-light font-bold text-lg">Email Notifications</h3>
-              <p className="text-light/60 text-sm">Send notifications via email</p>
+              <h3 className="text-light font-bold text-lg">{t('notifTab.emailNotifications')}</h3>
+              <p className="text-light/60 text-sm">{t('notifTab.sendViaEmail')}</p>
             </div>
           </div>
           <ToggleSwitch
@@ -245,22 +246,22 @@ export default function NotificationsTab({ clubId, clubTeams, userRole }) {
 
         {settings.email?.enabled && (
           <div className="mt-4 pl-11 space-y-1">
-            <h4 className="text-light/80 text-sm font-semibold mb-2">Events</h4>
+            <h4 className="text-light/80 text-sm font-semibold mb-2">{t('notifTab.events')}</h4>
             <SettingRow
               icon="📅"
-              label="New events created"
+              label={t('notifTab.newEventsCreated')}
               settingPath="email.events.created"
               description="Send email when new events are created"
             />
             <SettingRow
               icon="📝"
-              label="Events updated"
+              label={t('notifTab.eventsUpdated')}
               settingPath="email.events.updated"
               description="Send email when events are modified"
             />
             <SettingRow
               icon="❌"
-              label="Events deleted"
+              label={t('notifTab.eventsDeleted')}
               settingPath="email.events.deleted"
               description="Send email when events are cancelled"
             />
@@ -268,13 +269,13 @@ export default function NotificationsTab({ clubId, clubTeams, userRole }) {
             <h4 className="text-light/80 text-sm font-semibold mb-2 mt-4">Orders</h4>
             <SettingRow
               icon="🛒"
-              label="New orders created"
+              label={t('notifTab.newOrdersCreated')}
               settingPath="email.orders.created"
               description="Send email when new orders are available"
             />
             <SettingRow
               icon="⏰"
-              label="Order deadlines"
+              label={t('notifTab.orderDeadlinesEmail')} 
               settingPath="email.orders.deadline"
               description="Send email reminders about deadlines"
             />
@@ -288,8 +289,8 @@ export default function NotificationsTab({ clubId, clubTeams, userRole }) {
           <div className="flex items-center gap-3">
             <span className="text-2xl">⚡</span>
             <div>
-              <h3 className="text-light font-bold text-lg">Action Required Notifications</h3>
-              <p className="text-light/60 text-sm">Persistent notifications requiring user response</p>
+              <h3 className="text-light font-bold text-lg">{t('notifTab.actionRequiredNotifications')}</h3>
+              <p className="text-light/60 text-sm">{t('notifTab.persistentNotifications')}</p>
             </div>
           </div>
           <ToggleSwitch
@@ -302,18 +303,18 @@ export default function NotificationsTab({ clubId, clubTeams, userRole }) {
           <div className="mt-4 pl-11">
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
               <p className="text-light/80 text-sm mb-2">
-                <strong>Action Required notifications:</strong>
+                <strong>{t('notifTab.actionRequiredDesc')}</strong>
               </p>
               <ul className="text-light/60 text-sm space-y-1.5 list-disc list-inside">
-                <li>Stay visible until user responds (Accept/Decline)</li>
-                <li>Include direct action buttons</li>
-                <li>Perfect for event attendance and order confirmations</li>
-                <li>Automatically expire after deadline</li>
+                <li>{t('notifTab.stayVisibleUntilResponse')}</li>
+                <li>{t('notifTab.includeActionButtons')}</li>
+                <li>{t('notifTab.perfectFor')}</li>
+                <li>{t('notifTab.autoExpireAfterDeadline')}</li>
               </ul>
             </div>
 
             <div className="mt-4 space-y-2">
-              <p className="text-light/70 text-sm font-medium">Send for:</p>
+              <p className="text-light/70 text-sm font-medium">{t('notifTab.sendFor')}</p>
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -329,7 +330,7 @@ export default function NotificationsTab({ clubId, clubTeams, userRole }) {
                   className="w-4 h-4 rounded bg-dark border-white/20 text-primary focus:ring-2 focus:ring-primary"
                 />
                 <label htmlFor="action-event-attendance" className="text-light/70 text-sm cursor-pointer">
-                  📅 Event attendance confirmations
+                  📅 {t('notifTab.eventAttendanceConfirmations')}
                 </label>
               </div>
               <div className="flex items-center gap-2">
@@ -347,7 +348,7 @@ export default function NotificationsTab({ clubId, clubTeams, userRole }) {
                   className="w-4 h-4 rounded bg-dark border-white/20 text-primary focus:ring-2 focus:ring-primary"
                 />
                 <label htmlFor="action-order-response" className="text-light/70 text-sm cursor-pointer">
-                  🛒 Order response requests
+                  🛒 {t('notifTab.orderResponseRequests')}
                 </label>
               </div>
             </div>
@@ -370,14 +371,14 @@ export default function NotificationsTab({ clubId, clubTeams, userRole }) {
       <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
         <h4 className="text-blue-400 font-semibold mb-2 flex items-center gap-2">
           <span>ℹ️</span>
-          <span>How It Works</span>
+          <span>{t('notifTab.howItWorks')}</span>
         </h4>
         <ul className="text-light/70 text-sm space-y-1.5">
-          <li>• <strong>Club Settings:</strong> Apply to all teams by default</li>
-          <li>• <strong>Team Settings:</strong> Override club settings for specific teams</li>
-          <li>• <strong>Push & Email:</strong> Can be configured independently</li>
-          <li>• <strong>Users control:</strong> Individual users can disable their own notifications in Profile</li>
-          <li>• <strong>Action Required:</strong> Creates interactive notifications with Accept/Decline buttons</li>
+          <li>• <strong>Club Settings:</strong> {t('notifTab.applyToAllTeams')}</li>
+          <li>• <strong>Team Settings:</strong> {t('notifTab.overrideClubSettings')}</li>
+          <li>• <strong>Push & Email:</strong> {t('notifTab.canBeConfiguredIndependently')}</li>
+          <li>• <strong>Users control:</strong> {t('notifTab.usersCanDisable')}</li>
+          <li>• <strong>Action Required:</strong> {t('notifTab.createsInteractiveNotifications')}</li>
         </ul>
       </div>
     </div>
