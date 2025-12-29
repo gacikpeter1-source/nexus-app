@@ -19,7 +19,6 @@ import {
   unmuteTeam
 } from '../firebase/userNotificationPreferences';
 import { getUserClubs } from '../firebase/firestore';
-import { useLanguage } from '../contexts/LanguageContext';
 
 export default function UserNotificationPreferences() {
   const { user } = useAuth();
@@ -42,7 +41,6 @@ export default function UserNotificationPreferences() {
 
   const currentPlan = getCurrentPlan();
   const isPremium = currentPlan !== 'free';
-  const { t } = useLanguage();
 
   // Load preferences and user clubs
   useEffect(() => {
@@ -58,8 +56,8 @@ export default function UserNotificationPreferences() {
       const prefs = await getUserNotificationPreferences(user.id);
       setPreferences(prefs);
     } catch (error) {
-      console.error(t('usernotifpref.errorLoadingPreferences'), error);
-      showToast(t('usernotifpref.failedToLoadPreferences'), 'error');
+      console.error('Error loading preferences:', error);
+      showToast('Failed to load preferences', 'error');
     } finally {
       setLoading(false);
     }
@@ -72,7 +70,7 @@ export default function UserNotificationPreferences() {
       const clubs = await getUserClubs(user.id);
       setUserClubs(clubs);
     } catch (error) {
-      console.error(t('usernotifpref.errorLoadingClubs'), error);
+      console.error('Error loading clubs:', error);
     }
   };
 
@@ -80,16 +78,16 @@ export default function UserNotificationPreferences() {
     try {
       await toggleMasterSwitch(user.id, enabled);
       setPreferences(prev => ({ ...prev, masterEnabled: enabled }));
-      showToast(enabled ? `✅ ${t('usernotifpref.notificationsEnabled')}` : `🔕 ${t('usernotifpref.notificationsDisabled')}`, 'success');
+      showToast(enabled ? '✅ Notifications enabled' : '🔕 Notifications disabled', 'success');
     } catch (error) {
-      showToast(t('usernotifpref.failedToUpdateSetting'), 'error');
+      showToast('Failed to update setting', 'error');
     }
   };
 
   const handleToggleChannel = async (channel, enabled) => {
     // Check premium requirement for SMS/Call
     if ((channel === 'sms' || channel === 'call') && !isPremium) {
-      showToast(t('usernotifpref.smsCallRequiresPremium'), 'error');
+      showToast('SMS and Call notifications require a premium subscription', 'error');
       return;
     }
     
@@ -99,9 +97,9 @@ export default function UserNotificationPreferences() {
         ...prev,
         channels: { ...prev.channels, [channel]: enabled }
       }));
-      showToast(`${channel.toUpperCase()} ${enabled ? t('usernotifpref.enabled') : t('usernotifpref.disabled')}`, 'success');
+      showToast(`${channel.toUpperCase()} ${enabled ? 'enabled' : 'disabled'}`, 'success');
     } catch (error) {
-      showToast(t('usernotifpref.failedToUpdateChannel'), 'error');
+      showToast('Failed to update channel', 'error');
     }
   };
 
@@ -116,7 +114,7 @@ export default function UserNotificationPreferences() {
         }
       }));
     } catch (error) {
-      showToast(t('usernotifpref.failedToUpdatePreference'), 'error');
+      showToast('Failed to update preference', 'error');
     }
   };
 
@@ -131,7 +129,7 @@ export default function UserNotificationPreferences() {
         }
       }));
     } catch (error) {
-      showToast(t('usernotifpref.failedToUpdateChannel'), 'error');
+      showToast('Failed to update channel', 'error');
     }
   };
 
@@ -140,9 +138,9 @@ export default function UserNotificationPreferences() {
       setSaving(true);
       await updateQuietHours(user.id, config);
       setPreferences(prev => ({ ...prev, quietHours: config }));
-      showToast(t('usernotifpref.quietHoursUpdated'), 'success');
+      showToast('Quiet hours updated', 'success');
     } catch (error) {
-      showToast(t('usernotifpref.failedToUpdateQuietHours'), 'error');
+      showToast('Failed to update quiet hours', 'error');
     } finally {
       setSaving(false);
     }
@@ -161,9 +159,9 @@ export default function UserNotificationPreferences() {
           ? [...(prev.mutedClubs || []), clubId]
           : (prev.mutedClubs || []).filter(id => id !== clubId)
       }));
-      showToast(mute ? t('usernotifpref.clubMuted') : t('usernotifpref.clubUnmuted'), 'success');
+      showToast(mute ? 'Club muted' : 'Club unmuted', 'success');
     } catch (error) {
-      showToast(t('usernotifpref.failedToUpdateClubMuteStatus'), 'error');
+      showToast('Failed to update club mute status', 'error');
     }
   };
 
@@ -180,9 +178,9 @@ export default function UserNotificationPreferences() {
           ? [...(prev.mutedTeams || []), teamId]
           : (prev.mutedTeams || []).filter(id => id !== teamId)
       }));
-      showToast(mute ? t('usernotifpref.teamMuted') : t('usernotifpref.teamUnmuted'), 'success');
+      showToast(mute ? 'Team muted' : 'Team unmuted', 'success');
     } catch (error) {
-      showToast(t('usernotifpref.failedToUpdateTeamMuteStatus'), 'error');
+      showToast('Failed to update team mute status', 'error');
     }
   };
 
@@ -266,7 +264,7 @@ export default function UserNotificationPreferences() {
                         ? 'opacity-40 cursor-not-allowed'
                         : 'hover:border-primary cursor-pointer'}
                     `}
-                    title={!canUse ? t('usernotifpref.premiumOnly') : !globalChannelEnabled ? `${channel} ${t('usernotifpref.disabledGlobally')}` : channel}
+                    title={!canUse ? 'Premium only' : !globalChannelEnabled ? `${channel} disabled globally` : channel}
                   >
                     <ChannelIcon channel={channel} enabled={channelEnabled && canUse} />
                   </button>
@@ -315,7 +313,7 @@ export default function UserNotificationPreferences() {
   if (!preferences) {
     return (
       <div className="text-light/60 text-center py-8">
-        {t('usernotifpref.failedToLoadPreferencesRefresh')}
+        Failed to load preferences. Please refresh the page.
       </div>
     );
   }
@@ -326,11 +324,11 @@ export default function UserNotificationPreferences() {
       <div className="bg-gradient-to-br from-primary/20 to-accent/20 border-2 border-primary/50 rounded-xl p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-2xl font-bold text-light mb-2">{t('usernotifpref.masterNotificationSwitch')}</h3>
+            <h3 className="text-2xl font-bold text-light mb-2">Master Notification Switch</h3>
             <p className="text-light/70">
               {preferences.masterEnabled
-                ? `✅ ${t('usernotifpref.notificationsAreEnabled')}`
-                : `🔕 ${t('usernotifpref.allNotificationsDisabled')}`}
+                ? '✅ Notifications are enabled'
+                : '🔕 All notifications are disabled'}
             </p>
           </div>
           <ToggleSwitch
@@ -343,15 +341,15 @@ export default function UserNotificationPreferences() {
       {/* Global Channel Toggles */}
       {preferences.masterEnabled && (
         <div className="bg-white/5 rounded-lg p-6 border border-white/10">
-          <h3 className="text-xl font-bold text-light mb-4">{t('usernotifpref.notificationChannels')}</h3>
-          <p className="text-light/60 text-sm mb-4">{t('usernotifpref.enableDisableChannels')}</p>
+          <h3 className="text-xl font-bold text-light mb-4">Notification Channels</h3>
+          <p className="text-light/60 text-sm mb-4">Enable or disable entire channels. You can customize per notification type below.</p>
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { key: 'push', label: t('usernotifpref.pushNotifications'), icon: '🔔', premium: false },
-              { key: 'email', label: t('usernotifpref.email'), icon: '📧', premium: false },
-              { key: 'sms', label: t('usernotifpref.sms'), icon: '📱', premium: true },
-              { key: 'call', label: t('usernotifpref.voiceCall'), icon: '📞', premium: true }
+              { key: 'push', label: 'Push Notifications', icon: '🔔', premium: false },
+              { key: 'email', label: 'Email', icon: '📧', premium: false },
+              { key: 'sms', label: 'SMS', icon: '📱', premium: true },
+              { key: 'call', label: 'Voice Call', icon: '📞', premium: true }
             ].map(({ key, label, icon, premium }) => {
               const enabled = preferences.channels?.[key];
               const canUse = !premium || isPremium;
@@ -377,7 +375,7 @@ export default function UserNotificationPreferences() {
                   </div>
                   <div className="text-light font-medium text-sm">{label}</div>
                   {premium && !isPremium && (
-                    <div className="text-accent text-xs mt-1">{t('usernotifpref.premiumOnly')}</div>
+                    <div className="text-accent text-xs mt-1">Premium Only</div>
                   )}
                 </div>
               );
@@ -389,141 +387,141 @@ export default function UserNotificationPreferences() {
       {/* Notification Types */}
       {preferences.masterEnabled && (
         <div className="space-y-4">
-          <h3 className="text-xl font-bold text-light">{t('usernotifpref.notificationTypes')}</h3>
-          <p className="text-light/60 text-sm">{t('usernotifpref.customizeNotifications')}</p>
+          <h3 className="text-xl font-bold text-light">Notification Types</h3>
+          <p className="text-light/60 text-sm">Customize which notifications you receive and how.</p>
 
           {/* Events */}
-          <CollapsibleSection id="events" title={t('usernotifpref.eventNotifications')} icon="📅">
+          <CollapsibleSection id="events" title="Event Notifications" icon="📅">
             <NotificationTypeRow
               type="eventCreated"
-              label={t('usernotifpref.newEventCreated')}
-              description={t('usernotifpref.newEventCreatedDesc')}
+              label="New Event Created"
+              description="When a new event is created in your clubs/teams"
               icon="✨"
             />
             <NotificationTypeRow
               type="eventModified"
-              label={t('usernotifpref.eventModified')}
-              description={t('usernotifpref.eventModifiedDesc')}
+              label="Event Modified"
+              description="When event details are changed"
               icon="📝"
             />
             <NotificationTypeRow
               type="eventDeleted"
-              label={t('usernotifpref.eventDeleted')}
-              description={t('usernotifpref.eventDeletedDesc')}
+              label="Event Deleted"
+              description="When an event is removed"
               icon="🗑️"
             />
             <NotificationTypeRow
               type="eventCancelled"
-              label={t('usernotifpref.eventCancelled')}
-              description={t('usernotifpref.eventCancelledDesc')}
+              label="Event Cancelled"
+              description="When an event is cancelled (different from deleted)"
               icon="❌"
             />
             <NotificationTypeRow
               type="eventReminder"
-              label={t('usernotifpref.eventReminders')}
-              description={t('usernotifpref.eventRemindersDesc')}
+              label="Event Reminders"
+              description="Reminders before events you're attending"
               icon="⏰"
             />
             <NotificationTypeRow
               type="lockPeriodStarted"
-              label={t('usernotifpref.lockPeriodStarted')}
-              description={t('usernotifpref.lockPeriodStartedDesc')}
+              label="Lock Period Started"
+              description="When event enters lock period (no status changes allowed)"
               icon="🔒"
             />
           </CollapsibleSection>
 
           {/* Waitlist */}
-          <CollapsibleSection id="waitlist" title={t('usernotifpref.waitlistNotifications')} icon="⏳">
+          <CollapsibleSection id="waitlist" title="Waitlist Notifications" icon="⏳">
             <NotificationTypeRow
               type="freeSpotAvailable"
-              label={t('usernotifpref.freeSpotAvailable')}
-              description={t('usernotifpref.freeSpotAvailableDesc')}
+              label="Free Spot Available"
+              description="When a spot opens up in an event you're waitlisted for (time-sensitive)"
               icon="🎉"
             />
             <NotificationTypeRow
               type="waitlistPositionChange"
-              label={t('usernotifpref.positionChange')}
-              description={t('usernotifpref.positionChangeDesc')}
+              label="Position Change"
+              description="When you move up in the waitlist"
               icon="📈"
             />
           </CollapsibleSection>
 
           {/* Substitution */}
-          <CollapsibleSection id="substitution" title={t('usernotifpref.substitutionNotifications')} icon="🔄">
+          <CollapsibleSection id="substitution" title="Substitution Notifications" icon="🔄">
             <NotificationTypeRow
               type="substitutionRequest"
-              label={t('usernotifpref.substitutionRequest')}
-              description={t('usernotifpref.substitutionRequestDesc')}
+              label="Substitution Request"
+              description="When someone selects you as their substitute"
               icon="🤝"
             />
             <NotificationTypeRow
               type="substitutionCompleted"
-              label={t('usernotifpref.substitutionConfirmed')}
-              description={t('usernotifpref.substitutionConfirmedDesc')}
+              label="Substitution Confirmed"
+              description="When your substitution request is completed"
               icon="✅"
             />
           </CollapsibleSection>
 
           {/* Orders */}
-          <CollapsibleSection id="orders" title={t('usernotifpref.orderNotifications')} icon="🛒">
+          <CollapsibleSection id="orders" title="Order Notifications" icon="🛒">
             <NotificationTypeRow
               type="orderCreated"
-              label={t('usernotifpref.newOrderAvailable')}
-              description={t('usernotifpref.newOrderAvailableDesc')}
+              label="New Order Available"
+              description="When a new order is created"
               icon="📦"
             />
             <NotificationTypeRow
               type="orderDeadline"
-              label={t('usernotifpref.orderDeadlineReminder')}
-              description={t('usernotifpref.orderDeadlineReminderDesc')}
+              label="Order Deadline Reminder"
+              description="Reminders about upcoming order deadlines"
               icon="⏰"
             />
           </CollapsibleSection>
 
           {/* Chat */}
-          <CollapsibleSection id="chat" title={t('usernotifpref.chatNotifications')} icon="💬">
+          <CollapsibleSection id="chat" title="Chat Notifications" icon="💬">
             <NotificationTypeRow
               type="newChatMessage"
-              label={t('usernotifpref.newChatMessage')}
-              description={t('usernotifpref.newChatMessageDesc')}
+              label="New Chat Message"
+              description="When you receive a new message in chats"
               icon="💬"
             />
           </CollapsibleSection>
 
           {/* User Management */}
-          <CollapsibleSection id="userMgmt" title={t('usernotifpref.userManagement')} icon="👥">
+          <CollapsibleSection id="userMgmt" title="User Management" icon="👥">
             <NotificationTypeRow
               type="userAdded"
-              label={t('usernotifpref.addedToClubTeam')}
-              description={t('usernotifpref.addedToClubTeamDesc')}
+              label="Added to Club/Team"
+              description="When you're added to a club or team"
               icon="➕"
             />
             <NotificationTypeRow
               type="userRemoved"
-              label={t('usernotifpref.removedFromClubTeam')}
-              description={t('usernotifpref.removedFromClubTeamDesc')}
+              label="Removed from Club/Team"
+              description="When you're removed from a club or team"
               icon="➖"
             />
             <NotificationTypeRow
               type="roleChanged"
-              label={t('usernotifpref.roleChanged')}
-              description={t('usernotifpref.roleChangedDesc')}
+              label="Role Changed"
+              description="When your role is changed (e.g., promoted to Trainer)"
               icon="⭐"
             />
           </CollapsibleSection>
 
           {/* Announcements */}
-          <CollapsibleSection id="announcements" title={t('usernotifpref.announcements')} icon="📢">
+          <CollapsibleSection id="announcements" title="Announcements" icon="📢">
             <NotificationTypeRow
               type="clubAnnouncement"
-              label={t('usernotifpref.clubAnnouncements')}
-              description={t('usernotifpref.clubAnnouncementsDesc')}
+              label="Club Announcements"
+              description="Important club-wide announcements"
               icon="🏛️"
             />
             <NotificationTypeRow
               type="teamAnnouncement"
-              label={t('usernotifpref.teamAnnouncements')}
-              description={t('usernotifpref.teamAnnouncementsDesc')}
+              label="Team Announcements"
+              description="Important team announcements"
               icon="👥"
             />
           </CollapsibleSection>
@@ -535,8 +533,8 @@ export default function UserNotificationPreferences() {
         <div className="bg-white/5 rounded-lg p-6 border border-white/10">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-xl font-bold text-light">{t('usernotifpref.quietHours')}</h3>
-              <p className="text-light/60 text-sm">{t('usernotifpref.quietHoursDesc')}</p>
+              <h3 className="text-xl font-bold text-light">Quiet Hours</h3>
+              <p className="text-light/60 text-sm">Mute non-critical notifications during specific hours</p>
             </div>
             <ToggleSwitch
               enabled={preferences.quietHours?.enabled}
@@ -551,7 +549,7 @@ export default function UserNotificationPreferences() {
             <div className="space-y-4 mt-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-light/80 text-sm mb-2">{t('usernotifpref.startTime')}</label>
+                  <label className="block text-light/80 text-sm mb-2">Start Time</label>
                   <input
                     type="time"
                     value={preferences.quietHours?.startTime || '22:00'}
@@ -563,7 +561,7 @@ export default function UserNotificationPreferences() {
                   />
                 </div>
                 <div>
-                  <label className="block text-light/80 text-sm mb-2">{t('usernotifpref.endTime')}</label>
+                  <label className="block text-light/80 text-sm mb-2">End Time</label>
                   <input
                     type="time"
                     value={preferences.quietHours?.endTime || '07:00'}
@@ -578,7 +576,7 @@ export default function UserNotificationPreferences() {
               
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
                 <p className="text-blue-400 text-sm">
-                  {`ℹ️ ${t('usernotifpref.criticalNotificationsNote')}`}
+                  ℹ️ Critical notifications (waitlist spots, substitutions, event cancellations) will still be delivered during quiet hours.
                 </p>
               </div>
             </div>
@@ -589,8 +587,8 @@ export default function UserNotificationPreferences() {
       {/* Mute Clubs/Teams */}
       {preferences.masterEnabled && userClubs.length > 0 && (
         <div className="bg-white/5 rounded-lg p-6 border border-white/10">
-          <h3 className="text-xl font-bold text-light mb-4">{t('usernotifpref.muteClubsTeams')}</h3>
-          <p className="text-light/60 text-sm mb-4">{t('usernotifpref.muteClubsTeamsDesc')}</p>
+          <h3 className="text-xl font-bold text-light mb-4">Mute Clubs & Teams</h3>
+          <p className="text-light/60 text-sm mb-4">Temporarily disable notifications from specific clubs or teams</p>
 
           <div className="space-y-3">
             {userClubs.map(club => {
@@ -642,17 +640,21 @@ export default function UserNotificationPreferences() {
       <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
         <h4 className="text-blue-400 font-semibold mb-2 flex items-center gap-2">
           <span>ℹ️</span>
-          <span>{t('usernotifpref.howNotificationPreferencesWork')}</span>
+          <span>How Notification Preferences Work</span>
         </h4>
         <ul className="text-light/70 text-sm space-y-1.5">
-          <li>• <strong>{t('usernotifpref.masterSwitch')}</strong> {t('usernotifpref.masterSwitchDesc')}</li>
-          <li>• <strong>{t('usernotifpref.channels')}</strong> {t('usernotifpref.channelsDesc')}</li>
-          <li>• <strong>{t('usernotifpref.perTypeSettings')}</strong> {t('usernotifpref.perTypeSettingsDesc')}</li>
-          <li>• <strong>{t('usernotifpref.yourPreferencesOverride')}</strong> {t('usernotifpref.yourPreferencesOverrideDesc')}</li>
-          <li>• <strong>{t('usernotifpref.quietHoursNote')}</strong> {t('usernotifpref.quietHoursNoteDesc')}</li>
-          <li>• <strong>{t('usernotifpref.mutedClubsTeams')}</strong> {t('usernotifpref.mutedClubsTeamsDesc')}</li>
+          <li>• <strong>Master Switch:</strong> Disables ALL notifications instantly</li>
+          <li>• <strong>Channels:</strong> Global enable/disable for Push, Email, SMS, Call</li>
+          <li>• <strong>Per-Type Settings:</strong> Customize each notification type independently</li>
+          <li>• <strong>Your preferences override</strong> club/team settings (except emergency notifications)</li>
+          <li>• <strong>Quiet Hours:</strong> Non-critical notifications are paused during your quiet hours</li>
+          <li>• <strong>Muted Clubs/Teams:</strong> No notifications from muted sources</li>
         </ul>
       </div>
     </div>
   );
 }
+
+
+
+

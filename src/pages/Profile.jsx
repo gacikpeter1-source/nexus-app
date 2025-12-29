@@ -72,7 +72,7 @@ export default function Profile() {
     e.preventDefault();
 
     if (!form.displayName.trim()) {
-      alert('Display name is required');
+      alert(t('profile.displayNameRequired'));
       return;
     }
 
@@ -115,8 +115,8 @@ export default function Profile() {
       setPendingSubscription(result.subscription);
       setShowInvoice(true);
     } catch (error) {
-      console.error('Error creating subscription:', error);
-      alert('Failed to create subscription');
+      console.error(t('profile.errorCreatingSubscription'), error);
+      alert(t('profile.failedToCreateSubscription'));
     }
   };
 
@@ -132,12 +132,12 @@ export default function Profile() {
         cancelledAt: new Date().toISOString()
       });
       
-      alert('✅ Subscription cancelled successfully! You now have a Free account.');
+      alert(t('profile.subscriptionCancelled'));
       setShowCancelModal(false);
       window.location.reload(); // Reload to update subscription context
     } catch (error) {
-      console.error('Error cancelling subscription:', error);
-      alert('❌ Failed to cancel subscription: ' + error.message);
+      console.error(t('profile.errorCancellingSubscription'), error);
+      alert(t('profile.failedToCancelSubscription') + ' ' + error.message);
     } finally {
       setBusy(false);
     }
@@ -160,7 +160,7 @@ export default function Profile() {
           plan: 'free',
           cancelledAt: new Date().toISOString()
         });
-        alert('✅ Downgraded to Free plan!');
+        alert(t('profile.downgradedToFree'));
       } else {
         // For upgrades/changes, create new subscription request
         const result = await subscribe(changingToPlan, 'monthly');
@@ -175,8 +175,8 @@ export default function Profile() {
         window.location.reload();
       }
     } catch (error) {
-      console.error('Error changing plan:', error);
-      alert('❌ Failed to change plan: ' + error.message);
+      console.error(t('profile.errorChangingPlan'), error);
+      alert(t('profile.failedToChangePlan') + ' ' + error.message);
     } finally {
       setBusy(false);
     }
@@ -185,7 +185,7 @@ export default function Profile() {
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-light">{t('common.Please_login_to_view_your_profile')}</p>
+        <p className="text-light">{t('profile.loginRequired')}</p>
       </div>
     );
   }
@@ -205,10 +205,10 @@ export default function Profile() {
             ← Back
           </button>
           <h1 className="font-display text-3xl md:text-5xl lg:text-6xl text-light tracking-wider">
-            👤 {t('userMenu.profile')}
+            👤 {t('profile.title')}
           </h1>
           <p className="text-light/60 text-lg mt-2">
-            {t('userMenu.profileDesc')}
+            {t('profile.subtitle')}
           </p>
         </div>
 
@@ -224,9 +224,9 @@ export default function Profile() {
                   : 'text-light/60 hover:text-light'
               }`}
             >
-              {tab === 'profile' && '👤' + t('profile.title')}
-              {tab === 'notifications' && '🔔' + t('profile.notificationTab')}
-              {tab === 'subscription' && '💳' + t('profile.subscriptionTab')}
+              {tab === 'profile' && '👤 ' + t('profile.title')}
+              {tab === 'notifications' && '🔔 ' + t('profile.notificationTab')}
+              {tab === 'subscription' && '💳 ' + t('profile.subscriptionTab')}
             </button>
           ))}
         </div>
@@ -325,7 +325,7 @@ export default function Profile() {
                 <div>
                   <label className="block text-sm font-medium text-light/80 mb-2">Email</label>
                   <input
-                    type={t('profile.email')}
+                    type="email"
                     value={user.email}
                     disabled
                     className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 md:px-4 md:py-3 text-light/50 cursor-not-allowed"
@@ -387,7 +387,7 @@ export default function Profile() {
                 onClick={() => navigate(-1)}
                 className="px-4 py-2 md:px-6 md:py-4 bg-white/10 hover:bg-white/20 text-light rounded-lg text-sm md:text-base transition-colors"
               >
-                {t('common.cancel')}
+                {t('profile.cancel')}
               </button>
             </div>
           </form>
@@ -407,12 +407,12 @@ export default function Profile() {
             <div className="bg-gradient-to-br from-primary/20 to-accent/20 border-2 border-primary/50 rounded-xl p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h3 className="text-2xl font-bold text-light mb-2">Current Plan</h3>
+                  <h3 className="text-2xl font-bold text-light mb-2">{t('profile.current')}</h3>
                   <p className="text-2xl md:text-3xl font-bold text-accent">{planFeatures.name}</p>
                   <p className="text-light/70 mt-1">{planFeatures.description}</p>
                   {userSubscription && isSubscriptionActive() && (
                     <p className="text-sm text-success mt-2">
-                      ✓ Active until {new Date(getExpiryDate()).toLocaleDateString()}
+                      ✓ {t('profile.activeUntil')} {new Date(getExpiryDate()).toLocaleDateString()}
                     </p>
                   )}
                 </div>
@@ -423,14 +423,14 @@ export default function Profile() {
                     onClick={() => setShowCancelModal(true)}
                     className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition-all border border-red-600/50"
                   >
-                    🚫 Cancel Subscription
+                    🚫 {t('profile.cancelSubscription')}
                   </button>
                 )}
               </div>
 
               {/* Current Plan Features */}
               <div className="mt-4 p-4 bg-dark/30 rounded-lg">
-                <p className="text-sm text-light/60 mb-2">Your current features:</p>
+                <p className="text-sm text-light/60 mb-2">{t('profile.yourCurrentFeatures')}</p>
                 <ul className="grid grid-cols-2 gap-2 text-sm">
                   {planFeatures.features.map((feature, idx) => (
                     <li key={idx} className="flex items-center gap-2 text-light/80">
@@ -444,8 +444,8 @@ export default function Profile() {
             {/* Quick Plan Switcher */}
             {!showInvoice && (
               <div className="bg-mid-dark rounded-xl p-6 border border-white/10">
-                <h3 className="text-xl font-bold text-light mb-4">Switch Plan</h3>
-                <p className="text-light/60 mb-4">Choose a different plan instantly:</p>
+                <h3 className="text-xl font-bold text-light mb-4">{t('profile.switchPlan')}</h3>
+                <p className="text-light/60 mb-4">{t('profile.chooseDifferentPlan')}</p>
                 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {['free', 'user', 'club', 'full'].map(plan => {
@@ -466,7 +466,7 @@ export default function Profile() {
                         <p className="font-bold text-lg">{planInfo.name}</p>
                         <p className="text-xs opacity-70 mt-1">{planInfo.shortDesc || planInfo.description}</p>
                         {isCurrent && (
-                          <p className="text-xs mt-2 text-success">✓ Current</p>
+                          <p className="text-xs mt-2 text-success">✓ {t('profile.current')}</p>
                         )}
                         {!isCurrent && plan !== 'free' && (
                           <p className="text-xs mt-2 text-accent">
@@ -493,7 +493,7 @@ export default function Profile() {
               />
             ) : (
               <>
-                <h3 className="text-2xl font-bold text-light">All Available Plans</h3>
+                <h3 className="text-2xl font-bold text-light">{t('profile.allAvailablePlans')}</h3>
                 <SubscriptionPlans 
                   onSelectPlan={handleSelectPlan}
                   showFreePlan={true}
@@ -505,22 +505,22 @@ export default function Profile() {
             {showCancelModal && (
               <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
                 <div className="bg-mid-dark rounded-xl p-6 max-w-md w-full border border-white/10">
-                  <h3 className="text-2xl font-bold text-light mb-4">⚠️ Cancel Subscription?</h3>
+                  <h3 className="text-2xl font-bold text-light mb-4">⚠️ {t('profile.cancelSubscriptionQuestion')}</h3>
                   <p className="text-light/80 mb-4">
-                    Are you sure you want to cancel your <strong className="text-accent">{planFeatures.name}</strong> subscription?
+                    {t('profile.areYouSureCancelSubscription').split('{planName}')[0]}
+                    <strong className="text-accent">{planFeatures.name}</strong>
+                    {t('profile.areYouSureCancelSubscription').split('{planName}')[1]}
                   </p>
                   <div className="bg-red-600/10 border border-red-600/30 rounded-lg p-4 mb-4">
                     <p className="text-red-400 text-sm">
-                      <strong>You will lose:</strong>
+                      <strong>{t('profile.youWillLose')}</strong>
                     </p>
                     <ul className="text-red-400/80 text-sm mt-2 space-y-1">
                       {planFeatures.features.map((feature, idx) => (
                         <li key={idx}>• {feature}</li>
                       ))}
                     </ul>
-                    <p className="text-red-400 text-sm mt-3">
-                      You will be downgraded to the <strong>Free</strong> plan immediately.
-                    </p>
+                    <p className="text-red-400 text-sm mt-3" dangerouslySetInnerHTML={{ __html: t('profile.downgradedToFreeImmediately') }} />
                   </div>
                   <div className="flex gap-3">
                     <button
@@ -528,7 +528,7 @@ export default function Profile() {
                       className="flex-1 px-3 py-2 md:px-4 md:py-3 text-sm md:text-base bg-dark hover:bg-dark/80 text-light rounded-lg transition"
                       disabled={busy}
                     >
-                      Keep Subscription
+                      {t('profile.keepSubscription')}
                     </button>
                     <button
                       onClick={handleCancelSubscription}
@@ -550,20 +550,19 @@ export default function Profile() {
                     {changingToPlan === 'free' ? '⬇️ Downgrade' : '⬆️ Change Plan'}
                   </h3>
                   <p className="text-light/80 mb-4">
-                    Change from <strong className="text-primary">{planFeatures.name}</strong> to{' '}
-                    <strong className="text-accent">{PLAN_FEATURES[changingToPlan].name}</strong>?
+                    {t('profile.changeFromTo')
+                      .replace('{fromPlan}', `<strong className="text-primary">${planFeatures.name}</strong>`)
+                      .replace('{toPlan}', `<strong className="text-accent">${PLAN_FEATURES[changingToPlan].name}</strong>`)}
                   </p>
                   
                   {changingToPlan === 'free' ? (
                     <div className="bg-yellow-600/10 border border-yellow-600/30 rounded-lg p-4 mb-4">
-                      <p className="text-yellow-400 text-sm">
-                        <strong>⚠️ Warning:</strong> Downgrading to Free will remove all premium features immediately.
-                      </p>
+                      <p className="text-yellow-400 text-sm" dangerouslySetInnerHTML={{ __html: t('profile.warningDowngrading') }} />
                     </div>
                   ) : (
                     <div className="bg-primary/10 border border-primary/30 rounded-lg p-4 mb-4">
                       <p className="text-primary text-sm">
-                        <strong>✓ You'll get:</strong>
+                        <strong>{t('profile.youllGet')}</strong>
                       </p>
                       <ul className="text-light/80 text-sm mt-2 space-y-1">
                         {PLAN_FEATURES[changingToPlan].features.slice(0, 3).map((feature, idx) => (
@@ -582,7 +581,7 @@ export default function Profile() {
                       className="flex-1 px-3 py-2 md:px-4 md:py-3 text-sm md:text-base bg-dark hover:bg-dark/80 text-light rounded-lg transition"
                       disabled={busy}
                     >
-                      Cancel
+                      {t('profile.cancel')}
                     </button>
                     <button
                       onClick={confirmChangePlan}

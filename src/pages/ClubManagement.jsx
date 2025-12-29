@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, ROLES } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import NotificationsTab from '../components/NotificationsTab';
 
 import { 
@@ -41,6 +42,7 @@ import { canAssignRole } from '../firebase/privileges';
 export default function ClubManagement() {
   const { user, loading: authLoading, listClubsForUser } = useAuth();
   const { showToast } = useToast();
+  const { t } = useLanguage();
   const navigate = useNavigate();
 
   const [clubs, setClubs] = useState([]);
@@ -248,8 +250,8 @@ const [orderSearchQuery, setOrderSearchQuery] = useState('');
       const members = uniqueMembers.map(m => {
         const u = allUsers.find(u => u.id === m.id) || {};
         const teams = club.teams || [];
-        const userTeamIds = teams.filter(t => (t.members || []).includes(m.id)).map(t => t.id);
-        const userTeamNames = teams.filter(t => (t.members || []).includes(m.id)).map(t => t.name);
+        const userTeamIds = teams.filter(team => (team.members || []).includes(m.id)).map(team => team.id);
+        const userTeamNames = teams.filter(team => (team.members || []).includes(m.id)).map(team => team.name);
         return { ...m, username: u.username || '', email: u.email || '', teamIds: userTeamIds, teamNames: userTeamNames };
       });
 
@@ -314,15 +316,15 @@ const [orderSearchQuery, setOrderSearchQuery] = useState('');
       // If specific team requested, add to team
       let updatedTeams = club.teams || [];
       if (request.teamId) {
-        updatedTeams = updatedTeams.map(t => {
-          if (t.id === request.teamId) {
-            const teamMembers = [...(t.members || [])];
+        updatedTeams = updatedTeams.map(team => {
+          if (team.id === request.teamId) {
+            const teamMembers = [...(team.members || [])];
             if (!teamMembers.includes(request.userId)) {
               teamMembers.push(request.userId);
             }
-            return { ...t, members: teamMembers };
+            return { ...team, members: teamMembers };
           }
-          return t;
+          return team;
         });
       }
 
@@ -352,12 +354,12 @@ const [orderSearchQuery, setOrderSearchQuery] = useState('');
         teamName
       );
 
-      showToast('✅ Request approved!', 'success');
+      showToast(t('clubmgmt.requestApproved'), 'success');
       await loadPendingRequests(selectedClubId);
       await loadClubData(selectedClubId);
     } catch (error) {
       console.error('Error approving request:', error);
-      showToast('Failed to approve request', 'error');
+      showToast(t('clubmgmt.failedToApproveRequest'), 'error');
     }
   };
 
@@ -370,11 +372,11 @@ const [orderSearchQuery, setOrderSearchQuery] = useState('');
         handledAt: new Date().toISOString()
       });
 
-      showToast('Request denied', 'info');
+      showToast(t('clubmgmt.requestDenied'), 'info');
       await loadPendingRequests(selectedClubId);
     } catch (error) {
       console.error('Error denying request:', error);
-      showToast('Failed to deny request', 'error');
+      showToast(t('clubmgmt.failedToDenyRequest'), 'error');
     }
   };
 
@@ -437,12 +439,12 @@ useEffect(() => {
     try {
       const { deleteClub } = await import('../firebase/firestore');
       await deleteClub(clubId);
-      showToast('Club deleted successfully', 'success');
+      showToast(t('clubmgmt.clubDeletedSuccessfully'), 'success');
       await loadInitialData(); // Reload clubs
       setSelectedClubId('');
     } catch (error) {
       console.error('Error deleting club:', error);
-      showToast('Failed to delete club', 'error');
+      showToast(t('clubmgmt.failedToDeleteClub'), 'error');
     }
   };
 
@@ -463,7 +465,7 @@ useEffect(() => {
       const club = await getClub(selectedClubId);
       if (!club) {
         setShowRemoveActionModal(false);
-        return showToast('Club not found', 'error');
+        return showToast(t('clubmgmt.clubNotFound'), 'error');
       }
       
       const userTeams = (club.teams || []).filter(team => 
@@ -477,7 +479,7 @@ useEffect(() => {
       
       if (userTeams.length === 0) {
         setShowRemoveActionModal(false);
-        return showToast('User is not in any teams', 'info');
+        return showToast(t('clubmgmt.userIsNotInAnyTeams'), 'info');
       }
       
       // Open team selection modal
@@ -487,7 +489,7 @@ useEffect(() => {
       setShowRemoveModal(true);
     } catch (error) {
       console.error('Error loading teams:', error);
-      showToast('Failed to load teams', 'error');
+      showToast(t('clubmgmt.failedToLoadTeams'), 'error');
     }
   };
 
@@ -505,7 +507,7 @@ useEffect(() => {
     
     if (!isTrainerOrAbove) {
       setShowRemoveActionModal(false);
-      return showToast('Only trainers can remove users from club', 'error');
+      return showToast(t('clubmgmt.onlyTrainersCanRemoveUsers'), 'error');
     }
 
     if (!confirm(`Remove ${memberToRemove.username || memberToRemove.email} from club entirely?`)) {
@@ -542,19 +544,19 @@ useEffect(() => {
         null
       );
 
-      showToast('User removed from club', 'success');
+      showToast(t('clubmgmt.userRemovedFromClub'), 'success');
       setShowRemoveActionModal(false);
       setMemberToRemove(null);
       await loadClubData(selectedClubId);
     } catch (error) {
       console.error('Error removing from club:', error);
-      showToast('Failed to remove from club', 'error');
+      showToast(t('clubmgmt.failedToRemoveFromClub'), 'error');
     }
   };
 
   const confirmRemoveFromTeams = async () => {
     if (!userToRemove || teamsToRemoveFrom.length === 0) {
-      return showToast('Please select at least one team', 'error');
+      return showToast(t('clubmgmt.pleaseSelectAtLeastOneTeam'), 'error');
     }
     
     try {
@@ -577,14 +579,14 @@ useEffect(() => {
       };
 
       await updateClub(selectedClubId, updatedClub);
-      showToast(`Removed from ${teamsToRemoveFrom.length} team(s)`, 'success');
+      showToast(t('clubmgmt.removedFrom') + ` ${teamsToRemoveFrom.length} team(s)`, 'success');
       setShowRemoveModal(false);
       setUserToRemove(null);
       setTeamsToRemoveFrom([]);
       await loadClubData(selectedClubId);
     } catch (error) {
       console.error('Error removing member:', error);
-      showToast('Failed to remove member from teams', 'error');
+      showToast(t('clubmgmt.failedToRemoveMemberFromTeams'), 'error');
     }
   };
 
@@ -606,7 +608,7 @@ useEffect(() => {
       (team.assistants || []).includes(userToRemove.id)
     );
     
-    setTeamsToRemoveFrom(userTeams.map(t => t.id));
+    setTeamsToRemoveFrom(userTeams.map(team => team.id));
   };
 
   const openQuickAssignModal = (team) => {
@@ -639,31 +641,31 @@ useEffect(() => {
       const club = await getClub(selectedClubId);
       if (!club) return;
 
-      const updatedTeams = (club.teams || []).map(t => {
-        if (t.id === teamToAssign.id) {
+      const updatedTeams = (club.teams || []).map(team => {
+        if (team.id === teamToAssign.id) {
           return {
-            ...t,
-            members: [...new Set([...(t.members || []), userId])]
+            ...team,
+            members: [...new Set([...(team.members || []), userId])]
           };
         }
-        return t;
+        return team;
       });
 
       await updateClub(selectedClubId, { teams: updatedTeams });
-      showToast('User added to team', 'success');
+      showToast(t('clubmgmt.userAddedToTeam'), 'success');
       setShowQuickAssignModal(false);
       setQuickAssignSearch('');
       setQuickAssignMatches([]);
       await loadClubData(selectedClubId);
     } catch (error) {
       console.error('Error assigning to team:', error);
-      showToast('Failed to assign user', 'error');
+      showToast(t('clubmgmt.failedToAssignUser'), 'error');
     }
   };
 
   const handleRenameTeam = async () => {
     if (!selectedClubId || !teamToRename || !renameTeamName.trim()) {
-      showToast('Please enter a team name', 'error');
+      showToast(t('clubmgmt.pleaseEnterTeamName'), 'error');
       return;
     }
 
@@ -671,21 +673,21 @@ useEffect(() => {
       const club = await getClub(selectedClubId);
       if (!club) return;
 
-      const updatedTeams = (club.teams || []).map(t => 
-        t.id === teamToRename.id 
-          ? { ...t, name: renameTeamName.trim() }
-          : t
+      const updatedTeams = (club.teams || []).map(team => 
+        team.id === teamToRename.id 
+          ? { ...team, name: renameTeamName.trim() }
+          : team
       );
 
       await updateClub(selectedClubId, { teams: updatedTeams });
-      showToast('Team renamed successfully', 'success');
+      showToast(t('clubmgmt.teamRenamedSuccessfully'), 'success');
       setShowRenameTeamModal(false);
       setTeamToRename(null);
       setRenameTeamName('');
       await loadClubData(selectedClubId);
     } catch (error) {
       console.error('Error renaming team:', error);
-      showToast('Failed to rename team', 'error');
+      showToast(t('clubmgmt.failedToRenameTeam'), 'error');
     }
   };
 
@@ -699,7 +701,7 @@ useEffect(() => {
     if (!teamToDelete) return;
 
     // Confirm deletion
-    const confirmMessage = `Are you sure you want to delete "${teamToDelete.name}"?\n\n⚠️ This will permanently delete:\n- The team\n- All team events\n- All team chats\n- All team members will be unassigned\n\nThis action cannot be undone!`;
+    const confirmMessage = t('clubmgmt.areYouSureWantToDelete') + ` "${teamToDelete.name}"?\n\n⚠️ This will permanently delete:\n- The team\n- All team events\n- All team chats\n- All team members will be unassigned\n\nThis action cannot be undone!`;
     
     if (!window.confirm(confirmMessage)) return;
 
@@ -736,11 +738,11 @@ useEffect(() => {
         }
       );
 
-      showToast(`✅ Team "${teamToDelete.name}" and all related data deleted successfully`, 'success');
+      showToast(t('clubmgmt.teamDeletedSuccessfully').replace('{teamName}', teamToDelete.name), 'success');
       await loadClubData(selectedClubId);
     } catch (error) {
       console.error('Error deleting team:', error);
-      showToast('Failed to delete team: ' + error.message, 'error');
+      showToast(t('clubmgmt.failedToDeleteTeam') + ': ' + error.message, 'error');
     }
   };
 
@@ -752,10 +754,10 @@ useEffect(() => {
     
     // Can't leave if you're the owner
     if (isClubOwner(user, selectedClub)) {
-      return showToast('Club owners cannot leave. Transfer ownership first.', 'error');
+      return showToast(t('clubmgmt.clubOwnersCannotLeave'), 'error');
     }
     
-    if (!window.confirm(`Are you sure you want to leave ${selectedClub.name}?`)) return;
+    if (!window.confirm(t('clubmgmt.areYouSureWantToLeave') + ` ${selectedClub.name}?`)) return;
     
     try {
       const club = await getClub(selectedClubId);
@@ -778,19 +780,19 @@ useEffect(() => {
         teams: updatedTeams
       });
       
-      showToast('Left club successfully', 'success');
+      showToast(t('clubmgmt.leftClubSuccessfully'), 'success');
       setSelectedClubId('');
       await loadInitialData();
     } catch (error) {
       console.error('Error leaving club:', error);
-      showToast('Failed to leave club', 'error');
+      showToast(t('clubmgmt.failedToLeaveClub'), 'error');
     }
   };
 
   const handleChangeRole = async (userId, newRole) => {
     if (!selectedClubId) return;
     
-    console.log('🔄 Changing role:', { userId, newRole, selectedClubId });
+    console.log('🔄 ' + t('clubmgmt.changingRole') + ':', { userId, newRole, selectedClubId });
     
     try {
       // Update user's role in Firebase users collection
@@ -803,9 +805,9 @@ useEffect(() => {
       const club = await getClub(selectedClubId);
       if (!club) {
         console.error('❌ Club not found');
-        return showToast('Club not found', 'error');
+        return showToast(t('clubmgmt.clubNotFound'), 'error');
       }
-      console.log('✅ Club data loaded:', club.name);
+      console.log('✅ ' + t('clubmgmt.clubDataLoaded') + ':', club.name);
 
       // Remove user from all role arrays first
       let updatedTrainers = (club.trainers || []).filter(id => id !== userId);
@@ -851,7 +853,7 @@ useEffect(() => {
         oldRole
       );
       
-      showToast(`Role updated to ${newRole}`, 'success');
+      showToast(t('clubmgmt.roleUpdatedTo') + ` ${newRole}`, 'success');
       await loadClubData(selectedClubId);
     } catch (error) {
       console.error('❌ Error changing role:', error);
@@ -860,14 +862,14 @@ useEffect(() => {
         code: error.code,
         stack: error.stack
       });
-      showToast(`Failed to change role: ${error.message}`, 'error');
+      showToast(t('clubmgmt.failedToChangeRole') + `: ${error.message}`, 'error');
     }
   };
 
   // Edit Club function
   async function handleEditClub() {
     if (!editClubName.trim()) {
-      showToast('Club name is required', 'error');
+      showToast(t('clubmgmt.clubNameRequired'), 'error');
       return;
     }
 
@@ -876,7 +878,7 @@ useEffect(() => {
       : editClubType;
 
     if (!finalClubType) {
-      showToast('Club type is required', 'error');
+      showToast(t('clubmgmt.clubTypeRequired'), 'error');
       return;
     }
 
@@ -886,14 +888,14 @@ useEffect(() => {
         clubType: finalClubType
       });
 
-      showToast('Club updated successfully', 'success');
+      showToast(t('clubmgmt.clubUpdatedSuccessfully'), 'success');
       setShowEditClubModal(false);
       
       // Reload clubs list
       await loadClubs();
     } catch (error) {
       console.error('Error updating club:', error);
-      showToast('Failed to update club', 'error');
+      showToast(t('clubmgmt.failedToUpdateClub'), 'error');
     }
   }
 
@@ -902,7 +904,7 @@ useEffect(() => {
     const file = e.target.files[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
-        showToast('Image must be less than 5MB', 'error');
+        showToast(t('clubmgmt.imageMustBeLessThan5MB'), 'error');
         return;
       }
       setLogoFile(file);
@@ -916,7 +918,7 @@ useEffect(() => {
 
   async function handleUploadLogo() {
     if (!logoFile) {
-      showToast('Please select an image', 'error');
+      showToast(t('clubmgmt.pleaseSelectImage'), 'error');
       return;
     }
 
@@ -927,15 +929,15 @@ useEffect(() => {
         
         if (logoUploadType === 'club') {
           await updateClub(selectedClubId, { logoUrl: base64Image });
-          showToast('Club logo updated!', 'success');
+          showToast(t('clubmgmt.clubLogoUpdated'), 'success');
           await loadClubData(selectedClubId);
         } else if (logoUploadType === 'team' && selectedTeamForLogo) {
           const club = await getClub(selectedClubId);
-          const updatedTeams = club.teams.map(t =>
-            t.id === selectedTeamForLogo.id ? { ...t, logoUrl: base64Image } : t
+          const updatedTeams = club.teams.map(team =>
+            team.id === selectedTeamForLogo.id ? { ...team, logoUrl: base64Image } : team
           );
           await updateClub(selectedClubId, { teams: updatedTeams });
-          showToast('Team logo updated!', 'success');
+          showToast(t('clubmgmt.teamLogoUpdated'), 'success');
           await loadClubData(selectedClubId);
         }
         
@@ -946,7 +948,7 @@ useEffect(() => {
       reader.readAsDataURL(logoFile);
     } catch (error) {
       console.error('Error uploading logo:', error);
-      showToast('Failed to upload logo', 'error');
+      showToast(t('clubmgmt.failedToUploadLogo'), 'error');
     }
   }
 
@@ -983,11 +985,11 @@ useEffect(() => {
         selectedClubId
       );
       
-      showToast('Member promoted to trainer', 'success');
+      showToast(t('clubmgmt.memberPromotedToTrainer'), 'success');
       await loadClubData(selectedClubId);
     } catch (error) {
       console.error('Error promoting member:', error);
-      showToast('Failed to promote member', 'error');
+      showToast(t('clubmgmt.failedToPromoteMember'), 'error');
     }
   };
 
@@ -1017,11 +1019,11 @@ useEffect(() => {
         selectedClubId
       );
       
-      showToast('Member demoted to regular member', 'success');
+      showToast(t('clubmgmt.memberDemotedToRegularMember'), 'success');
       await loadClubData(selectedClubId);
     } catch (error) {
       console.error('Error demoting member:', error);
-      showToast('Failed to demote member', 'error');
+      showToast(t('clubmgmt.failedToDemoteMember'), 'error');
     }
   };
 
@@ -1035,7 +1037,7 @@ async function loadOrders() {
     setOrders(ordersList);
   } catch (error) {
     console.error('Error loading orders:', error);
-    showToast('Failed to load orders', 'error');
+    showToast(t('clubmgmt.failedToLoadOrders'), 'error');
   }
 }
 
@@ -1057,7 +1059,7 @@ function resetOrderForm() {
 
 function addFieldToOrder() {
   if (!newField.label.trim()) {
-    showToast('Field label is required', 'error');
+    showToast(t('clubmgmt.fieldLabelRequired'), 'error');
     return;
   }
 
@@ -1096,7 +1098,7 @@ function removeFieldFromOrder(fieldId) {
 
 function exportToExcel(order, responses) {
   if (responses.length === 0) {
-    showToast('No users to export', 'info');
+    showToast(t('clubmgmt.noUsersToExport'), 'info');
     return;
   }
 
@@ -1108,7 +1110,7 @@ function exportToExcel(order, responses) {
     const row = [
       `"${response.userName}"`,
       `"${response.userEmail}"`,
-      response.status === 'pending' ? 'Not Responded' : response.status,
+      response.status === 'pending' ? t('clubmgmt.notResponded') : response.status,
       ...order.fields.map(field => {
         const value = response.responses?.[field.id] || '-';
         return `"${value}"`;
@@ -1129,17 +1131,17 @@ function exportToExcel(order, responses) {
   link.click();
   document.body.removeChild(link);
   
-  showToast(`Exported ${responses.length} users to Excel!`, 'success');
+  showToast(t('clubmgmt.exported') + ` ${responses.length} ` + t('clubmgmt.usersToExcel'), 'success');
 }
 
 async function handleCreateOrder() {
   if (!orderForm.title.trim()) {
-    showToast('Order title is required', 'error');
+    showToast(t('clubmgmt.orderTitleRequired'), 'error');
     return;
   }
 
   if (orderForm.fields.length === 0) {
-    showToast('Add at least one custom field', 'error');
+    showToast(t('clubmgmt.addAtLeastOneCustomField'), 'error');
     return;
   }
 
@@ -1169,13 +1171,13 @@ async function handleCreateOrder() {
       console.log('Could not send notification:', err);
     }
 
-    showToast('Order created successfully!', 'success');
+    showToast(t('clubmgmt.orderCreatedSuccessfully'), 'success');
     setShowCreateOrderModal(false);
     resetOrderForm();
     await loadOrders();
     } catch (error) {
       console.error('Error creating order:', error);
-      showToast('Failed to create order', 'error');
+      showToast(t('clubmgmt.failedToCreateOrder'), 'error');
     }
 }
 
@@ -1184,11 +1186,11 @@ async function handleCloseOrder(orderId) {
 
   try {
     await updateOrderTemplate(orderId, { status: 'closed' });
-    showToast('Order closed', 'success');
+    showToast(t('clubmgmt.orderClosed'), 'success');
     await loadOrders();
   } catch (error) {
     console.error('Error closing order:', error);
-    showToast('Failed to close order', 'error');
+    showToast(t('clubmgmt.failedToCloseOrder'), 'error');
   }
 }
 
@@ -1197,11 +1199,11 @@ async function handleDeleteOrder(orderId) {
 
   try {
     await deleteOrderTemplate(orderId);
-    showToast('Order deleted', 'success');
+    showToast(t('clubmgmt.orderDeleted'), 'success');
     await loadOrders();
   } catch (error) {
     console.error('Error deleting order:', error);
-    showToast('Failed to delete order', 'error');
+    showToast(t('clubmgmt.failedToDeleteOrder'), 'error');
   }
 }
 
@@ -1283,7 +1285,7 @@ async function loadOrderResponses(order) {
     setOrderResponses(allUserResponses);
   } catch (error) {
     console.error('Error loading order responses:', error);
-    showToast('Failed to load responses', 'error');
+    showToast(t('clubmgmt.failedToLoadResponses'), 'error');
   } finally {
     setLoadingResponses(false);
   }
@@ -1326,23 +1328,23 @@ const filteredOrderResponses = useMemo(() => {
         
         if (isTrainer && trainerCount <= 1) {
           showToast(
-            '❌ Cannot remove last trainer from team. Please assign another trainer first.',
+            '❌ ' + t('clubmgmt.cannotRemoveLastTrainer') ,
             'error'
           );
           return;
         }
       }
 
-      const updatedTeams = (club.teams || []).map(t => {
-        if (t.id === teamForUserRemoval.id) {
+      const updatedTeams = (club.teams || []).map(team => {
+        if (team.id === teamForUserRemoval.id) {
           return {
-            ...t,
-            members: (t.members || []).filter(id => id !== userId),
-            trainers: (t.trainers || []).filter(id => id !== userId),
-            assistants: (t.assistants || []).filter(id => id !== userId)
+            ...team,
+            members: (team.members || []).filter(id => id !== userId),
+            trainers: (team.trainers || []).filter(id => id !== userId),
+            assistants: (team.assistants || []).filter(id => id !== userId)
           };
         }
-        return t;
+        return team;
       });
 
       await updateClub(selectedClubId, { teams: updatedTeams });
@@ -1356,19 +1358,19 @@ const filteredOrderResponses = useMemo(() => {
         teamForUserRemoval.name
       );
       
-      showToast('User removed from team', 'success');
+      showToast(t('clubmgmt.userRemovedFromTeam'), 'success');
       setShowRemoveUserFromTeamModal(false);
       setTeamForUserRemoval(null);
       await loadClubData(selectedClubId);
     } catch (error) {
       console.error('Error removing user from team:', error);
-      showToast('Failed to remove user from team', 'error');
+      showToast(t('clubmgmt.failedToRemoveUserFromTeam'), 'error');
     }
   };
 
   const handleCreateTeam = async () => {
     if (!selectedClubId || !newTeamName.trim()) {
-      showToast('Please enter a team name', 'error');
+      showToast(t('clubmgmt.pleaseEnterTeamName'), 'error');
       return;
     }
     
@@ -1404,13 +1406,13 @@ const filteredOrderResponses = useMemo(() => {
         }
       );
       
-      showToast('Team created successfully! You are now a trainer.', 'success');
+      showToast(t('clubmgmt.teamCreatedSuccessfully'), 'success');
       setNewTeamName('');
       setShowCreateTeamModal(false);
       await loadClubData(selectedClubId);
     } catch (error) {
       console.error('Error creating team:', error);
-      showToast('Failed to create team', 'error');
+      showToast(t('clubmgmt.failedToCreateTeam'), 'error');
     }
   };
 
@@ -1432,14 +1434,14 @@ const filteredOrderResponses = useMemo(() => {
       });
 
       await updateClub(selectedClubId, { teams: updatedTeams });
-      showToast('Member assigned to teams', 'success');
+      showToast(t('clubmgmt.memberAssignedToTeams'), 'success');
       setShowTeamAssignModal(false);
       setUserToAssign(null);
       setSelectedTeamsForAssignment([]);
       await loadClubData(selectedClubId);
     } catch (error) {
       console.error('Error assigning to teams:', error);
-      showToast('Failed to assign to teams', 'error');
+      showToast(t('clubmgmt.failedToAssignToTeams'), 'error');
     }
   };
 
@@ -1478,20 +1480,20 @@ const filteredOrderResponses = useMemo(() => {
       });
 
       await updateClub(selectedClubId, { teams: updatedTeams });
-      showToast('Member removed from team', 'success');
+      showToast(t('clubmgmt.memberRemovedFromTeam'), 'success');
       await loadClubData(selectedClubId);
     } catch (error) {
       console.error('Error removing from team:', error);
-      showToast('Failed to remove from team', 'error');
+      showToast(t('clubmgmt.failedToRemoveFromTeam'), 'error');
     }
   };
 
   if (authLoading) {
-    return <div className="p-6 text-light">Loading...</div>;
+    return <div className="p-6 text-light">{t('clubmgmt.loading')}</div>;
   }
 
   if (!user) {
-    return <div className="p-6 text-light">Please sign in</div>;
+    return <div className="p-6 text-light">{t('clubmgmt.pleaseSignIn')}</div>;
   }
 
   return (
@@ -1499,20 +1501,20 @@ const filteredOrderResponses = useMemo(() => {
       <div className="flex-1 overflow-auto">
         <div className="mb-2 animate-fade-in">
           <h1 className="font-display text-3xl md:text-5xl lg:text-7xl text-light mb-2 tracking-wider">
-            <span className="text-primary">CLUB</span> MANAGEMENT
+            <span className="text-primary">{t('event.club')}</span> {t('clubmgmt.management')}
           </h1>
-          <p className="text-light/60 text-sm md:text-lg">Manage your club members and teams</p>
+          <p className="text-light/60 text-sm md:text-lg">{t('clubmgmt.manageClubMembersAndTeams')}</p>
         </div>
 
         {/* Club selector */}
         <div className="mb-2 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-          <label className="block mb-1 text-light/80 font-medium">Select Club</label>
+          <label className="block mb-1 text-light/80 font-medium">{t('clubmgmt.selectclub')}</label>
           <select
             value={selectedClubId}
             onChange={e => setSelectedClubId(e.target.value)}
             className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
           >
-            <option value="" className="bg-mid-dark">-- Select club --</option>
+            <option value="" className="bg-mid-dark">-- {t('clubmgmt.management')} --</option>
             {clubs.map(c => (
               <option key={c.id} value={c.id} className="bg-mid-dark">
                 {c.name} {c.clubNumber ? `(${c.clubNumber})` : ''}
@@ -1527,7 +1529,7 @@ const filteredOrderResponses = useMemo(() => {
                 onClick={() => setShowCreateTeamModal(true)}
                 className="px-1 py-0.5 md:px-2 md:py-0.8 md:px-4 md:py-2 bg-primary/80 hover:bg-primary text-white rounded-lg text-sm font-medium transition-all inline-flex items-center gap-2"
               >
-                <span>Create Team</span>
+                <span>{t('clubmgmt.createTeam')}</span>
               </button>
               
               <button
@@ -1540,7 +1542,7 @@ const filteredOrderResponses = useMemo(() => {
                 }}
                 className="px-1 py-0.5 md:px-2 md:py-0.8 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-all inline-flex items-center gap-2"
               >
-                <span>Edit Club</span>
+                <span>{t('clubmgmt.editClub')}</span>
               </button>
               
               <button
@@ -1550,7 +1552,7 @@ const filteredOrderResponses = useMemo(() => {
                 }}
                 className="px-1 py-0.5 md:px-2 md:py-0.8 bg-purple-500 hover:bg-purple-600 text-white rounded-lg text-sm font-medium transition-all inline-flex items-center gap-2"
               >
-                 <span>Change Logo</span>
+                 <span>{t('clubmgmt.changeLogo')}</span>
               </button>
             </div>
           )}
@@ -1571,27 +1573,27 @@ const filteredOrderResponses = useMemo(() => {
               <div className="mt-3 px-4 py-2 bg-white/5 border border-white/10 rounded-lg">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-light/70">
                   <span className="flex items-center gap-1">
-                    <span className="text-light/50">Owner:</span>
+                    <span className="text-light/50">{t('clubmgmt.owner')}:</span>
                     <span className="text-light font-medium">{ownerEmail}</span>
                   </span>
                   <span className="hidden sm:inline text-light/30">•</span>
                   <span className="flex items-center gap-1">
-                    <span className="text-light/50">Teams:</span>
+                    <span className="text-light/50">{t('clubmgmt.teams')}:</span>
                     <span className="text-accent font-medium">{teamsCount}</span>
                   </span>
                   <span className="hidden sm:inline text-light/30">•</span>
                   <span className="flex items-center gap-1">
-                    <span className="text-light/50">Trainers:</span>
+                    <span className="text-light/50">{t('clubmgmt.trainers')}:</span>
                     <span className="text-success font-medium">{trainersCount}</span>
                   </span>
                   <span className="hidden sm:inline text-light/30">•</span>
                   <span className="flex items-center gap-1">
-                    <span className="text-light/50">Assistants:</span>
+                    <span className="text-light/50">{t('clubmgmt.assistants')}:</span>
                     <span className="text-secondary font-medium">{assistantsCount}</span>
                   </span>
                   <span className="hidden sm:inline text-light/30">•</span>
                   <span className="flex items-center gap-1">
-                    <span className="text-light/50">Users:</span>
+                    <span className="text-light/50">{t('clubmgmt.users')}:</span>
                     <span className="text-primary font-medium">{usersCount}</span>
                   </span>
                 </div>
@@ -1613,7 +1615,7 @@ const filteredOrderResponses = useMemo(() => {
                     : 'bg-white/5 text-light/70 hover:bg-white/10 hover:text-light'}
                 `}
               >
-                👥 Management
+                👥 {t('clubmgmt.management')}
               </button>
 
               <button
@@ -1625,7 +1627,7 @@ const filteredOrderResponses = useMemo(() => {
                     : 'bg-white/5 text-light/70 hover:bg-white/10 hover:text-light'}
                 `}
               >
-                📊 Statistics
+                📊 {t('clubmgmt.statistics')}
               </button>
 
               <button
@@ -1637,7 +1639,7 @@ const filteredOrderResponses = useMemo(() => {
                     : 'bg-white/5 text-light/70 hover:bg-white/10 hover:text-light'}
                 `}
               >
-                📬 Pending Requests
+                📬 {t('clubmgmt.pendingRequests')}
               </button>
 
               <button
@@ -1649,7 +1651,7 @@ const filteredOrderResponses = useMemo(() => {
                     : 'bg-white/5 text-light/70 hover:bg-white/10 hover:text-light'}
                 `}
               >
-                🛒 Orders
+                🛒 {t('clubmgmt.orders')}
               </button>
 
               <button
@@ -1661,7 +1663,7 @@ const filteredOrderResponses = useMemo(() => {
                     : 'bg-white/5 text-light/70 hover:bg-white/10 hover:text-light'}
                 `}
               >
-                🔔 Notifications
+                🔔 {t('clubmgmt.notifications')}
               </button>
             </div>
           </div>
@@ -1676,13 +1678,13 @@ const filteredOrderResponses = useMemo(() => {
                 
                 {/* Filter by Trainer/Assistant */}
 <div className="mb-4">
-                  <label className="block text-sm font-medium text-light/80 mb-2">Filter by Trainer/Assistant</label>
+                  <label className="block text-sm font-medium text-light/80 mb-2">{t('clubmgmt.filterByTrainerAssistant')}</label>
                   <select
                     value={teamTrainerFilter}
                     onChange={e => setTeamTrainerFilter(e.target.value)}
                     className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                   >
-                    <option value="" className="bg-mid-dark">All Teams</option>
+                    <option value="" className="bg-mid-dark">{t('clubmgmt.allTeams')}</option>
                     {(() => {
                       // Get unique trainers and assistants from all teams
                       const trainersSet = new Set();
@@ -1715,7 +1717,7 @@ const filteredOrderResponses = useMemo(() => {
                       return (
                         <>
                           {trainersList.length > 0 && (
-                            <optgroup label="Trainers" className="bg-mid-dark">
+                            <optgroup label={t('clubmgmt.trainers')} className="bg-mid-dark">
                               {trainersList.map(m => (
                                 <option key={m.id} value={m.id} className="bg-mid-dark">
                                   {m.username} - {m.email}
@@ -1724,7 +1726,7 @@ const filteredOrderResponses = useMemo(() => {
                             </optgroup>
                           )}
                           {assistantsList.length > 0 && (
-                            <optgroup label="Assistants" className="bg-mid-dark">
+                            <optgroup label={t('clubmgmt.assistants')} className="bg-mid-dark">
                               {assistantsList.map(m => (
                                 <option key={m.id} value={m.id} className="bg-mid-dark">
                                   {m.username} - {m.email}
@@ -1745,20 +1747,20 @@ const filteredOrderResponses = useMemo(() => {
                       return (t.trainers || []).includes(teamTrainerFilter) || 
                              (t.assistants || []).includes(teamTrainerFilter);
                     })
-                    .map(t => {
-                      const memberCount = (t.members || []).length;
-                      const trainerCount = (t.trainers || []).length;
-                      const assistantCount = (t.assistants || []).length;
+                    .map(team => {
+                      const memberCount = (team.members || []).length;
+                      const trainerCount = (team.trainers || []).length;
+                      const assistantCount = (team.assistants || []).length;
                       
                       return (
-                        <div key={t.id} className="bg-white/5 border border-white/10 rounded-lg p-4 hover:bg-white/10 transition-all overflow-visible">
+                        <div key={team.id} className="bg-white/5 border border-white/10 rounded-lg p-4 hover:bg-white/10 transition-all overflow-visible">
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <h3 
-                                onClick={() => navigate(`/team/${selectedClubId}/${t.id}`)}
+                                onClick={() => navigate(`/team/${selectedClubId}/${team.id}`)}
                                 className="font-semibold text-light text-base md:text-lg mb-2 cursor-pointer hover:text-primary transition-colors"
                               >
-                                {t.name}
+                                {team.name}
                               </h3>
                               <div className="flex gap-4 text-sm text-light/70">
                                 <div className="flex items-center gap-1">
@@ -1780,31 +1782,31 @@ const filteredOrderResponses = useMemo(() => {
                               <div className="relative">
                                 <button 
                                   ref={(el) => {
-                                    if (el) actionButtonRefs.current[t.id] = el;
+                                    if (el) actionButtonRefs.current[team.id] = el;
                                   }}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (teamActionDropdown === t.id) {
+                                    if (teamActionDropdown === team.id) {
                                       setTeamActionDropdown(null);
                                     } else {
-                                      const rect = actionButtonRefs.current[t.id]?.getBoundingClientRect();
+                                      const rect = actionButtonRefs.current[team.id]?.getBoundingClientRect();
                                       if (rect) {
                                         setDropdownPosition({
                                           top: rect.bottom + window.scrollY + 8,
                                           right: window.innerWidth - rect.right + window.scrollX
                                         });
                                       }
-                                      setTeamActionDropdown(t.id);
+                                      setTeamActionDropdown(team.id);
                                     }
                                   }}
                                   className="px-4 py-2 bg-white/10 hover:bg-white/15 text-light rounded-lg text-sm font-medium transition-all flex items-center gap-2"
                                 >
-                                  <span>Actions</span>
+                                  <span>{t('clubmgmt.actions')}</span>
                                   <span className="text-xs">▼</span>
                                 </button>
 
                                 {/* Dropdown Menu - Rendered via Portal */}
-                                {teamActionDropdown === t.id && createPortal(
+                                {teamActionDropdown === team.id && createPortal(
                                   <div 
                                     onClick={(e) => e.stopPropagation()}
                                     style={{
@@ -1818,19 +1820,19 @@ const filteredOrderResponses = useMemo(() => {
                                     <button
                                       onClick={() => {
                                         setTeamActionDropdown(null);
-                                        setTeamToRename(t);
-                                        setRenameTeamName(t.name);
+                                        setTeamToRename(team);
+                                        setRenameTeamName(team.name);
                                         setShowRenameTeamModal(true);
                                       }}
                                       className="w-full px-4 py-2 text-left text-light hover:bg-white/10 transition rounded-t-lg flex items-center gap-2"
                                     >
                                       <span>✏️</span>
-                                      <span>Rename Team</span>
+                                      <span>{t('clubmgmt.renameTeam')}</span>
                                     </button>
                                     <button
                                       onClick={() => {
                                         setTeamActionDropdown(null);
-                                        openQuickAssignModal(t);
+                                        openQuickAssignModal(team);
                                       }}
                                       className="w-full px-4 py-2 text-left text-light hover:bg-white/10 transition flex items-center gap-2"
                                     >
@@ -1840,17 +1842,17 @@ const filteredOrderResponses = useMemo(() => {
                                     <button
                                       onClick={() => {
                                         setTeamActionDropdown(null);
-                                        setTeamForUserRemoval(t);
+                                        setTeamForUserRemoval(team);
                                         setShowRemoveUserFromTeamModal(true);
                                       }}
                                       className="w-full px-4 py-2 text-left text-light hover:bg-white/10 transition flex items-center gap-2"
                                     >
                                       <span>➖</span>
-                                      <span>Remove User</span>
+                                      <span>{t('clubmgmt.removeUser')}</span>
                                     </button>
                                     <button
                                       onClick={() => {
-                                        setSelectedTeamForLogo(t);
+                                        setSelectedTeamForLogo(team);
                                         setLogoUploadType('team');
                                         setShowLogoUpload(true);
                                         setTeamActionDropdown(null);
@@ -1858,18 +1860,18 @@ const filteredOrderResponses = useMemo(() => {
                                       className="w-full px-4 py-2 text-left hover:bg-white/10 transition flex items-center gap-2"
                                     >
                                       <span>🖼️</span>
-                                      <span>Change Logo</span>
+                                      <span>{t('clubmgmt.changeLogo')}</span>
                                     </button>
                                     <div className="border-t border-white/10"></div>
                                     <button
                                       onClick={() => {
                                         setTeamActionDropdown(null);
-                                        handleDeleteTeam(t.id);
+                                        handleDeleteTeam(team.id);
                                       }}
                                       className="w-full px-4 py-2 text-left text-red-400 hover:bg-red-500/10 transition rounded-b-lg flex items-center gap-2"
                                     >
                                       <span>🗑️</span>
-                                      <span>Delete Team</span>
+                                      <span>{t('clubmgmt.deleteTeam')}</span>
                                     </button>
                                   </div>,
                                   document.body
@@ -1887,7 +1889,7 @@ const filteredOrderResponses = useMemo(() => {
             <div className="mb-4">
               <input
                 type="text"
-                placeholder="Search members by username or email"
+                placeholder={t('clubmgmt.searchMembersByUsernameOrEmail')}
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all w-full"
@@ -1896,16 +1898,16 @@ const filteredOrderResponses = useMemo(() => {
 
             {/* Filter by Team */}
             <div className="mb-4 flex items-center gap-2">
-              <label className="text-light/80">Filter by Team:</label>
+              <label className="text-light/80">{t('clubmgmt.filterByTeam')}:</label>
               <select
                 value={selectedTeamFilter}
                 onChange={e => setSelectedTeamFilter(e.target.value)}
                 className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
               >
-                <option value="" className="bg-mid-dark">All</option>
-                <option value="none" className="bg-mid-dark">No team</option>
-                {clubTeams.map(t => (
-                  <option key={t.id} value={t.id} className="bg-mid-dark">{t.name}</option>
+                <option value="" className="bg-mid-dark">{t('clubmgmt.all')}</option>
+                <option value="none" className="bg-mid-dark">{t('clubmgmt.noTeam')}</option>
+                {clubTeams.map(team => (
+                  <option key={team.id} value={team.id} className="bg-mid-dark">{team.name}</option>
                 ))}
               </select>
             </div>
@@ -1915,16 +1917,16 @@ const filteredOrderResponses = useMemo(() => {
               {loading ? (
                 <div className="py-8 text-center text-light/60">Loading members...</div>
               ) : filteredMembers.length === 0 ? (
-                <div className="py-8 text-center text-light/40">No members found.</div>
+                <div className="py-8 text-center text-light/40">{t('clubmgmt.noMembersFound')}</div>
               ) : (
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-white/10">
-                      <th className="px-4 py-3 text-left text-light font-semibold">Username</th>
-                      <th className="px-4 py-3 text-left text-light font-semibold">Email</th>
-                      <th className="px-4 py-3 text-left text-light font-semibold">Role</th>
-                      <th className="px-4 py-3 text-left text-light font-semibold">Teams</th>
-                      <th className="px-4 py-3 text-left text-light font-semibold">Actions</th>
+                      <th className="px-4 py-3 text-left text-light font-semibold">{t('clubmgmt.username')}</th>
+                      <th className="px-4 py-3 text-left text-light font-semibold">{t('clubmgmt.email')}</th>
+                      <th className="px-4 py-3 text-left text-light font-semibold">{t('clubmgmt.role')}</th>
+                      <th className="px-4 py-3 text-left text-light font-semibold">{t('nav.teams')}</th>
+                      <th className="px-4 py-3 text-left text-light font-semibold">{t('clubmgmt.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1993,10 +1995,10 @@ const filteredOrderResponses = useMemo(() => {
                                 }}
                                 className="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-light text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                               >
-                                <option value="user" className="bg-mid-dark">User</option>
-                                <option value="parent" className="bg-mid-dark">Parent</option>
-                                <option value="assistant" className="bg-mid-dark">Assistant</option>
-                                <option value="trainer" className="bg-mid-dark">Trainer</option>
+                                <option value="user" className="bg-mid-dark">{t('clubmgmt.member')}</option>
+                                <option value="parent" className="bg-mid-dark">{t('clubmgmt.parent')}</option>
+                                <option value="assistant" className="bg-mid-dark">{t('clubmgmt.assistant')}</option>
+                                <option value="trainer" className="bg-mid-dark">{t('clubmgmt.trainer')}</option>
                               </select>
                               <button
                                 onClick={e => {
@@ -2030,7 +2032,7 @@ const filteredOrderResponses = useMemo(() => {
             
             {loadingRequests ? (
               <div className="text-center py-12">
-                <div className="text-light/60">Loading requests...</div>
+                <div className="text-light/60">{t('clubmgmt.loadingRequests')}</div>
               </div>
             ) : pendingRequests.length === 0 ? (
               <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-12 text-center">
@@ -2081,7 +2083,7 @@ const filteredOrderResponses = useMemo(() => {
                             </div>
                             {teamName && (
                               <div className="text-sm text-light/80">
-                                <span className="text-light/50">Team:</span>{' '}
+                                <span className="text-light/50">{t('clubmgmt.team')}:</span>{' '}
                                 <span className="text-secondary font-medium">{teamName}</span>
                               </div>
                             )}
@@ -2098,14 +2100,14 @@ const filteredOrderResponses = useMemo(() => {
                             className="px-5 py-2.5 bg-success hover:bg-success/80 text-white rounded-lg transition-all font-semibold text-sm flex items-center gap-2"
                           >
                             <span>✔</span>
-                            <span>Approve</span>
+                            <span>{t('clubmgmt.approve')}</span>
                           </button>
                           <button
                             onClick={() => handleDenyRequest(request.id)}
                             className="px-5 py-2.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 rounded-lg transition-all font-semibold text-sm flex items-center gap-2"
                           >
                             <span>✕</span>
-                            <span>Deny</span>
+                            <span>{t('clubmgmt.deny')}</span>
                           </button>
                         </div>
                       </div>
@@ -2130,7 +2132,7 @@ const filteredOrderResponses = useMemo(() => {
         {/* Statistics Tab */}
         {selectedClubId && activeTab === 'statistics' && (
           <div className="animate-fade-in">
-            <h2 className="font-title text-xl md:text-3xl text-light mb-4 md:mb-6">Trainer Statistics</h2>
+            <h2 className="font-title text-xl md:text-3xl text-light mb-4 md:mb-6">{t('clubmgmt.trainerStatistics')}</h2>
             
             {!selectedTrainer ? (
               <>
@@ -2138,7 +2140,7 @@ const filteredOrderResponses = useMemo(() => {
                 <div className="mb-4">
                   <input
                     type="text"
-                    placeholder="Search trainers by name or email..."
+                    placeholder={t('clubmgmt.searchTrainersByNameOrEmail') + "..."}
                     value={trainerSearchQuery}
                     onChange={e => setTrainerSearchQuery(e.target.value)}
                     className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
@@ -2147,7 +2149,7 @@ const filteredOrderResponses = useMemo(() => {
 
                 {/* Trainers List */}
                 <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-                  <h3 className="font-semibold text-light text-base md:text-lg mb-4">Select Trainer</h3>
+                  <h3 className="font-semibold text-light text-base md:text-lg mb-4">{t('clubmgmt.selectTrainer')}</h3>
                   <div className="space-y-2">
                     {(() => {
                       const trainers = clubMembers.filter(m => 
@@ -2158,7 +2160,7 @@ const filteredOrderResponses = useMemo(() => {
                       );
 
                       if (trainers.length === 0) {
-                        return <p className="text-light/50 text-center py-4">No trainers found</p>;
+                        return <p className="text-light/50 text-center py-4">{t('clubmgmt.noTrainersFound')}</p>;
                       }
 
                       return trainers.map(trainer => (
@@ -2172,7 +2174,7 @@ const filteredOrderResponses = useMemo(() => {
                               <div className="font-semibold text-light">{trainer.username}</div>
                               <div className="text-sm text-light/60">{trainer.email}</div>
                               <div className="text-xs text-light/40 mt-1">
-                                Role: {trainer.role}
+                              {t('clubmgmt.roleColon')} {trainer.role}
                               </div>
                             </div>
                             <span className="text-light/40">→</span>
@@ -2191,7 +2193,7 @@ const filteredOrderResponses = useMemo(() => {
                   className="mb-4 px-4 py-2 bg-white/10 hover:bg-white/15 text-light rounded-lg text-sm font-medium transition-all inline-flex items-center gap-2"
                 >
                   <span>←</span>
-                  <span>Back to Trainers</span>
+                  <span>{t('clubmgmt.backToTrainers')}</span>
                 </button>
 
                 {/* Trainer Info */}
@@ -2203,7 +2205,7 @@ const filteredOrderResponses = useMemo(() => {
                     <div>
                       <h3 className="font-title text-lg md:text-2xl text-light">{selectedTrainer.username}</h3>
                       <p className="text-light/60">{selectedTrainer.email}</p>
-                      <p className="text-sm text-light/50 mt-1">Role: {selectedTrainer.role}</p>
+                      <p className="text-sm text-light/50 mt-1">{t('clubmgmt.roleColon')}: {selectedTrainer.role}</p>
                     </div>
                   </div>
                 </div>
@@ -2214,7 +2216,7 @@ const filteredOrderResponses = useMemo(() => {
                   <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
                     <div className="flex items-center gap-3 mb-2">
                       <span className="text-2xl md:text-3xl">👥</span>
-                      <h3 className="font-semibold text-light">Teams</h3>
+                      <h3 className="font-semibold text-light">{t('clubmgmt.teams')}</h3>
                     </div>
                     <div className="text-2xl md:text-4xl font-bold">
                       {(() => {
@@ -2227,14 +2229,14 @@ const filteredOrderResponses = useMemo(() => {
                         ).length;
                       })()}
                     </div>
-                    <p className="text-light/50 text-sm mt-1">Teams as member</p>
+                    <p className="text-light/50 text-sm mt-1">{t('clubmgmt.teamsAsMember')}</p>
                   </div>
 
                   {/* Games Attended */}
                   <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
                     <div className="flex items-center gap-3 mb-2">
                       <span className="text-2xl md:text-3xl">⚽</span>
-                      <h3 className="font-semibold text-light">Games</h3>
+                      <h3 className="font-semibold text-light">{t('clubmgmt.games')}</h3>
                     </div>
                     <div className="text-2xl md:text-4xl font-bold">0</div>
                     <p className="text-light/50 text-sm mt-1">Games attended</p>
@@ -2244,57 +2246,57 @@ const filteredOrderResponses = useMemo(() => {
                   <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
                     <div className="flex items-center gap-3 mb-2">
                       <span className="text-2xl md:text-3xl">🏋️</span>
-                      <h3 className="font-semibold text-light">Training</h3>
+                      <h3 className="font-semibold text-light">{t('clubmgmt.training')}</h3>
                     </div>
                     <div className="text-2xl md:text-4xl font-bold">0</div>
-                    <p className="text-light/50 text-sm mt-1">Extra trainings</p>
+                    <p className="text-light/50 text-sm mt-1">{t('clubmgmt.extraTrainings')}</p>
                   </div>
 
                   {/* Tournaments */}
                   <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
                     <div className="flex items-center gap-3 mb-2">
                       <span className="text-2xl md:text-3xl">🏆</span>
-                      <h3 className="font-semibold text-light">Tournaments</h3>
+                      <h3 className="font-semibold text-light">{t('clubmgmt.tournaments')}</h3>
                     </div>
                     <div className="text-2xl md:text-4xl font-bold">0</div>
-                    <p className="text-light/50 text-sm mt-1">Tournaments attended</p>
+                    <p className="text-light/50 text-sm mt-1">{t('clubmgmt.tournamentsAttended')}</p>
                   </div>
                 </div>
 
                 {/* Manual Entry Form */}
                 <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-                  <h3 className="font-title text-xl md:text-2xl text-light mb-4">Add Manual Entry</h3>
+                  <h3 className="font-title text-xl md:text-2xl text-light mb-4">{t('clubmgmt.addManualEntry')}</h3>
                   
                   <div className="grid gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-light/80 mb-2">Team</label>
+                      <label className="block text-sm font-medium text-light/80 mb-2">{t('clubmgmt.team')}</label>
                       <input
                         type="text"
-                        placeholder="Team name (optional)"
+                        placeholder={t('clubmgmt.teamNameOptional')}
                         className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-light/80 mb-2">Score</label>
+                      <label className="block text-sm font-medium text-light/80 mb-2">{t('clubmgmt.score')}:</label>
                       <input
                         type="text"
-                        placeholder="Score (optional)"
+                        placeholder={t('clubmgmt.scoreOptional')}
                         className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-light/80 mb-2">Comments</label>
+                      <label className="block text-sm font-medium text-light/80 mb-2">{t('clubmgmt.comments')}</label>
                       <textarea
-                        placeholder="Comments (optional)"
+                        placeholder={t('clubmgmt.commentsOptional')}
                         rows="3"
                         className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none"
                       ></textarea>
                     </div>
 
                     <button className="px-6 py-3 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all">
-                      Add Entry
+                      {t('clubmgmt.addEntry')}
                     </button>
                   </div>
                 </div>
@@ -2308,12 +2310,12 @@ const filteredOrderResponses = useMemo(() => {
   <div className="space-y-6">
     {/* Header */}
     <div className="flex items-center justify-between">
-      <h2 className="font-title text-lg md:text-2xl text-light">Order Management</h2>
+      <h2 className="font-title text-lg md:text-2xl text-light">{t('clubmgmt.orderManagement')}</h2>
       <button
         onClick={() => setShowCreateOrderModal(true)}
         className="px-4 py-2 text-sm bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
       >
-        Create Order
+        {t('clubmgmt.createOrder')}
       </button>
     </div>
 
@@ -2321,9 +2323,9 @@ const filteredOrderResponses = useMemo(() => {
     {orders.length === 0 ? (
       <div className="text-center py-12 bg-white/5 border border-white/10 rounded-xl">
         <div className="text-4xl mb-3">📋</div>
-        <h3 className="font-title text-xl text-light/80 mb-2">No Orders Yet</h3>
+        <h3 className="font-title text-xl text-light/80 mb-2">{t('clubmgmt.noOrdersYet')}</h3>
         <p className="text-light/50 text-sm mb-4">
-          Create your first order template to collect information from members.
+        {t('clubmgmt.createFirstOrderTemplate')}
         </p>
         <button
           onClick={() => setShowCreateOrderModal(true)}
@@ -2357,7 +2359,7 @@ const filteredOrderResponses = useMemo(() => {
                         ? 'bg-green-500/20 text-green-300'
                         : 'bg-gray-500/20 text-gray-300'
                     }`}>
-                      {isActive ? '🟢 Active' : '⚫ Closed'}
+                      {isActive ? "🟢" + t('clubmgmt.active') : "⚫" + t('clubmgmt.closed')}
                     </span>
                   </div>
                   {order.description && (
@@ -2377,7 +2379,7 @@ const filteredOrderResponses = useMemo(() => {
                     onClick={() => handleViewOrderResponses(order)}
                     className="px-3 py-1.5 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-all"
                   >
-                    View Responses
+                    {t('clubmgmt.viewResponses')}
                   </button>
                   {isActive && (
                     <button
@@ -2398,7 +2400,7 @@ const filteredOrderResponses = useMemo(() => {
 
               {/* Order Fields Preview */}
               <div className="mt-4 pt-4 border-t border-white/10">
-                <p className="text-xs text-light/50 mb-2">Required Fields:</p>
+                <p className="text-xs text-light/50 mb-2">{t('clubmgmt.requiredFields')}:</p>
                 <div className="flex flex-wrap gap-2">
                   {order.fields.slice(0, 5).map(field => (
                     <span
@@ -2426,7 +2428,7 @@ const filteredOrderResponses = useMemo(() => {
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
         <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="font-title text-lg md:text-2xl text-light">Create Order Template</h3>
+            <h3 className="font-title text-lg md:text-2xl text-light">{t('clubmgmt.createOrderTemplate')}</h3>
             <button
               onClick={() => {
                 setShowCreateOrderModal(false);
@@ -2441,7 +2443,7 @@ const filteredOrderResponses = useMemo(() => {
           <div className="space-y-4">
             {/* Title */}
             <div>
-              <label className="block font-medium text-light/80 mb-1">Order Title *</label>
+              <label className="block font-medium text-light/80 mb-1">{t('clubmgmt.orderTitleAsterisk')}</label>
               <input
                 type="text"
                 className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
@@ -2453,7 +2455,7 @@ const filteredOrderResponses = useMemo(() => {
 
             {/* Description */}
             <div>
-              <label className="block font-medium text-light/80 mb-1">Description</label>
+              <label className="block font-medium text-light/80 mb-1">{t('clubmgmt.description')}</label>
               <textarea
                 rows={2}
                 className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
@@ -2465,7 +2467,7 @@ const filteredOrderResponses = useMemo(() => {
 
             {/* Teams Selection - Visual Circles */}
             <div>
-              <label className="block font-medium text-light/80 mb-2">Select Teams</label>
+              <label className="block font-medium text-light/80 mb-2">{t('clubmgmt.selectTeams')}</label>
               
               <div className="flex flex-wrap gap-2">
                 {/* All Teams Option */}
@@ -2528,7 +2530,7 @@ const filteredOrderResponses = useMemo(() => {
 
             {/* Deadline */}
             <div>
-              <label className="block font-medium text-light/80 mb-1">Deadline (Optional)</label>
+              <label className="block font-medium text-light/80 mb-1">{t('clubmgmt.deadlineOptional')}</label>
               <input
                 type="date"
                 className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
@@ -2539,7 +2541,7 @@ const filteredOrderResponses = useMemo(() => {
 
             {/* Custom Fields */}
             <div className="border-t border-white/10 pt-4">
-              <h4 className="font-medium text-light mb-3">Custom Fields</h4>
+              <h4 className="font-medium text-light mb-3">{t('clubmgmt.customFields')}</h4>
               
               {/* Existing Fields */}
               {orderForm.fields.length > 0 && (
@@ -2572,7 +2574,7 @@ const filteredOrderResponses = useMemo(() => {
               <div className="bg-white/5 border border-white/10 rounded-lg p-4 space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-light/80 mb-1">Field Label</label>
+                    <label className="block text-sm font-medium text-light/80 mb-1">{t('clubmgmt.fieldLabel')}</label>
                     <input
                       type="text"
                       className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-light placeholder-light/40"
@@ -2582,23 +2584,23 @@ const filteredOrderResponses = useMemo(() => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-light/80 mb-1">Field Type</label>
+                    <label className="block text-sm font-medium text-light/80 mb-1">{t('clubmgmt.fieldType')}</label>
                     <select
                       className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-light"
                       value={newField.type}
                       onChange={(e) => setNewField(f => ({ ...f, type: e.target.value }))}
                     >
-                      <option value="text" className="bg-mid-dark">Text</option>
-                      <option value="number" className="bg-mid-dark">Number</option>
-                      <option value="dropdown" className="bg-mid-dark">Dropdown</option>
-                      <option value="textarea" className="bg-mid-dark">Long Text</option>
+                      <option value="text" className="bg-mid-dark">{t('clubmgmt.text')}</option>
+                      <option value="number" className="bg-mid-dark">{t('clubmgmt.number')}</option>
+                      <option value="dropdown" className="bg-mid-dark">{t('clubmgmt.dropdown')}</option>
+                      <option value="textarea" className="bg-mid-dark">{t('clubmgmt.longText')}</option>
                     </select>
                   </div>
                 </div>
 
                 {newField.type === 'dropdown' && (
                   <div>
-                    <label className="block text-sm font-medium text-light/80 mb-1">Options (comma separated)</label>
+                    <label className="block text-sm font-medium text-light/80 mb-1">{t('clubmgmt.optionsCommaSeparated')}</label>
                     <input
                       type="text"
                       className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-light placeholder-light/40"
@@ -2617,7 +2619,7 @@ const filteredOrderResponses = useMemo(() => {
                     checked={newField.required}
                     onChange={(e) => setNewField(f => ({ ...f, required: e.target.checked }))}
                   />
-                  <span className="text-sm text-light/80">Required field</span>
+                  <span className="text-sm text-light/80">{t('clubmgmt.requiredField')}</span>
                 </label>
 
                 <button
@@ -2625,7 +2627,7 @@ const filteredOrderResponses = useMemo(() => {
                   onClick={addFieldToOrder}
                   className="w-full px-4 py-2 text-sm bg-primary/20 hover:bg-primary/30 text-primary rounded-lg transition-all"
                 >
-                  Add Field
+                  {t('clubmgmt.addField')}
                 </button>
               </div>
             </div>
@@ -2638,7 +2640,7 @@ const filteredOrderResponses = useMemo(() => {
                 className="flex-1 px-4 py-2 text-sm bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
                 disabled={orderForm.fields.length === 0}
               >
-                Create Order
+                {t('clubmgmt.createOrder')}
               </button>
               <button
                 type="button"
@@ -2648,7 +2650,7 @@ const filteredOrderResponses = useMemo(() => {
                 }}
                 className="px-4 py-2 text-sm bg-white/10 hover:bg-white/15 text-light rounded-lg font-medium transition-all"
               >
-                Cancel
+                {t('clubmgmt.cancel')}
               </button>
             </div>
           </div>
@@ -2669,9 +2671,9 @@ const filteredOrderResponses = useMemo(() => {
           <div>
             <h3 className="font-title text-lg md:text-2xl text-light">{selectedOrder.title} - Responses</h3>
             <p className="text-sm text-light/60 mt-1">
-              {orderResponses.filter(r => r.status === 'accepted').length} Accepted • 
+              {orderResponses.filter(r => r.status === 'accepted').length} {t('clubmgmt.accepted')} • 
               {orderResponses.filter(r => r.status === 'declined').length} Declined • 
-              {orderResponses.filter(r => r.status === 'pending').length} Pending
+              {orderResponses.filter(r => r.status === 'pending').length} {t('clubmgmt.pending')}
             </p>
           </div>
           <div className="flex gap-2">
@@ -2680,7 +2682,7 @@ const filteredOrderResponses = useMemo(() => {
               className="px-4 py-2 text-sm bg-green-500 hover:bg-green-600 text-white rounded-lg transition-all"
               disabled={orderResponses.length === 0}
             >
-              📊 Export All
+              📊 {t('clubmgmt.exportAll')}
             </button>
             <button
               onClick={() => {
@@ -2720,7 +2722,7 @@ const filteredOrderResponses = useMemo(() => {
                     : 'bg-white/5 text-light/70 hover:bg-white/10'
                 }`}
               >
-                ✓ Accepted ({orderResponses.filter(r => r.status === 'accepted').length})
+                ✓ {t('clubmgmt.accepted')} ({orderResponses.filter(r => r.status === 'accepted').length})
               </button>
               <button
                 onClick={() => setOrderStatusFilter('declined')}
@@ -2740,7 +2742,7 @@ const filteredOrderResponses = useMemo(() => {
                     : 'bg-white/5 text-light/70 hover:bg-white/10'
                 }`}
               >
-                ⏳ Pending ({orderResponses.filter(r => r.status === 'pending').length})
+                ⏳ {t('clubmgmt.pending')} ({orderResponses.filter(r => r.status === 'pending').length})
               </button>
             </div>
 
@@ -2748,7 +2750,7 @@ const filteredOrderResponses = useMemo(() => {
             <div className="flex-1 min-w-[200px]">
               <input
                 type="text"
-                placeholder="🔍 Search by name or email..."
+                placeholder={"🔍 " + t('clubmgmt.searchByNameOrEmailToAddUser')}
                 value={orderSearchQuery}
                 onChange={(e) => setOrderSearchQuery(e.target.value)}
                 className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-1.5 text-sm text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
@@ -2772,19 +2774,19 @@ const filteredOrderResponses = useMemo(() => {
       </div>
 
       {loadingResponses ? (
-        <div className="text-center py-12 text-light/60">Loading responses...</div>
+        <div className="text-center py-12 text-light/60">{t('clubmgmt.loadingResponses')}</div>
       ) : orderResponses.length === 0 ? (
         <div className="text-center py-12">
           <div className="text-4xl mb-3">📋</div>
-          <p className="text-light/60">No eligible users found</p>
+          <p className="text-light/60">{t('clubmgmt.noEligibleUsersFound')}</p>
         </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[600px]">
             <thead>
               <tr className="border-b border-white/10">
-                <th className="text-left text-sm font-medium text-light/80 pb-3 pr-4">Name</th>
-                <th className="text-left text-sm font-medium text-light/80 pb-3 pr-4">Status</th>
+                <th className="text-left text-sm font-medium text-light/80 pb-3 pr-4">{t('common.name')}</th>
+                <th className="text-left text-sm font-medium text-light/80 pb-3 pr-4">{t('clubmgmt.status')}</th>
                 {selectedOrder.fields.map(field => (
                   <th key={field.id} className="text-left text-sm font-medium text-light/80 pb-3 pr-4">
                     {field.label}
@@ -2796,7 +2798,7 @@ const filteredOrderResponses = useMemo(() => {
               {filteredOrderResponses.length === 0 ? (
                 <tr>
                   <td colSpan={selectedOrder.fields.length + 2} className="text-center py-8 text-light/60">
-                    No users match your filters
+                  {t('clubmgmt.noUsersMatchYourFilters')}
                   </td>
                 </tr>
               ) : (
@@ -2822,7 +2824,7 @@ const filteredOrderResponses = useMemo(() => {
                       <td className="py-3 pr-4">
                         {response.status === 'accepted' && (
                           <span className="px-2 py-1 text-xs rounded-full bg-green-500/20 text-green-300 ring-1 ring-green-400">
-                            ✓ Accepted
+                            ✓ {t('clubmgmt.accepted')}
                           </span>
                         )}
                         {response.status === 'declined' && (
@@ -2832,7 +2834,7 @@ const filteredOrderResponses = useMemo(() => {
                         )}
                         {response.status === 'pending' && (
                           <span className="px-2 py-1 text-xs rounded-full bg-yellow-500/20 text-yellow-300">
-                            ⏳ Pending
+                            ⏳ {t('clubmgmt.pending')}
                           </span>
                         )}
                       </td>
@@ -2855,29 +2857,29 @@ const filteredOrderResponses = useMemo(() => {
       {/* Statistics */}
       {orderResponses.length > 0 && (
         <div className="mt-6 pt-6 border-t border-white/10">
-          <h4 className="text-sm font-medium text-light/80 mb-3">Statistics</h4>
+          <h4 className="text-sm font-medium text-light/80 mb-3">{t('clubmgmt.statistics')}</h4>
           <div className="grid grid-cols-4 gap-4">
             <div className="bg-white/5 rounded-lg p-4 text-center">
               <div className="text-2xl font-bold text-light">{orderResponses.length}</div>
-              <div className="text-xs text-light/50 mt-1">Total Eligible</div>
+              <div className="text-xs text-light/50 mt-1">{t('clubmgmt.totalEligible')}</div>
             </div>
             <div className="bg-green-500/10 rounded-lg p-4 text-center">
               <div className="text-2xl font-bold text-green-400">
                 {orderResponses.filter(r => r.status === 'accepted').length}
               </div>
-              <div className="text-xs text-green-300 mt-1">Accepted</div>
+              <div className="text-xs text-green-300 mt-1">{t('clubmgmt.accepted')}</div>
             </div>
             <div className="bg-red-500/10 rounded-lg p-4 text-center">
               <div className="text-2xl font-bold text-red-400">
                 {orderResponses.filter(r => r.status === 'declined').length}
               </div>
-              <div className="text-xs text-red-300 mt-1">Declined</div>
+              <div className="text-xs text-red-300 mt-1">{t('clubmgmt.declined')}</div>
             </div>
             <div className="bg-yellow-500/10 rounded-lg p-4 text-center">
               <div className="text-2xl font-bold text-yellow-400">
                 {orderResponses.filter(r => r.status === 'pending').length}
               </div>
-              <div className="text-xs text-yellow-300 mt-1">Pending</div>
+              <div className="text-xs text-yellow-300 mt-1">{t('clubmgmt.pending')}</div>
             </div>
           </div>
         </div>
@@ -2933,7 +2935,7 @@ const filteredOrderResponses = useMemo(() => {
                 }}
                 className="flex-1 px-4 py-3 bg-white/10 text-light rounded-lg hover:bg-white/15 font-medium transition"
               >
-                Cancel
+                {t('clubmgmt.cancel')}
               </button>
               <button
                 onClick={handleAssignToTeams}
@@ -2951,7 +2953,7 @@ const filteredOrderResponses = useMemo(() => {
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
             <h3 className="text-2xl font-bold text-light mb-4">
-              Remove User
+            {t('clubmgmt.removeUser')}
             </h3>
             
             <p className="text-light/70 mb-6">
@@ -2965,8 +2967,8 @@ const filteredOrderResponses = useMemo(() => {
               >
                 <span className="text-xl">👥</span>
                 <div>
-                  <div className="font-semibold">Remove from Teams</div>
-                  <div className="text-xs text-light/60">Remove from selected teams only</div>
+                  <div className="font-semibold">{t('clubmgmt.removeFromTeams')}</div>
+                  <div className="text-xs text-light/60">{t('clubmgmt.removeFromSelectedTeamsOnly')}</div>
                 </div>
               </button>
 
@@ -2976,8 +2978,8 @@ const filteredOrderResponses = useMemo(() => {
               >
                 <span className="text-xl">🚫</span>
                 <div>
-                  <div className="font-semibold">Remove from Club</div>
-                  <div className="text-xs text-red-300/60">Remove from club and all teams (Trainer only)</div>
+                  <div className="font-semibold">{t('clubmgmt.removeFromClub')}</div>
+                  <div className="text-xs text-red-300/60">{t('clubmgmt.removeFromClubAndAllTeams')}</div>
                 </div>
               </button>
             </div>
@@ -2989,7 +2991,7 @@ const filteredOrderResponses = useMemo(() => {
               }}
               className="w-full mt-4 px-4 py-3 bg-white/10 text-light rounded-lg hover:bg-white/15 font-medium transition"
             >
-              Cancel
+              {t('clubmgmt.cancel')}
             </button>
           </div>
         </div>
@@ -3012,7 +3014,7 @@ const filteredOrderResponses = useMemo(() => {
               onClick={selectAllTeamsForRemoval}
               className="mb-3 px-3 py-1.5 bg-white/10 hover:bg-white/15 text-light rounded text-sm transition"
             >
-              Select All
+              {t('clubmgmt.selectAll')}
             </button>
 
             <div className="space-y-2 mb-4 max-h-64 overflow-y-auto">
@@ -3063,7 +3065,7 @@ const filteredOrderResponses = useMemo(() => {
                 }}
                 className="flex-1 px-4 py-3 bg-white/10 text-light rounded-lg hover:bg-white/15 font-medium transition"
               >
-                Cancel
+                {t('clubmgmt.cancel')}
               </button>
               <button
                 onClick={confirmRemoveFromTeams}
@@ -3081,7 +3083,7 @@ const filteredOrderResponses = useMemo(() => {
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-lg w-full mx-4">
             <h3 className="text-2xl font-bold text-light mb-4">
-              Assign User to {teamToAssign.name}
+            {t('clubmgmt.assignUserTo')} {teamToAssign.name}
             </h3>
             
             <p className="text-light/70 text-sm mb-4">
@@ -3094,7 +3096,7 @@ const filteredOrderResponses = useMemo(() => {
                 type="text"
                 value={quickAssignSearch}
                 onChange={e => handleQuickAssignSearch(e.target.value)}
-                placeholder="Type name or email..."
+                placeholder={t('clubmgmt.typeNameOrEmail')+ "..."}
                 className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                 autoFocus
               />
@@ -3112,14 +3114,14 @@ const filteredOrderResponses = useMemo(() => {
                     >
                       <div className="font-medium text-light">{m.username}</div>
                       <div className="text-sm text-light/60">{m.email}</div>
-                      <div className="text-xs text-light/40 mt-1">Role: {m.role}</div>
+                      <div className="text-xs text-light/40 mt-1">{t('clubmgmt.roleColon')}: {m.role}</div>
                     </div>
                   ))}
                 </div>
               ) : quickAssignSearch.length >= 2 ? (
-                <p className="text-light/50 text-sm text-center py-4">No matches found</p>
+                <p className="text-light/50 text-sm text-center py-4">{t('clubmgmt.noMatchesFound')}</p>
               ) : (
-                <p className="text-light/50 text-sm text-center py-4">Type at least 2 characters to search</p>
+                <p className="text-light/50 text-sm text-center py-4">{t('clubmgmt.typeAtLeast2Characters')}</p>
               )}
             </div>
 
@@ -3145,21 +3147,21 @@ const filteredOrderResponses = useMemo(() => {
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
             <h3 className="text-2xl font-bold text-light mb-4">
-              Create New Team
+              {t('clubmgmt.createNewTeam')}
             </h3>
             
             <p className="text-light/70 text-sm mb-4">
-              You will automatically become a trainer of this team.
+            {t('clubmgmt.youWillAutomaticallyBecomeTrainer')}
             </p>
 
             {/* Team Name Input */}
             <div className="mb-6">
-              <label className="block text-sm font-medium text-light/80 mb-2">Team Name</label>
+              <label className="block text-sm font-medium text-light/80 mb-2">{t('clubmgmt.teamName')}</label>
               <input
                 type="text"
                 value={newTeamName}
                 onChange={e => setNewTeamName(e.target.value)}
-                placeholder="Enter team name..."
+                placeholder={t('clubmgmt.enterTeamName')}
                 className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                 autoFocus
                 onKeyPress={e => {
@@ -3176,13 +3178,13 @@ const filteredOrderResponses = useMemo(() => {
                 }}
                 className="flex-1 px-4 py-3 bg-white/10 text-light rounded-lg hover:bg-white/15 font-medium transition"
               >
-                Cancel
+                {t('clubmgmt.cancel')}
               </button>
               <button
                 onClick={handleCreateTeam}
                 className="flex-1 px-4 py-3 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition"
               >
-                Create Team
+                {t('clubmgmt.createTeam')}
               </button>
             </div>
           </div>
@@ -3211,7 +3213,7 @@ const filteredOrderResponses = useMemo(() => {
                 const uniqueUserIds = [...new Set(allUserIds)];
 
                 if (uniqueUserIds.length === 0) {
-                  return <p className="text-light/50 text-center py-4">No users in this team</p>;
+                  return <p className="text-light/50 text-center py-4">{t('clubmgmt.noUsersInThisTeam')}</p>;
                 }
 
                 return uniqueUserIds.map(userId => {
@@ -3255,7 +3257,7 @@ const filteredOrderResponses = useMemo(() => {
               }}
               className="w-full px-4 py-3 bg-white/10 text-light rounded-lg hover:bg-white/15 font-medium transition"
             >
-              Cancel
+              {t('clubmgmt.cancel')}
             </button>
           </div>
         </div>
@@ -3266,7 +3268,7 @@ const filteredOrderResponses = useMemo(() => {
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
             <h3 className="text-2xl font-bold text-light mb-4">
-              Rename Team
+            {t('clubmgmt.renameTeam')}
             </h3>
             
             <p className="text-light/70 text-sm mb-4">
@@ -3275,12 +3277,12 @@ const filteredOrderResponses = useMemo(() => {
 
             {/* Team Name Input */}
             <div className="mb-6">
-              <label className="block text-sm font-medium text-light/80 mb-2">New Team Name</label>
+              <label className="block text-sm font-medium text-light/80 mb-2">{t('clubmgmt.newTeamName')}</label>
               <input
                 type="text"
                 value={renameTeamName}
                 onChange={e => setRenameTeamName(e.target.value)}
-                placeholder="Enter new team name..."
+                placeholder={t('clubmgmt.enterNewTeamName')}
                 className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                 autoFocus
                 onKeyPress={e => {
@@ -3298,13 +3300,13 @@ const filteredOrderResponses = useMemo(() => {
                 }}
                 className="flex-1 px-4 py-3 bg-white/10 text-light rounded-lg hover:bg-white/15 font-medium transition"
               >
-                Cancel
+                {t('clubmgmt.cancel')}
               </button>
               <button
                 onClick={handleRenameTeam}
                 className="flex-1 px-4 py-3 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition"
               >
-                Rename
+                {t('clubmgmt.rename')}
               </button>
             </div>
           </div>
@@ -3315,11 +3317,11 @@ const filteredOrderResponses = useMemo(() => {
       {showEditClubModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-mid-dark border border-white/10 rounded-xl p-6 max-w-md w-full">
-            <h3 className="font-title text-xl md:text-2xl text-light mb-4">Edit Club</h3>
+            <h3 className="font-title text-xl md:text-2xl text-light mb-4">{t('clubmgmt.editClub')}</h3>
             
             <div className="space-y-4 mb-6">
               <div>
-                <label className="block text-light/80 font-medium mb-2">Club Name</label>
+                <label className="block text-light/80 font-medium mb-2">{t('clubmgmt.deleteClub')}</label>
                 <input
                   type="text"
                   value={editClubName}
@@ -3329,7 +3331,7 @@ const filteredOrderResponses = useMemo(() => {
               </div>
 
               <div>
-                <label className="block text-light/80 font-medium mb-2">Club Type</label>
+                <label className="block text-light/80 font-medium mb-2">{t('clubmgmt.clubType')}</label>
                 <select
                   value={editClubType}
                   onChange={(e) => {
@@ -3340,7 +3342,7 @@ const filteredOrderResponses = useMemo(() => {
                   }}
                   className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                 >
-                  <option value="" className="bg-mid-dark text-light">Select type...</option>
+                  <option value="" className="bg-mid-dark text-light">{t('clubmgmt.selectType')}</option>
                   {CLUB_TYPES.map(type => (
                     <option key={type} value={type} className="bg-mid-dark text-light">{type}</option>
                   ))}
@@ -3349,12 +3351,12 @@ const filteredOrderResponses = useMemo(() => {
 
               {editClubType === 'Custom' && (
                 <div>
-                  <label className="block text-light/80 font-medium mb-2">Custom Type</label>
+                  <label className="block text-light/80 font-medium mb-2">{t('clubmgmt.customType')}</label>
                   <input
                     type="text"
                     value={editCustomClubType}
                     onChange={(e) => setEditCustomClubType(e.target.value)}
-                    placeholder="Enter custom club type"
+                    placeholder={t('clubmgmt.enterCustomClubType')}
                     className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                   />
                 </div>
@@ -3366,13 +3368,13 @@ const filteredOrderResponses = useMemo(() => {
                 onClick={() => setShowEditClubModal(false)}
                 className="flex-1 px-4 py-2 bg-white/10 hover:bg-white/15 text-light rounded-lg font-medium transition-all"
               >
-                Cancel
+                {t('clubmgmt.cancel')}
               </button>
               <button
                 onClick={handleEditClub}
                 className="flex-1 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
               >
-                Save Changes
+                {t('clubmgmt.saveChanges')}
               </button>
             </div>
           </div>
@@ -3388,19 +3390,19 @@ const filteredOrderResponses = useMemo(() => {
             </h3>
             
             <div className="mb-4">
-              <label className="block text-light/80 font-medium mb-2">Select Image</label>
+              <label className="block text-light/80 font-medium mb-2">{t('clubmgmt.selectImage')}</label>
               <input
                 type="file"
                 accept="image/*"
                 onChange={handleLogoFileChange}
                 className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-primary file:text-white file:cursor-pointer hover:file:bg-primary/80"
               />
-              <p className="text-xs text-light/50 mt-1">Max size: 5MB (JPG, PNG, GIF, WebP)</p>
+              <p className="text-xs text-light/50 mt-1">{t('clubmgmt.maxSize5MB')}</p>
             </div>
 
             {logoPreview && (
               <div className="mb-4">
-                <p className="text-light/80 text-sm mb-2">Preview:</p>
+                <p className="text-light/80 text-sm mb-2">{t('clubmgmt.preview')}:</p>
                 <img 
                   src={logoPreview} 
                   alt="Preview" 
@@ -3418,7 +3420,7 @@ const filteredOrderResponses = useMemo(() => {
                 }}
                 className="flex-1 px-4 py-2 bg-white/10 hover:bg-white/15 text-light rounded-lg font-medium transition-all"
               >
-                Cancel
+                {t('clubmgmt.cancel')}
               </button>
               <button
                 onClick={handleUploadLogo}

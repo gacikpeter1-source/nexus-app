@@ -34,6 +34,141 @@ export const PLAN_PRICING = {
   [SUBSCRIPTION_PLANS.TRIAL]: { monthly: 0, yearly: 0 }
 };
 
+// Function to get translated plan features
+// Call this from components that have access to t()
+export const getPlanFeatures = (t) => ({
+  [SUBSCRIPTION_PLANS.FREE]: {
+    name: t('subscripcontext.freeAccount'),
+    shortDesc: t('subscripcontext.basicFeatures'),
+    maxTeamSize: 0,
+    maxTeams: 0,
+    canCreateClub: false,
+    canCreateEvents: true,
+    canViewCalendar: true,
+    canRespondToEvents: true,
+    hasNotifications: false,
+    hasStatistics: false,
+    hasLibrary: false,
+    hasChat: false,
+    canCustomizeTheme: false,
+    canExportData: false,
+    hasSMSService: false,
+    hasPublicEvents: false,
+    description: t('subscripcontext.basicFeaturesDesc'),
+    features: [
+      t('subscripcontext.viewCalendar'),
+      t('subscripcontext.respondToEvents'),
+      t('subscripcontext.basicProfile')
+    ]
+  },
+  [SUBSCRIPTION_PLANS.USER]: {
+    name: t('subscripcontext.userSubscription'),
+    shortDesc: t('subscripcontext.smallTeams'),
+    maxTeamSize: 10,
+    maxTeams: 1,
+    canCreateClub: false,
+    canCreateEvents: true,
+    canViewCalendar: true,
+    canRespondToEvents: true,
+    hasNotifications: true,
+    hasStatistics: true,
+    hasLibrary: true,
+    hasChat: true,
+    canCustomizeTheme: true,
+    canExportData: false,
+    hasSMSService: false,
+    hasPublicEvents: false,
+    description: t('subscripcontext.smallTeamsDesc'),
+    features: [
+      '1 team (max 10 members)',
+      t('subscripcontext.pushNotifications'),
+      t('subscripcontext.statisticsReports'),
+      t('subscripcontext.libraryAccess'),
+      t('subscripcontext.chatMessaging'),
+      t('subscripcontext.customThemes')
+    ]
+  },
+  [SUBSCRIPTION_PLANS.CLUB]: {
+    name: t('subscripcontext.clubCompanySubscription'),
+    shortDesc: t('subscripcontext.midSizedClubs'),
+    maxTeamSize: Infinity,
+    maxTeams: Infinity,
+    canCreateClub: true,
+    canCreateEvents: true,
+    canViewCalendar: true,
+    canRespondToEvents: true,
+    hasNotifications: true,
+    hasStatistics: true,
+    hasLibrary: true,
+    hasChat: true,
+    canCustomizeTheme: true,
+    canExportData: true,
+    hasSMSService: false,
+    hasPublicEvents: false,
+    description: t('subscripcontext.midSizedClubsDesc'),
+    features: [
+      t('subscripcontext.unlimitedTeams'),
+      t('subscripcontext.unlimitedMembers'),
+      t('subscripcontext.createClubs'),
+      t('subscripcontext.advancedStatistics'),
+      t('subscripcontext.dataExport'),
+      t('subscripcontext.allUserFeatures')
+    ]
+  },
+  [SUBSCRIPTION_PLANS.FULL]: {
+    name: t('subscripcontext.fullSubscription'),
+    shortDesc: t('subscripcontext.enterprise'),
+    maxTeamSize: Infinity,
+    maxTeams: Infinity,
+    canCreateClub: true,
+    canCreateEvents: true,
+    canViewCalendar: true,
+    canRespondToEvents: true,
+    hasNotifications: true,
+    hasStatistics: true,
+    hasLibrary: true,
+    hasChat: true,
+    canCustomizeTheme: true,
+    canExportData: true,
+    hasSMSService: true,
+    hasPublicEvents: true,
+    description: t('subscripcontext.enterpriseDesc'),
+    features: [
+      t('subscripcontext.smsNotifications'),
+      t('subscripcontext.publicEvents'),
+      t('subscripcontext.socialMediaIntegration'),
+      t('subscripcontext.prioritySupport'),
+      t('subscripcontext.allClubFeatures')
+    ]
+  },
+  [SUBSCRIPTION_PLANS.TRIAL]: {
+    name: t('subscripcontext.trialSubscription'),
+    shortDesc: t('subscripcontext.trialAccess'),
+    maxTeamSize: Infinity,
+    maxTeams: Infinity,
+    canCreateClub: true,
+    canCreateEvents: true,
+    canViewCalendar: true,
+    canRespondToEvents: true,
+    hasNotifications: true,
+    hasStatistics: true,
+    hasLibrary: true,
+    hasChat: true,
+    canCustomizeTheme: true,
+    canExportData: true,
+    hasSMSService: true,
+    hasPublicEvents: true,
+    description: t('subscripcontext.trialAccessDesc'),
+    features: [
+      t('subscripcontext.allFeaturesUnlocked'),
+      t('subscripcontext.timeLimitedAccess'),
+      t('subscripcontext.fullPlatformTrial')
+    ]
+  }
+});
+
+// Static fallback for backwards compatibility (English only)
+// This is used when t() is not available
 export const PLAN_FEATURES = {
   [SUBSCRIPTION_PLANS.FREE]: {
     name: 'Free Account',
@@ -201,7 +336,7 @@ export function SubscriptionProvider({ children }) {
         setClubSubscriptions(clubSubs);
       }
     } catch (error) {
-      console.error('Error loading subscriptions:', error);
+      console.error('subscripcontext.errorLoadingSubscriptions', error);
     } finally {
       setLoading(false);
     }
@@ -358,7 +493,7 @@ export function SubscriptionProvider({ children }) {
 
       return { subscription, invoice };
     } catch (error) {
-      console.error('Error creating subscription:', error);
+      console.error('subscripcontext.errorCreatingSubscription', error);
       throw error;
     }
   };
@@ -376,7 +511,8 @@ export function SubscriptionProvider({ children }) {
     SUBSCRIPTION_PLANS,
     BILLING_CYCLES,
     PLAN_PRICING,
-    PLAN_FEATURES
+    PLAN_FEATURES, // Static English fallback
+    getPlanFeatures // Function to get translated features
   };
 
   return (

@@ -11,6 +11,7 @@ import {
   createOrderResponse,
   getClubOrderTemplates
 } from '../firebase/firestore';
+import { useLanguage } from '../contexts/LanguageContext';
 
 function Modal({ open, title, children, onClose }) {
   if (!open) return null;
@@ -56,7 +57,8 @@ export default function ClubsDashboard() {
   const [showOrderResponseModal, setShowOrderResponseModal] = useState(false);
   const [orderResponseForm, setOrderResponseForm] = useState({});
   const [respondingToOrder, setRespondingToOrder] = useState(false);
-  
+
+  const { t } = useLanguage();
   const location = useLocation();
     useEffect(() => {
       if (location.state?.selectedClubId) {
@@ -111,13 +113,13 @@ export default function ClubsDashboard() {
       setAllClubsForRequest(availableClubs);
       
       if (availableClubs.length === 0 && allClubs.length > 0) {
-        showToast('You are already a member of all available clubs!', 'info');
+        showToast(t('clubsdashboard.alreadyMemberOfAllClubs'), 'info');
       } else if (allClubs.length === 0) {
-        showToast('No clubs found in the database. Create one first!', 'info');
+        showToast(t('clubsdashboard.noClubsFoundCreateFirst'), 'info');
       }
     } catch (error) {
-      console.error('❌ Error loading clubs for request:', error);
-      showToast(`Failed to load clubs: ${error.message}`, 'error');
+      console.error(t('clubsdashboard.errorLoadingClubsForRequest'), error);
+      showToast(`${t('clubsdashboard.failedToLoadClubs')} ${error.message}`, 'error');
       setAllClubsForRequest([]);
     } finally {
       setLoadingClubsForRequest(false);
@@ -151,7 +153,7 @@ async function handleSubmitOrderResponse(status) {
       .map(field => field.label);
     
     if (missingFields.length > 0) {
-      showToast(`Please fill required fields: ${missingFields.join(', ')}`, 'error');
+      showToast(`${t('clubsdashboard.pleaseFillRequiredFields')} ${missingFields.join(', ')}`, 'error');
       return;
     }
   }
@@ -169,7 +171,7 @@ async function handleSubmitOrderResponse(status) {
     };
 
     await createOrderResponse(responseData);
-    showToast(status === 'accepted' ? 'Order accepted!' : 'Order declined', 'success');
+    showToast(status === 'accepted' ? t('clubsdashboard.orderAccepted') : t('clubsdashboard.orderDeclined'), 'success');
     
     setShowOrderResponseModal(false);
     setSelectedOrder(null);
@@ -179,7 +181,7 @@ async function handleSubmitOrderResponse(status) {
     await loadPendingOrders();
   } catch (error) {
     console.error('Error submitting order response:', error);
-    showToast('Failed to submit response', 'error');
+    showToast(t('clubsdashboard.failedToSubmitResponse'), 'error');
   } finally {
     setRespondingToOrder(false);
   }
@@ -239,7 +241,7 @@ async function handleSubmitOrderResponse(status) {
 
 
   const submitJoinRequest = async () => {
-    if (!selectedClubForRequest) return showToast('Please select a club.', 'error');
+    if (!selectedClubForRequest) return showToast(t('clubsdashboard.pleaseSelectClub'), 'error');
 
     try {
       await createRequest({
@@ -251,10 +253,10 @@ async function handleSubmitOrderResponse(status) {
       setOpenRequestModal(false);
       setSelectedClubForRequest('');
       setSelectedTeam('');
-      showToast('Join request submitted!', 'success');
+      showToast(t('clubsdashboard.joinRequestSubmitted'), 'success');
     } catch (error) {
       console.error('Error submitting request:', error);
-      showToast('Failed to submit request', 'error');
+      showToast(t('clubsdashboard.failedToSubmitRequest'), 'error');
     }
   };
 
@@ -268,13 +270,13 @@ async function handleSubmitOrderResponse(status) {
 
     if (isCreator || isLastTrainer) {
       showToast(
-        '❌ Cannot leave club: You are the creator or last trainer. Please transfer ownership or assign another trainer first.',
+        `❌ ${t('clubsdashboard.cannotLeaveClubCreatorOrLastTrainer')}`,
         'error'
       );
       return;
     }
 
-    if (!window.confirm(`Are you sure you want to leave "${selectedClub.name}"? You will be removed from all teams in this club.`)) {
+    if (!window.confirm(t('clubsdashboard.areYouSureLeaveClub').replace('{clubName}', selectedClub.name))) {
       return;
     }
 
@@ -307,12 +309,12 @@ async function handleSubmitOrderResponse(status) {
       const updatedClubIds = (userData.clubIds || []).filter(id => id !== selectedClubId);
       await updateUser(user.id, { clubIds: updatedClubIds });
 
-      showToast('✅ Left club successfully', 'success');
+      showToast(`✅ ${t('clubsdashboard.leftClubSuccessfully')}`, 'success');
       setSelectedClubId(null);
       await loadClubs();
     } catch (error) {
       console.error('Error leaving club:', error);
-      showToast('Failed to leave club', 'error');
+      showToast(t('clubsdashboard.failedToLeaveClub'), 'error');
     }
   };
 
@@ -321,7 +323,7 @@ async function handleSubmitOrderResponse(status) {
     if (loading) {
       return (
         <div className="text-center py-12">
-          <div className="text-light/60">Loading clubs...</div>
+          <div className="text-light/60">{t('clubsdashboard.loadingClubs')}</div>
         </div>
       );
     }
@@ -329,7 +331,7 @@ async function handleSubmitOrderResponse(status) {
     if (clubs.length === 0) {
       return (
         <div className="text-center py-8">
-          <p className="text-light/50 text-sm">No clubs yet. Use the buttons above to get started.</p>
+          <p className="text-light/50 text-sm">{t('clubsdashboard.noClubsYetUseButtons')}</p>
         </div>
       );
     }
@@ -434,7 +436,7 @@ async function handleSubmitOrderResponse(status) {
             className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 rounded-lg transition-all font-medium text-sm flex items-center gap-2"
           >
             <span>🚪</span>
-            <span>Leave Club</span>
+            <span>{t('clubsdashboard.leaveClub')}</span>
           </button>
         </div>
 
@@ -442,9 +444,9 @@ async function handleSubmitOrderResponse(status) {
         {userTeamsInClub.length === 0 ? (
           <div className="rounded-2xl border-2 border-dashed border-white/20 bg-white/5 backdrop-blur-sm p-12 text-center">
             
-            <h3 className="font-title text-2xl text-light mb-2">No Teams Yet</h3>
+            <h3 className="font-title text-2xl text-light mb-2">{t('clubsdashboard.noTeamsYet')}</h3>
             <p className="text-light/60 mb-6 max-w-md mx-auto">
-              You haven&apos;t joined any teams in this club yet.
+              {t('clubsdashboard.youHaventJoinedAnyTeams')}
             </p>
           </div>
         ) : (
@@ -512,7 +514,7 @@ async function handleSubmitOrderResponse(status) {
       {/* Hero Section */}
       <div className="mb-8 animate-fade-in">
         <h1 className="font-display text-3xl md:text-5xl lg:text-7xl text-light mb-2 tracking-wider">
-          MY <span className="text-primary">CLUBS</span>
+          {t('clubsdashboard.my')} <span className="text-primary">{t('clubsdashboard.clubs')}</span>
         </h1>
         <p className="text-light/60 text-lg">
           {selectedClub ? 'Select a team to view details' : 'Select a club to view your teams'}
@@ -527,14 +529,14 @@ async function handleSubmitOrderResponse(status) {
             className="btn-primary flex items-center gap-1 px-2 py-0.5 md:px-2 md:py-1 text-xs md:text-sm"
           >
             <span>+</span>
-            <span>Create Club</span>
+            <span>{t('clubsdashboard.createClub')}</span>
           </button>
           <button
             onClick={() => setOpenRequestModal(true)}
             className="btn-secondary flex items-center gap-1 px-2 py-0.5 md:px-2 md:py-1 text-xs md:text-sm"
           >
             <span>+</span>
-            <span>Request to Join</span>
+            <span>{t('clubsdashboard.requestToJoin')}</span>
           </button>
         </div>
       )}
@@ -547,7 +549,7 @@ async function handleSubmitOrderResponse(status) {
       {/* Join Request Modal */}
       <Modal 
         open={openRequestModal} 
-        title="Request to Join" 
+        title={t('clubsdashboard.requestToJoin')} 
         onClose={() => {
           setOpenRequestModal(false);
           setSelectedClubForRequest('');
@@ -560,7 +562,7 @@ async function handleSubmitOrderResponse(status) {
           {/* Loading State */}
           {loadingClubsForRequest && (
             <div className="text-center py-4">
-              <div className="text-light/60">Loading clubs...</div>
+              <div className="text-light/60">{t('clubsdashboard.loadingClubs')}</div>
             </div>
           )}
           
@@ -568,11 +570,11 @@ async function handleSubmitOrderResponse(status) {
           {!loadingClubsForRequest && (
             <div>
               <label className="block text-sm font-medium text-light/80 mb-2">
-                🔍 Search Club
+                🔍 {t('clubsdashboard.searchClub')}
               </label>
               <input
                 type="text"
-                placeholder="Type to search clubs..."
+                placeholder={t('clubsdashboard.typeToSearchClubs')}
                 value={clubSearchQuery}
                 onChange={(e) => setClubSearchQuery(e.target.value)}
                 className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 md:px-4 md:py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all mb-2"
@@ -588,7 +590,7 @@ async function handleSubmitOrderResponse(status) {
                 }}
                 className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 md:px-4 md:py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
               >
-                <option value="" className="bg-mid-dark">-- Select a club --</option>
+                <option value="" className="bg-mid-dark">-- {t('clubsdashboard.selectClub')} --</option>
                 {filteredClubsForRequest.map(c => (
                   <option key={c.id} value={c.id} className="bg-mid-dark">
                     {c.name} {c.clubType ? `(${c.clubType})` : ''}
@@ -597,12 +599,12 @@ async function handleSubmitOrderResponse(status) {
               </select>
               
               {clubSearchQuery && filteredClubsForRequest.length === 0 && !loadingClubsForRequest && (
-                <p className="text-sm text-light/50 mt-2">No clubs found matching "{clubSearchQuery}"</p>
+                <p className="text-sm text-light/50 mt-2">{t('clubsdashboard.noClubsFoundMatching')} "{clubSearchQuery}"</p>
               )}
               
               {!clubSearchQuery && allClubsForRequest.length === 0 && !loadingClubsForRequest && (
                 <p className="text-sm text-yellow-400 mt-2">
-                  ℹ️ You're already a member of all available clubs, or no clubs exist yet!
+                  ℹ️ {t('clubsdashboard.alreadyMemberOrNoClubsExist')}
                 </p>
               )}
             </div>
@@ -612,11 +614,11 @@ async function handleSubmitOrderResponse(status) {
           {selectedClubForRequest && availableTeams.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-light/80 mb-2">
-                🔍 Search Team
+                🔍 {t('clubsdashboard.searchTeam')}
               </label>
               <input
                 type="text"
-                placeholder="Type to search teams..."
+                placeholder={t('clubsdashboard.typeToSearchTeams')}
                 value={teamSearchQuery}
                 onChange={(e) => setTeamSearchQuery(e.target.value)}
                 className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 md:px-4 md:py-3 text-light placeholder-light/40 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all mb-2"
@@ -628,18 +630,18 @@ async function handleSubmitOrderResponse(status) {
                 onChange={(e) => setSelectedTeam(e.target.value)}
                 className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 md:px-4 md:py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
               >
-                <option value="" className="bg-mid-dark">-- Select a team (optional) --</option>
+                <option value="" className="bg-mid-dark">-- {t('clubsdashboard.selectTeamOptional')} --</option>
                 {filteredTeams.map(t => (
                   <option key={t.id} value={t.id} className="bg-mid-dark">{t.name}</option>
                 ))}
               </select>
               
               {teamSearchQuery && filteredTeams.length === 0 && (
-                <p className="text-sm text-light/50 mt-2">No teams found matching "{teamSearchQuery}"</p>
+                <p className="text-sm text-light/50 mt-2">{t('clubsdashboard.noTeamsFoundMatching')} "{teamSearchQuery}"</p>
               )}
               
               <p className="text-xs text-light/50 mt-2">
-                💡 Selecting a specific team helps trainers process your request faster
+                💡 {t('clubsdashboard.selectingTeamHelpsTrainers')}
               </p>
             </div>
           )}
@@ -648,7 +650,7 @@ async function handleSubmitOrderResponse(status) {
           {selectedClubForRequest && availableTeams.length === 0 && (
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
               <p className="text-sm text-blue-400">
-                ℹ️ This club has no teams. Your request will go to the club admins.
+                ℹ️ {t('clubsdashboard.clubHasNoTeams')}
               </p>
             </div>
           )}
@@ -658,7 +660,7 @@ async function handleSubmitOrderResponse(status) {
             disabled={!selectedClubForRequest}
             className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Submit Request
+            {t('clubsdashboard.submitRequest')}
           </button>
         </div>
       </Modal>
@@ -777,14 +779,14 @@ async function handleSubmitOrderResponse(status) {
                 className="flex-1 px-3 py-2 md:px-4 md:py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm md:text-base font-medium transition-all disabled:opacity-50"
                 disabled={respondingToOrder}
               >
-                {respondingToOrder ? 'Submitting...' : '✓ Accept & Submit'}
+                {respondingToOrder ? 'Submitting...' : `✓ ${t('clubsdashboard.accepted')}`}
               </button>
               <button
                 onClick={() => handleSubmitOrderResponse('declined')}
                 className="px-3 py-2 md:px-4 md:py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm md:text-base font-medium transition-all disabled:opacity-50"
                 disabled={respondingToOrder}
               >
-                ✗ Decline
+                ✗ {t('clubsdashboard.decline')}
               </button>
             </div>
           </div>
