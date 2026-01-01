@@ -3368,4 +3368,223 @@ exports.cleanupAllInvalidTokens = functions.https.onCall(async (data, context) =
   }
 });
 
+// ============================================================================
+// USER DELETION CLEANUP
+// ============================================================================
+
+/**
+ * Triggered when a user document is deleted from Firestore
+ * Cleans up all associated data: clubs, teams, chats, notifications, etc.
+ */
+exports.onUserDeleted = functions.firestore
+  .document('users/{userId}')
+  .onDelete(async (snap, context) => {
+    const userId = context.params.userId;
+    const userData = snap.data();
+    
+    console.log('═══════════════════════════════════════');
+    console.log('🗑️ USER DELETION CLEANUP STARTED');
+    console.log(`👤 User ID: ${userId}`);
+    console.log(`📧 Email: ${userData.email || 'N/A'}`);
+    console.log('═══════════════════════════════════════');
+    
+    try {
+      const db = admin.firestore();
+      const batch = db.batch();
+      let operationCount = 0;
+      
+      // 1. Remove user from all clubs
+      console.log('🏠 Cleaning up club memberships...');
+      const clubsSnapshot = await db.collection('clubs').get();
+      for (const clubDoc of clubsSnapshot.docs) {
+        const club = clubDoc.data();
+        let clubUpdated = false;
+        const updates = {};
+        
+        // Remove from club members
+        if (club.members && club.members.includes(userId)) {
+          updates.members = admin.firestore.FieldValue.arrayRemove(userId);
+          clubUpdated = true;
+        }
+        
+        // Remove from club admins
+        if (club.admins && club.admins.includes(userId)) {
+          updates.admins = admin.firestore.FieldValue.arrayRemove(userId);
+          clubUpdated = true;
+        }
+        
+        // Remove from teams
+        if (club.teams) {
+          const updatedTeams = club.teams.map(team => {
+            let teamChanged = false;
+            const updatedTeam = { ...team };
+            
+            if (team.members && team.members.includes(userId)) {
+              updatedTeam.members = team.members.filter(id => id !== userId);
+              teamChanged = true;
+            }
+            if (team.trainers && team.trainers.includes(userId)) {
+              updatedTeam.trainers = team.trainers.filter(id => id !== userId);
+              teamChanged = true;
+            }
+            if (team.assistants && team.assistants.includes(userId)) {
+              updatedTeam.assistants = team.assistants.filter(id => id !== userId);
+              teamChanged = true;
+            }
+            
+            return teamChanged ? updatedTeam : team;
+          });
+          
+          if (JSON.stringify(updatedTeams) !== JSON.stringify(club.teams)) {
+            updates.teams = updatedTeams;
+            clubUpdated = true;
+          }
+        }
+        
+        if (clubUpdated) {
+          batch.update(clubDoc.ref, updates);
+          operationCount++;
+          console.log(`  ✓ Removed from club: ${club.name || clubDoc.id}`);
+        }
+      }
+      
+      // 2. Remove user from all chats
+      console.log('💬 Cleaning up chat memberships...');
+      const chatsSnapshot = await db.collection('chats')
+        .where('participants', 'array-contains', userId)
+        .get();
+      
+      chatsSnapshot.forEach(chatDoc => {
+        batch.update(chatDoc.ref, {
+          participants: admin.firestore.FieldValue.arrayRemove(userId)
+        });
+        operationCount++;
+      });
+      console.log(`  ✓ Removed from ${chatsSnapshot.size} chat(s)`);
+      
+      // 3. Delete user's notifications
+      console.log('🔔 Cleaning up notifications...');
+      const notificationsSnapshot = await db.collection('notifications')
+        .where('userId', '==', userId)
+        .get();
+      
+      notificationsSnapshot.forEach(notifDoc => {
+        batch.delete(notifDoc.ref);
+        operationCount++;
+      });
+      console.log(`  ✓ Deleted ${notificationsSnapshot.size} notification(s)`);
+      
+      // 4. Delete user's settings
+      console.log('⚙️ Cleaning up user settings...');
+      const settingsSnapshot = await db.collection(`users/${userId}/settings`).get();
+      settingsSnapshot.forEach(settingDoc => {
+        batch.delete(settingDoc.ref);
+        operationCount++;
+      });
+      console.log(`  ✓ Deleted ${settingsSnapshot.size} setting(s)`);
+      
+      // 5. Handle parent-child relationships
+      console.log('👨‍👩‍👧 Cleaning up parent-child relationships...');
+      
+      // Delete relationships where user is parent
+      const parentRelationships = await db.collection('parentChildRelationships')
+        .where('parentId', '==', userId)
+        .get();
+      parentRelationships.forEach(relDoc => {
+        batch.delete(relDoc.ref);
+        operationCount++;
+      });
+      
+      // Delete relationships where user is child
+      const childRelationships = await db.collection('parentChildRelationships')
+        .where('childId', '==', userId)
+        .get();
+      childRelationships.forEach(relDoc => {
+        batch.delete(relDoc.ref);
+        operationCount++;
+      });
+      
+      console.log(`  ✓ Deleted ${parentRelationships.size + childRelationships.size} relationship(s)`);
+      
+      // 6. Update events (remove user from responses)
+      console.log('📅 Cleaning up event responses...');
+      const eventsSnapshot = await db.collection('events').get();
+      let eventUpdates = 0;
+      
+      for (const eventDoc of eventsSnapshot.docs) {
+        const event = eventDoc.data();
+        let eventUpdated = false;
+        const updates = {};
+        
+        if (event.responses && event.responses[userId]) {
+          updates[`responses.${userId}`] = admin.firestore.FieldValue.delete();
+          eventUpdated = true;
+        }
+        
+        if (event.waitlist && event.waitlist.includes(userId)) {
+          updates.waitlist = admin.firestore.FieldValue.arrayRemove(userId);
+          eventUpdated = true;
+        }
+        
+        if (eventUpdated) {
+          batch.update(eventDoc.ref, updates);
+          operationCount++;
+          eventUpdates++;
+        }
+      }
+      console.log(`  ✓ Cleaned ${eventUpdates} event(s)`);
+      
+      // 7. Delete substitution requests
+      console.log('🔄 Cleaning up substitution requests...');
+      const substitutionRequests = await db.collection('substitutionRequests')
+        .where('requestedBy', '==', userId)
+        .get();
+      
+      const substitutionResponses = await db.collection('substitutionRequests')
+        .where('targetUser', '==', userId)
+        .get();
+      
+      [...substitutionRequests.docs, ...substitutionResponses.docs].forEach(doc => {
+        batch.delete(doc.ref);
+        operationCount++;
+      });
+      
+      console.log(`  ✓ Deleted ${substitutionRequests.size + substitutionResponses.size} substitution request(s)`);
+      
+      // Commit all changes in batches (max 500 operations per batch)
+      if (operationCount > 0) {
+        console.log(`\n💾 Committing ${operationCount} operation(s)...`);
+        await batch.commit();
+        console.log('✅ All operations committed successfully');
+      } else {
+        console.log('ℹ️ No cleanup operations needed');
+      }
+      
+      // 8. Delete Firebase Auth user if still exists
+      console.log('\n🔐 Checking Firebase Auth user...');
+      try {
+        await admin.auth().getUser(userId);
+        await admin.auth().deleteUser(userId);
+        console.log('✅ Firebase Auth user deleted');
+      } catch (authError) {
+        if (authError.code === 'auth/user-not-found') {
+          console.log('ℹ️ Firebase Auth user already deleted');
+        } else {
+          console.error('⚠️ Error deleting Firebase Auth user:', authError.message);
+        }
+      }
+      
+      console.log('═══════════════════════════════════════');
+      console.log('✅ USER DELETION CLEANUP COMPLETED');
+      console.log(`   Total operations: ${operationCount}`);
+      console.log('═══════════════════════════════════════');
+      
+    } catch (error) {
+      console.error('═══════════════════════════════════════');
+      console.error('❌ USER DELETION CLEANUP FAILED');
+      console.error('Error:', error);
+      console.error('═══════════════════════════════════════');
+    }
+  });
+
 

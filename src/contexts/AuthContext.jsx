@@ -8,6 +8,8 @@ import {
   sendPasswordResetEmail,
   updatePassword,
   onAuthStateChanged,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
 } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import {
@@ -293,26 +295,48 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Delete account
-  const deleteAccount = async () => {
+  const deleteAccount = async (password) => {
     try {
       if (!auth.currentUser) {
         throw new Error('No user logged in');
       }
-      const userId = auth.currentUser.uid;
       
+      const userId = auth.currentUser.uid;
+      const userEmail = auth.currentUser.email;
+      
+      // Re-authenticate user before deletion (Firebase security requirement)
+      if (password) {
+        const credential = EmailAuthProvider.credential(userEmail, password);
+        await reauthenticateWithCredential(auth.currentUser, credential);
+        console.log('✅ User re-authenticated');
+      }
+      
+      // Delete Firestore user document first
+      console.log('🗑️ Deleting Firestore user document...');
       await deleteUserFromFirestore(userId);
+      console.log('✅ Firestore user document deleted');
+      
+      // Delete Firebase Authentication user
+      console.log('🗑️ Deleting Firebase Auth user...');
       await auth.currentUser.delete();
+      console.log('✅ Firebase Auth user deleted');
       
       setUser(null);
       localStorage.removeItem('currentUser');
-      console.log('✅ Account deleted');
+      console.log('✅ Account fully deleted');
       return { ok: true };
     } catch (error) {
-      console.error('Delete account error:', error);
+      console.error('❌ Delete account error:', error);
       let message = 'Failed to delete account';
+      
       if (error.code === 'auth/requires-recent-login') {
-        message = 'Please log out and log in again before deleting your account';
+        message = 'For security, please re-enter your password to delete your account';
+      } else if (error.code === 'auth/wrong-password') {
+        message = 'Incorrect password';
+      } else if (error.code === 'auth/too-many-requests') {
+        message = 'Too many attempts. Please try again later';
       }
+      
       return { ok: false, message };
     }
   };

@@ -410,18 +410,26 @@ export default function Profile() {
                 </div>
                 <button
                   onClick={async () => {
-                    if (window.confirm('⚠️ Are you absolutely sure you want to delete your account?\n\nThis will:\n• Delete all your data\n• Remove you from all clubs and teams\n• Cancel any active subscriptions\n\nThis action CANNOT be undone!\n\nType "DELETE" in the next prompt to confirm.')) {
+                    if (window.confirm('⚠️ Are you absolutely sure you want to delete your account?\n\nThis will:\n• Delete all your data\n• Remove you from all clubs and teams\n• Cancel any active subscriptions\n\nThis action CANNOT be undone!\n\nClick OK to proceed.')) {
+                      // Step 1: Confirm by typing DELETE
                       const confirmation = window.prompt('Type DELETE to confirm account deletion:');
                       if (confirmation === 'DELETE') {
-                        const result = await deleteAccount();
-                        if (result.ok) {
-                          alert('✅ Account deleted successfully');
-                          navigate('/register');
+                        // Step 2: Ask for password for security
+                        const password = window.prompt('Enter your password to confirm:');
+                        if (password) {
+                          // Step 3: Delete account
+                          const result = await deleteAccount(password);
+                          if (result.ok) {
+                            alert('✅ Account deleted successfully! You can now register with the same email if needed.');
+                            navigate('/register');
+                          } else {
+                            alert('❌ ' + result.message);
+                          }
                         } else {
-                          alert('❌ ' + result.message);
+                          alert('Password required for security. Account deletion cancelled.');
                         }
                       } else {
-                        alert('Account deletion cancelled');
+                        alert('Confirmation failed. Account deletion cancelled.');
                       }
                     }
                   }}
