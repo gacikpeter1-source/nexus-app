@@ -108,7 +108,7 @@
   "canBeConfiguredIndependently": "Kann unabhängig konfiguriert werden",
   "usersCanDisable": "Einzelne Benutzer können ihre eigenen Benachrichtigungen im Profil deaktivieren",
   "createsInteractiveNotifications": "Erstellt interaktive Benachrichtigungen mit Akzeptieren/Ablehnen-Schaltflächen"
-},
+  },
   "userMenu": {
     "profile": "Profil",
     "profileDesc": "Bearbeite dein Profil & Avatar",
@@ -154,7 +154,7 @@
     "joinPlatform": "Tritt der Trainingsverwaltungsplattform deines Teams bei",
     "agreeTerms": "Mit der Erstellung eines Kontos stimmst du unseren Nutzungsbedingungen und Datenschutzrichtlinien zu"
   },
-"profile": {
+  "profile": {
   "title": "PROFIL",
   "notificationTab": "Benachrichtigungen",
   "subscriptionTab": "Abonnements",
@@ -166,7 +166,7 @@
   "displayNameDesc": "Name, der in allen Teams und Vereinen angezeigt wird",
   "contactInfo": "Kontaktinformationen",
   "phone": "Telefonnummer",
-  "bio": "Bio",
+    "bio": "Bio",
   "bioPlaceholder": "Schreiben Sie eine kurze Bio...",
   "tellOthers": "Erzählen Sie anderen von sich",
   "saveChanges": "Änderungen Speichern",
@@ -202,7 +202,7 @@
   "warningDowngrading": "Warnung: Das Herabstufen auf Kostenlos entfernt sofort alle Premium-Funktionen.",
   "youllGet": "Sie erhalten:",
   "cancel": "Abbrechen"
-},
+  },
   "changePassword": {
     "title": "PASSWORT ÄNDERN",
     "subtitle": "Aktualisiere dein Kontopasswort",
@@ -911,5 +911,5 @@
   "maxSize5MB": "Max. Größe: 5MB (JPG, PNG, GIF, WebP)",
   "preview": "Vorschau:",
   "upload": "Hochladen"
-}
+  }
 }

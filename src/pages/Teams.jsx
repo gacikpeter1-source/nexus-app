@@ -40,23 +40,23 @@ export default function Teams() {
   const mergedTeams = useMemo(() => {
     if (!clubs || !Array.isArray(clubs)) return [];
     
-    const teams = [];
+      const teams = [];
     for (const club of clubs) {
       if (!Array.isArray(club.teams)) continue;
       
       for (const t of club.teams) {
-        teams.push({
-          id: t.id || t._id || Math.random().toString(36).slice(2,8),
-          name: t.name || t.title || 'Unnamed Team',
-          sport: t.sport || t.category || t.type || '',
-          trainers: Array.isArray(t.trainers) ? t.trainers : (t.trainer ? [t.trainer] : []),
-          assistants: Array.isArray(t.assistants) ? t.assistants : (t.assistant ? [t.assistant] : []),
-          members: Array.isArray(t.members) ? t.members : (t.member ? [t.member] : []),
+          teams.push({
+            id: t.id || t._id || Math.random().toString(36).slice(2,8),
+            name: t.name || t.title || 'Unnamed Team',
+            sport: t.sport || t.category || t.type || '',
+            trainers: Array.isArray(t.trainers) ? t.trainers : (t.trainer ? [t.trainer] : []),
+            assistants: Array.isArray(t.assistants) ? t.assistants : (t.assistant ? [t.assistant] : []),
+            members: Array.isArray(t.members) ? t.members : (t.member ? [t.member] : []),
           clubId: club.id || null,
           clubName: club.name || null
-        });
+          });
+        }
       }
-    }
     
     console.log('📦 Extracted teams from Firestore clubs:', teams);
     return teams;
@@ -247,11 +247,11 @@ export default function Teams() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-display text-2xl md:text-4xl text-light mb-1">
-              MY <span className="text-primary">TEAMS</span>
-            </h1>
+          MY <span className="text-primary">TEAMS</span>
+        </h1>
             <p className="text-light/60 text-sm">
-              {filteredTeams.length} {filteredTeams.length === 1 ? 'team' : 'teams'}
-            </p>
+          {filteredTeams.length} {filteredTeams.length === 1 ? 'team' : 'teams'}
+        </p>
           </div>
         </div>
       </div>
@@ -260,16 +260,16 @@ export default function Teams() {
       {pendingOrders.length > 0 && (
         <div className="mb-4 animate-fade-in" style={{ animationDelay: '0.05s' }}>
           <div className="space-y-1">
-            {pendingOrders.map(order => (
+              {pendingOrders.map(order => (
               <button
-                key={order.id}
+                  key={order.id}
                 onClick={() => {
                   setSelectedOrder(order);
                   setShowOrderResponseModal(true);
                   setOrderResponseForm({});
                 }}
                 className="w-full bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 hover:border-orange-500/50 rounded-lg px-3 py-2 transition-all text-left group"
-              >
+                >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     <span className="text-sm">📋</span>
@@ -290,7 +290,7 @@ export default function Teams() {
                   </span>
                 </div>
               </button>
-            ))}
+              ))}
           </div>
         </div>
       )}
@@ -434,53 +434,53 @@ export default function Teams() {
                   to={`/team/${team.clubId}/${team.id}`}
                   className="group flex items-center gap-3 bg-white/5 backdrop-blur-sm border border-white/10 p-3 rounded-lg hover:bg-white/10 hover:border-primary/50 transition-all"
                 >
-                  {/* Team Icon */}
+                    {/* Team Icon */}
                   <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-accent to-primary flex items-center justify-center text-xl shrink-0">
-                    {team.sport === 'Football' ? '⚽' :
-                     team.sport === 'Basketball' ? '🏀' :
-                     team.sport === 'Volleyball' ? '🏐' :
-                     team.sport === 'Swimming' ? '🏊' :
-                     '🏆'}
-                  </div>
+                      {team.sport === 'Football' ? '⚽' :
+                       team.sport === 'Basketball' ? '🏀' :
+                       team.sport === 'Volleyball' ? '🏐' :
+                       team.sport === 'Swimming' ? '🏊' :
+                       '🏆'}
+                    </div>
 
                   {/* Team Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
                       <h3 className="font-semibold text-light group-hover:text-primary transition-colors truncate">
-                        {team.name}
-                      </h3>
-                      {team.sport && (
+                      {team.name}
+                    </h3>
+                    {team.sport && (
                         <span className="text-xs text-light/50">• {team.sport}</span>
-                      )}
+                    )}
                     </div>
                     {team.clubName && (
                       <p className="text-xs text-light/40 truncate">{team.clubName}</p>
                     )}
                   </div>
 
-                  {/* Stats */}
+                    {/* Stats */}
                   <div className="flex items-center gap-4 shrink-0">
                     <div className="text-center">
                       <div className="text-sm font-bold text-primary">
-                        {(team.trainers || []).length}
-                      </div>
+                          {(team.trainers || []).length}
+                        </div>
                       <div className="text-xs text-light/50">
-                        {t('team.trainers')}
+                          {t('team.trainers')}
+                        </div>
                       </div>
-                    </div>
                     <div className="text-center">
                       <div className="text-sm font-bold text-accent">
-                        {totalMembers}
-                      </div>
+                          {totalMembers}
+                        </div>
                       <div className="text-xs text-light/50">
-                        {t('team.members')}
+                          {t('team.members')}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Arrow indicator */}
+                    {/* Arrow indicator */}
                   <div className="text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    →
+                      →
                   </div>
                 </Link>
               );

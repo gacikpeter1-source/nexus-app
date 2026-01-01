@@ -252,7 +252,15 @@ const [orderSearchQuery, setOrderSearchQuery] = useState('');
         const teams = club.teams || [];
         const userTeamIds = teams.filter(team => (team.members || []).includes(m.id)).map(team => team.id);
         const userTeamNames = teams.filter(team => (team.members || []).includes(m.id)).map(team => team.name);
-        return { ...m, username: u.username || '', email: u.email || '', teamIds: userTeamIds, teamNames: userTeamNames };
+        return { 
+          ...m, 
+          username: u.username || '', 
+          email: u.email || '', 
+          userRole: u.role || 'user', // Global user role (parent/admin/user)
+          clubRole: m.role, // Club role (trainer/assistant/user)
+          teamIds: userTeamIds, 
+          teamNames: userTeamNames 
+        };
       });
 
       setClubMembers(members);
@@ -1924,7 +1932,8 @@ const filteredOrderResponses = useMemo(() => {
                     <tr className="border-b border-white/10">
                       <th className="px-4 py-3 text-left text-light font-semibold">{t('clubmgmt.username')}</th>
                       <th className="px-4 py-3 text-left text-light font-semibold">{t('clubmgmt.email')}</th>
-                      <th className="px-4 py-3 text-left text-light font-semibold">{t('clubmgmt.role')}</th>
+                      <th className="px-4 py-3 text-left text-light font-semibold">{t('clubmgmt.clubRole')}</th>
+                      <th className="px-4 py-3 text-left text-light font-semibold">{t('clubmgmt.userRole')}</th>
                       <th className="px-4 py-3 text-left text-light font-semibold">{t('nav.teams')}</th>
                       <th className="px-4 py-3 text-left text-light font-semibold">{t('clubmgmt.actions')}</th>
                     </tr>
@@ -1940,7 +1949,24 @@ const filteredOrderResponses = useMemo(() => {
                       >
                         <td className="px-4 py-3 text-light">{m.username}</td>
                         <td className="px-4 py-3 text-light">{m.email}</td>
-                        <td className="px-4 py-3 text-light">{m.role}</td>
+                        <td className="px-4 py-3 text-light">
+                          <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                            m.clubRole === 'trainer' ? 'bg-primary/20 text-primary' :
+                            m.clubRole === 'assistant' ? 'bg-blue-500/20 text-blue-300' :
+                            'bg-white/10 text-light/70'
+                          }`}>
+                            {m.clubRole}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-light">
+                          <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                            m.userRole === 'admin' ? 'bg-red-500/20 text-red-300' :
+                            m.userRole === 'parent' ? 'bg-purple-500/20 text-purple-300' :
+                            'bg-white/10 text-light/70'
+                          }`}>
+                            {m.userRole === 'parent' ? '👨‍👩‍👧 ' : ''}{m.userRole}
+                          </span>
+                        </td>
                         <td className="px-4 py-3 text-light">
                           {m.teamNames && m.teamNames.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
@@ -1995,7 +2021,7 @@ const filteredOrderResponses = useMemo(() => {
                                 }}
                                 className="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-light text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                               >
-                                <option value="user" className="bg-mid-dark">{t('clubmgmt.member')}</option>
+                                <option value="user" className="bg-mid-dark">{t('clubmgmt.user')}</option>
                                 <option value="parent" className="bg-mid-dark">{t('clubmgmt.parent')}</option>
                                 <option value="assistant" className="bg-mid-dark">{t('clubmgmt.assistant')}</option>
                                 <option value="trainer" className="bg-mid-dark">{t('clubmgmt.trainer')}</option>

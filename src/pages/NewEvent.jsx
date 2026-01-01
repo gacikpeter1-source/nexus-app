@@ -9,7 +9,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { createEvent, getUserClubs } from '../firebase/firestore';
-import { notifyEventCreated, getNotificationRecipients } from '../utils/notifications';
+// Notifications are now handled by Cloud Functions automatically
+// import { notifyEventCreated, getNotificationRecipients } from '../utils/notifications';
 import { useIsAdmin } from '../hooks/usePermissions';
 import { isClubOwner } from '../firebase/privileges';
 import TrainingBrowserModal from '../components/TrainingBrowserModal';
@@ -271,11 +272,8 @@ export default function NewEvent() {
       const newEvent = await createEvent(eventData);
       showToast('Event created successfully!', 'success');
 
-      // Send notification
-      if (form.visibilityLevel !== 'personal') {
-        const recipients = await getNotificationRecipients(form.clubId, form.teamId);
-        await notifyEventCreated(newEvent, recipients, recipients);
-      }
+      // Notifications are now handled automatically by Cloud Functions (onEventCreated)
+      // No need to manually send notifications here
 
       navigate('/calendar');
     } catch (error) {

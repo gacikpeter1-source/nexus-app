@@ -412,30 +412,30 @@ const handleCreateTeamChat = async () => {
   const members = useMemo(() => {
     if (!team || !allUsers) return [];
     const memberIds = team.members || [];
-    return memberIds.map(id => {
-      const user = allUsers.find(u => u.id === id);
-      return user || { id, username: 'Unknown', email: 'N/A' };
-    });
+    // Filter out invalid/deleted users - only return members that actually exist
+    return memberIds
+      .map(id => allUsers.find(u => u.id === id))
+      .filter(user => user !== undefined);
   }, [team, allUsers]);
 
   // Get trainers with user details
   const trainers = useMemo(() => {
     if (!team || !allUsers) return [];
     const trainerIds = team.trainers || [];
-    return trainerIds.map(id => {
-      const user = allUsers.find(u => u.id === id);
-      return user || { id, username: 'Unknown', email: 'N/A' };
-    });
+    // Filter out invalid/deleted users - only return trainers that actually exist
+    return trainerIds
+      .map(id => allUsers.find(u => u.id === id))
+      .filter(user => user !== undefined);
   }, [team, allUsers]);
 
   // Get assistants with user details
   const assistants = useMemo(() => {
     if (!team || !allUsers) return [];
     const assistantIds = team.assistants || [];
-    return assistantIds.map(id => {
-      const user = allUsers.find(u => u.id === id);
-      return user || { id, username: 'Unknown', email: 'N/A' };
-    });
+    // Filter out invalid/deleted users - only return assistants that actually exist
+    return assistantIds
+      .map(id => allUsers.find(u => u.id === id))
+      .filter(user => user !== undefined);
   }, [team, allUsers]);
 
   if (loading) {
@@ -642,15 +642,15 @@ const handleCreateTeamChat = async () => {
                     const isAttending = userResponse?.status === 'attending';
                     
                     return (
-                      <div
-                        key={event.id || idx}
-                        onClick={() => navigate(`/event/${event.id}`)}
+                    <div
+                      key={event.id || idx}
+                      onClick={() => navigate(`/event/${event.id}`)}
                         className={`bg-white/5 border rounded-lg p-4 hover:bg-white/10 transition-all cursor-pointer group ${
                           isAttending 
                             ? 'border-green-500/50 bg-green-500/5 shadow-[0_0_10px_rgba(34,197,94,0.3)] hover:border-green-500/70' 
                             : 'border-white/10 hover:border-primary/50'
                         }`}
-                      >
+                    >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
@@ -665,7 +665,7 @@ const handleCreateTeamChat = async () => {
                             </h3>
                           </div>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-sm text-light/60 capitalize">{event.type || 'Event'}</p>
+                          <p className="text-sm text-light/60 capitalize">{event.type || 'Event'}</p>
                             {isAttending && (
                               <span className="px-2 py-0.5 bg-green-500/20 text-green-300 rounded text-xs font-medium">
                                 ✓ You are registered
@@ -701,11 +701,11 @@ const handleCreateTeamChat = async () => {
                                   : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                               }`}>
                                 {attendingCount}/{totalLimit}
-                              </div>
+                        </div>
                             );
                           })()}
-                        </div>
                       </div>
+                    </div>
                     </div>
                     );
                   })}
@@ -1112,12 +1112,12 @@ onUpdateTeamSettings={async (settings) => {
                 club?.ownerId === user?.id || 
                 team?.trainers?.includes(user?.id) || 
                 team?.assistants?.includes(user?.id)) && (
-                <button
-                  onClick={() => navigate(`/team/${clubId}/${teamId}/attendance`)}
-                  className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium"
-                >
-                  + Take Attendance
-                </button>
+              <button
+                onClick={() => navigate(`/team/${clubId}/${teamId}/attendance`)}
+                className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium"
+              >
+                + Take Attendance
+              </button>
               )}
             </div>
             {/* Filters */}
@@ -1240,18 +1240,18 @@ onUpdateTeamSettings={async (settings) => {
                             team?.trainers?.includes(user?.id) || 
                             team?.assistants?.includes(user?.id)) && (
                             <>
-                              <button
-                                onClick={() => navigate(`/team/${clubId}/${teamId}/attendance`)}
-                                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-light rounded-lg text-sm transition"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => handleDeleteAttendance(record.id)}
-                                className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm transition"
-                              >
-                                Delete
-                              </button>
+                          <button
+                            onClick={() => navigate(`/team/${clubId}/${teamId}/attendance`)}
+                            className="px-4 py-2 bg-white/10 hover:bg-white/20 text-light rounded-lg text-sm transition"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteAttendance(record.id)}
+                            className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm transition"
+                          >
+                            Delete
+                          </button>
                             </>
                           )}
                         </div>
@@ -1375,7 +1375,7 @@ onUpdateTeamSettings={async (settings) => {
                                   <div className="text-light/80">
                                     <span className="font-medium text-light">{edit.editedByName}</span>
                                     {' '}{edit.changes}
-                                  </div>
+                  </div>
                                   {edit.reason && (
                                     <div className="text-light/60 text-xs mt-1">Reason: {edit.reason}</div>
                                   )}

@@ -108,7 +108,7 @@
   "canBeConfiguredIndependently": "Lze konfigurovat nezávisle",
   "usersCanDisable": "Jednotliví uživatelé mohou vypnout vlastní oznámení v profilu",
   "createsInteractiveNotifications": "Vytváří interaktivní oznámení s tlačítky Přijmout/Odmítnout"
-},
+  },
   "userMenu": {
     "profile": "Profil",
     "profileDesc": "Upravit váš profil a avatar",
@@ -154,7 +154,7 @@
     "joinPlatform": "Připojte se k platformě pro správu tréninků vašeho týmu",
     "agreeTerms": "Vytvořením účtu souhlasíte s našimi Podmínkami služby a Zásadami ochrany osobních údajů"
   },
-"profile": {
+  "profile": {
   "title": "PROFIL",
   "notificationTab": "Oznámení",
   "subscriptionTab": "Předplatné",
@@ -166,7 +166,7 @@
   "displayNameDesc": "Jméno zobrazené ve všech týmech a klubech",
   "contactInfo": "Kontaktní Informace",
   "phone": "Telefonní Číslo",
-  "bio": "Bio",
+    "bio": "Bio",
   "bioPlaceholder": "Napište krátké bio...",
   "tellOthers": "Řekněte ostatním o sobě",
   "saveChanges": "Uložit Změny",
@@ -202,7 +202,7 @@
   "warningDowngrading": "Varování: Snížení na Bezplatný okamžitě odstraní všechny prémiové funkce.",
   "youllGet": "Získáte:",
   "cancel": "Zrušit"
-},
+  },
   "changePassword": {
     "title": "ZMĚNIT HESLO",
     "subtitle": "Aktualizujte heslo vašeho účtu",
@@ -911,5 +911,5 @@
   "maxSize5MB": "Max. velikost: 5 MB (JPG, PNG, GIF, WebP)",
   "preview": "Náhled:",
   "upload": "Nahrát"
-}
+  }
 }

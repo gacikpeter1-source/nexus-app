@@ -108,7 +108,7 @@
   "canBeConfiguredIndependently": "Se puede configurar de forma independiente",
   "usersCanDisable": "Los usuarios individuales pueden desactivar sus propias notificaciones en el perfil",
   "createsInteractiveNotifications": "Crea notificaciones interactivas con botones Aceptar/Rechazar"
-},
+  },
   "userMenu": {
     "profile": "Perfil",
     "profileDesc": "Edita tu perfil y avatar",
@@ -154,7 +154,7 @@
     "joinPlatform": "Únete a la plataforma de gestión de entrenamiento de tu equipo",
     "agreeTerms": "Al crear una cuenta, aceptas nuestros Términos de Servicio y Política de Privacidad"
   },
-"profile": {
+  "profile": {
   "title": "PERFIL",
   "notificationTab": "Notificaciones",
   "subscriptionTab": "Suscripciones",
@@ -202,7 +202,7 @@
   "warningDowngrading": "Advertencia: Degradar a Gratuito eliminará todas las características premium inmediatamente.",
   "youllGet": "Obtendrás:",
   "cancel": "Cancelar"
-},
+  },
   "changePassword": {
     "title": "CAMBIAR CONTRASEÑA",
     "subtitle": "Actualiza la contraseña de tu cuenta",
@@ -910,5 +910,5 @@
   "maxSize5MB": "Tamaño máx: 5MB (JPG, PNG, GIF, WebP)",
   "preview": "Vista previa:",
   "upload": "Cargar"
-}
+  }
 }

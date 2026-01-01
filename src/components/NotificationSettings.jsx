@@ -6,8 +6,10 @@ import { useLanguage } from '../contexts/LanguageContext';
 export default function NotificationSettings() {
   const { 
     notificationPermission, 
-    requestPermission, 
+    requestPermission,
+    disableNotifications,
     isNotificationsEnabled,
+    fcmToken,
     loading 
   } = useNotifications();
   
@@ -16,13 +18,27 @@ export default function NotificationSettings() {
   const { t } = useLanguage();
   // Handle toggle switch
   const handleToggle = async () => {
+    // Don't allow toggle during loading
+    if (loading) {
+      console.log('⏳ Toggle blocked - still loading');
+      return;
+    }
+
     if (notificationPermission === 'denied') {
       setShowInfo(true);
       return;
     }
 
+    console.log('🔄 Toggle clicked - Current state:', { isNotificationsEnabled, notificationPermission, hasToken: !!fcmToken });
+
     if (!isNotificationsEnabled) {
+      // Turn ON notifications
+      console.log('✅ Enabling notifications...');
       await requestPermission();
+    } else {
+      // Turn OFF notifications (remove FCM token)
+      console.log('🔕 Disabling notifications...');
+      await disableNotifications();
     }
   };
 
@@ -93,12 +109,12 @@ export default function NotificationSettings() {
             {/* Toggle Switch */}
             <button
               onClick={handleToggle}
-              disabled={notificationPermission === 'denied'}
+              disabled={notificationPermission === 'denied' || loading}
               className={`
                 relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300
                 focus:outline-none focus:ring-2 focus:ring-primary/50
                 ${isNotificationsEnabled ? 'bg-green-500' : 'bg-white/30'}
-                ${notificationPermission === 'denied' ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:scale-105'}
+                ${(notificationPermission === 'denied' || loading) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:scale-105'}
               `}
               aria-label="Toggle notifications"
             >

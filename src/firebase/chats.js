@@ -20,6 +20,37 @@ import {
 import { db } from './config';
 
 // ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Get parent IDs for children in a list of user IDs
+ * @param {Array<string>} userIds - Array of user IDs
+ * @returns {Promise<Array<string>>} - Array of parent IDs
+ */
+const getParentIdsForChildren = async (userIds) => {
+  const parentIds = [];
+  
+  for (const userId of userIds) {
+    try {
+      const userDoc = await getDoc(doc(db, 'users', userId));
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        // If user is a child account (subaccount or linked), add their parents
+        if (userData.parentIds && userData.parentIds.length > 0) {
+          parentIds.push(...userData.parentIds);
+          console.log(`👨‍👩‍👧 Auto-including ${userData.parentIds.length} parent(s) for child ${userId}`);
+        }
+      }
+    } catch (error) {
+      console.error(`Error checking if user ${userId} is a child:`, error);
+    }
+  }
+  
+  return [...new Set(parentIds)]; // Remove duplicates
+};
+
+// ============================================================================
 // CHAT OPERATIONS
 // ============================================================================
 
@@ -38,12 +69,25 @@ export const createChat = async (chatData) => {
       members = [],
     } = chatData;
 
+    // Combine all user IDs
+    const allUserIds = [...new Set([createdBy, ...members])];
+    
+    // Get parent IDs for any children in the chat
+    const parentIds = await getParentIdsForChildren(allUserIds);
+    
+    // Combine members with their parents
+    const allMembers = [...new Set([...allUserIds, ...parentIds])];
+    
+    if (parentIds.length > 0) {
+      console.log(`👨‍👩‍👧 Chat includes ${parentIds.length} parent(s) of child account(s)`);
+    }
+
     const chat = {
       title,
       clubId,
       teamId,
       createdBy,
-      members: [...new Set([createdBy, ...members])], // Ensure creator is in members
+      members: allMembers, // Includes children AND their parents
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       lastMessage: null,
@@ -206,18 +250,29 @@ export const updateChat = async (chatId, updates) => {
 };
 
 /**
- * Add member to chat
+ * Add member to chat (also adds their parents if they're a child)
  * @param {string} chatId - Chat ID
  * @param {string} userId - User ID to add
  */
 export const addChatMember = async (chatId, userId) => {
   try {
+    // Get parent IDs if this user is a child
+    const parentIds = await getParentIdsForChildren([userId]);
+    
+    // Add the user and their parents (if any)
+    const usersToAdd = [userId, ...parentIds];
+    
     const chatRef = doc(db, 'chats', chatId);
     await updateDoc(chatRef, {
-      members: arrayUnion(userId),
+      members: arrayUnion(...usersToAdd),
       updatedAt: serverTimestamp(),
     });
-    console.log('✅ Member added to chat');
+    
+    if (parentIds.length > 0) {
+      console.log(`✅ Member added to chat (+ ${parentIds.length} parent(s))`);
+    } else {
+      console.log('✅ Member added to chat');
+    }
   } catch (error) {
     console.error('❌ Error adding member:', error);
     throw error;
@@ -231,6 +286,26 @@ export const addChatMember = async (chatId, userId) => {
  */
 export const removeChatMember = async (chatId, userId) => {
   try {
+    // Check if this user is a parent of any child in the chat
+    const chatDoc = await getDoc(doc(db, 'chats', chatId));
+    if (chatDoc.exists()) {
+      const chatData = chatDoc.data();
+      const members = chatData.members || [];
+      
+      // Check if any members are children of this user
+      for (const memberId of members) {
+        if (memberId === userId) continue; // Skip self
+        
+        const memberDoc = await getDoc(doc(db, 'users', memberId));
+        if (memberDoc.exists()) {
+          const memberData = memberDoc.data();
+          if (memberData.parentIds && memberData.parentIds.includes(userId)) {
+            throw new Error('Cannot remove parent while their child is in the chat');
+          }
+        }
+      }
+    }
+    
     const chatRef = doc(db, 'chats', chatId);
     await updateDoc(chatRef, {
       members: arrayRemove(userId),

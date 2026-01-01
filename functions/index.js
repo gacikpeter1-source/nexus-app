@@ -25,7 +25,7 @@ async function getUserNotificationPreferences(userId) {
       .doc(`users/${userId}/settings/notificationPreferences`)
       .get();
     
-    if (prefDoc.exists()) {
+    if (prefDoc.exists) {
       return prefDoc.data();
     }
     
@@ -163,8 +163,9 @@ async function filterUsersByPreferences(userIds, notificationType, clubId = null
     
     if (!prefs) {
       // No prefs = allow all channels (default)
-      filteredUsers.push.push(userId);
-      filteredUsers.email.push(userId);
+      filteredUsers['push'].push(userId);
+      filteredUsers['email'].push(userId);
+      console.log(`✅ User ${userId} has no prefs, allowing all channels`);
       continue;
     }
     
@@ -204,8 +205,11 @@ async function areNotificationsEnabled(clubId, teamId, notificationType) {
     
     const settingsDoc = await admin.firestore().doc(path).get();
     
-    if (!settingsDoc.exists()) {
-      return false;
+    // Default to TRUE if no settings exist (notifications enabled by default)
+    // Note: In Admin SDK, .exists is a property, not a function
+    if (!settingsDoc.exists) {
+      console.log('⚙️ No notification settings found, defaulting to enabled');
+      return true;
     }
     
     const settings = settingsDoc.data();
@@ -216,14 +220,16 @@ async function areNotificationsEnabled(clubId, teamId, notificationType) {
       if (value && typeof value === 'object' && part in value) {
         value = value[part];
       } else {
-        return false;
+        // Default to TRUE if setting not found
+        return true;
       }
     }
     
-    return value === true;
+    return value !== false; // Enabled unless explicitly disabled
   } catch (error) {
     console.error('Error checking notification settings:', error);
-    return false;
+    // Default to TRUE on error (fail open, not closed)
+    return true;
   }
 }
 
@@ -245,7 +251,7 @@ async function sendEmailNotification(userIds, subject, body, notificationType = 
     const emails = [];
     for (const userId of filteredUserIds) {
       const userDoc = await admin.firestore().collection('users').doc(userId).get();
-      if (userDoc.exists()) {
+      if (userDoc.exists) {
         const email = userDoc.data().email;
         if (email) emails.push(email);
       }
@@ -405,6 +411,40 @@ async function cleanupInvalidTokens(invalidTokens) {
  */
 async function sendPushNotification(userId, title, body, data = {}) {
   try {
+    // Save in-app notification
+    try {
+      await admin.firestore().collection('notifications').add({
+        userId: userId,
+        type: data.type || 'general',
+        title: title,
+        body: body,
+        data: data,
+        read: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        clubId: data.clubId || null,
+        teamId: data.teamId || null,
+        eventId: data.eventId || null,
+        chatId: data.chatId || null,
+        actionUrl: data.actionUrl || null
+      });
+      console.log(`💾 Saved in-app notification for user ${userId}`);
+    } catch (error) {
+      console.error(`❌ Error saving in-app notification for user ${userId}:`, error);
+    }
+    
+    // Check user notification preferences
+    const prefs = await getUserNotificationPreferences(userId);
+    const notificationType = data.type || 'general';
+    const shouldSendPush = shouldSendToUser(prefs, notificationType, 'push', data.clubId, data.teamId);
+    
+    console.log(`📱 User ${userId} push notification preference for ${notificationType}: ${shouldSendPush}`);
+    
+    if (!shouldSendPush) {
+      console.log(`ℹ️ Push notification skipped for user ${userId} due to preferences`);
+      return { success: true, reason: 'user_preferences' };
+    }
+    
     // Get user's FCM tokens
     const tokens = await getUserTokens([userId]);
     
@@ -413,7 +453,7 @@ async function sendPushNotification(userId, title, body, data = {}) {
       return { success: false, reason: 'no_tokens' };
     }
 
-    // Send notification
+    // Send push notification
     const result = await sendMulticastNotification(
       tokens,
       { title, body },
@@ -534,34 +574,37 @@ exports.onEventCreated = functions.firestore
 
       // If event is for specific team, get team members
       if (event.teamId) {
-        const teamDoc = await admin.firestore()
-          .collection('clubs')
-          .doc(event.clubId)
-          .collection('teams')
-          .doc(event.teamId)
-          .get();
+        console.log('🔍 Looking for team in club:', event.clubId, '/', event.teamId);
         
-        if (teamDoc.exists) {
-          const teamData = teamDoc.data();
+        // Teams are stored as an array field in the club document, not as a subcollection
+        const teamData = (clubData.teams || []).find(t => t.id === event.teamId);
+        
+        if (teamData) {
+          console.log('📋 Team data found:', {
+            name: teamData.name,
+            members: teamData.members || [],
+            assistants: teamData.assistants || [],
+            trainers: teamData.trainers || []
+          });
           (teamData.members || []).forEach(id => targetUserIds.add(id));
           (teamData.assistants || []).forEach(id => targetUserIds.add(id));
+          (teamData.trainers || []).forEach(id => targetUserIds.add(id));
+        } else {
+          console.log('⚠️ Team not found in club.teams array!');
         }
       } else {
-        // Event for all club members
+        // Event for all club members (no specific team)
+        console.log('📢 Club-wide event - notifying all members');
         (clubData.members || []).forEach(id => targetUserIds.add(id));
         (clubData.admins || []).forEach(id => targetUserIds.add(id));
+        (clubData.trainers || []).forEach(id => targetUserIds.add(id));
         
-        // Include all team members if no specific team
-        const teamsSnapshot = await admin.firestore()
-          .collection('clubs')
-          .doc(event.clubId)
-          .collection('teams')
-          .get();
-        
-        teamsSnapshot.forEach(teamDoc => {
-          const team = teamDoc.data();
+        // Include all team members from all teams in the club
+        // Teams are stored as an array field in the club document
+        (clubData.teams || []).forEach(team => {
           (team.members || []).forEach(id => targetUserIds.add(id));
           (team.assistants || []).forEach(id => targetUserIds.add(id));
+          (team.trainers || []).forEach(id => targetUserIds.add(id));
         });
       }
 
@@ -588,10 +631,13 @@ exports.onEventCreated = functions.firestore
 
 
       // Convert Set to Array and remove event creator
+      console.log('📊 Raw target user IDs:', Array.from(targetUserIds));
+      console.log('🚫 Event creator (to be excluded):', event.createdBy);
       targetUserIds = Array.from(targetUserIds).filter(id => id !== event.createdBy);
+      console.log('✅ Target users after filtering:', targetUserIds);
 
       if (targetUserIds.length === 0) {
-        console.log('ℹ️ No users to notify');
+        console.log('ℹ️ No users to notify (all filtered out or no members)');
         return;
       }
 
@@ -605,17 +651,49 @@ exports.onEventCreated = functions.firestore
         event.teamId
       );
 
+      // Format date and time for notifications
+      const eventDate = event.date ? new Date(event.date).toLocaleDateString() : 'TBD';
+      const eventTime = event.startTime || event.time || '';
+      const dateTimeText = eventTime ? `${eventDate} at ${eventTime}` : eventDate;
+      
+      // Create in-app notifications for ALL eligible users (regardless of push/email preference)
+      console.log(`💾 Creating in-app notifications for ${filteredUsers.push.length + filteredUsers.email.length} users`);
+      const allNotifiedUsers = new Set([...filteredUsers.push, ...filteredUsers.email]);
+      
+      for (const userId of allNotifiedUsers) {
+        try {
+          await admin.firestore().collection('notifications').add({
+            userId: userId,
+            type: 'event',
+            title: '📅 New Event Created',
+            body: `${event.title} - ${dateTimeText}`,
+            data: {
+              eventId: eventId,
+              clubId: event.clubId,
+              teamId: event.teamId || '',
+              eventTitle: event.title,
+              eventDate: event.date,
+              eventTime: eventTime
+            },
+            read: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+            clubId: event.clubId,
+            teamId: event.teamId || null,
+            eventId: eventId,
+            actionUrl: `/event/${eventId}`
+          });
+        } catch (error) {
+          console.error(`❌ Error creating in-app notification for user ${userId}:`, error);
+        }
+      }
+      
       // Send push notifications to users who want them
       if (pushEnabled && filteredUsers.push.length > 0) {
         const tokens = await getUserTokens(filteredUsers.push);
 
         if (tokens.length > 0) {
           console.log(`🔔 Sending push to ${tokens.length} devices`);
-
-          // Format date and time for notification
-          const eventDate = event.date ? new Date(event.date).toLocaleDateString() : 'TBD';
-          const eventTime = event.startTime || event.time || '';
-          const dateTimeText = eventTime ? `${eventDate} at ${eventTime}` : eventDate;
           
           const result = await sendMulticastNotification(
             tokens,
@@ -678,9 +756,13 @@ exports.onEventUpdated = functions.firestore
     // Check if meaningful fields changed
     const hasChanged = 
       before.title !== after.title ||
-      before.start !== after.start ||
-      before.end !== after.end ||
-      before.location !== after.location;
+      before.date !== after.date ||
+      before.startTime !== after.startTime ||
+      before.time !== after.time ||
+      before.duration !== after.duration ||
+      before.endTime !== after.endTime ||
+      before.location !== after.location ||
+      before.description !== after.description;
     
     if (!hasChanged) {
       console.log('ℹ️ No meaningful changes detected');
@@ -708,25 +790,60 @@ exports.onEventUpdated = functions.firestore
         return;
       }
 
-      // Get users who responded to this event
-      const responses = after.responses || {};
-      let targetUserIds = new Set(Object.keys(responses));
-
-      // Convert to array and filter
-      targetUserIds = Array.from(targetUserIds).filter(id => id !== after.createdBy);
-
-      if (targetUserIds.length === 0) {
-        console.log('ℹ️ No attendees to notify');
+      // Get club data to find all users who can see this event
+      const clubDoc = await admin.firestore()
+        .collection('clubs')
+        .doc(after.clubId)
+        .get();
+      
+      if (!clubDoc.exists) {
+        console.log('⚠️ Club not found');
         return;
       }
 
-      console.log(`👥 Initial target users: ${targetUserIds.length}`);
+      const clubData = clubDoc.data();
+      let targetUserIds = new Set();
+
+      // If event is for specific team, get team members
+      if (after.teamId) {
+        console.log('🔍 Looking for team members to notify about update');
+        const teamData = (clubData.teams || []).find(t => t.id === after.teamId);
+        
+        if (teamData) {
+          (teamData.members || []).forEach(id => targetUserIds.add(id));
+          (teamData.assistants || []).forEach(id => targetUserIds.add(id));
+          (teamData.trainers || []).forEach(id => targetUserIds.add(id));
+        }
+      } else {
+        // Event for all club members
+        (clubData.members || []).forEach(id => targetUserIds.add(id));
+        (clubData.admins || []).forEach(id => targetUserIds.add(id));
+        (clubData.trainers || []).forEach(id => targetUserIds.add(id));
+        
+        (clubData.teams || []).forEach(team => {
+          (team.members || []).forEach(id => targetUserIds.add(id));
+          (team.assistants || []).forEach(id => targetUserIds.add(id));
+          (team.trainers || []).forEach(id => targetUserIds.add(id));
+        });
+      }
+
+      // Convert to array and remove event creator
+      targetUserIds = Array.from(targetUserIds).filter(id => id !== after.createdBy);
+
+      if (targetUserIds.length === 0) {
+        console.log('ℹ️ No users to notify about update');
+        return;
+      }
+
+      console.log(`👥 Notifying ${targetUserIds.length} users about event update`);
 
       // Determine what changed
       let changeDescription = '';
       if (before.title !== after.title) changeDescription = 'Title changed';
-      else if (before.start !== after.start || before.end !== after.end) changeDescription = 'Time changed';
+      else if (before.date !== after.date || before.startTime !== after.startTime || before.time !== after.time || before.duration !== after.duration || before.endTime !== after.endTime) changeDescription = 'Time changed';
       else if (before.location !== after.location) changeDescription = 'Location changed';
+      else if (before.description !== after.description) changeDescription = 'Description changed';
+      else changeDescription = 'Event updated';
 
       // Filter users by their notification preferences
       const filteredUsers = await filterUsersByPreferences(
@@ -735,6 +852,37 @@ exports.onEventUpdated = functions.firestore
         after.clubId,
         after.teamId
       );
+
+      // Create in-app notifications for ALL eligible users
+      console.log(`💾 Creating in-app notifications for ${filteredUsers.push.length + filteredUsers.email.length} users`);
+      const allNotifiedUsers = new Set([...filteredUsers.push, ...filteredUsers.email]);
+      
+      for (const userId of allNotifiedUsers) {
+        try {
+          await admin.firestore().collection('notifications').add({
+            userId: userId,
+            type: 'event_update',
+            title: '📝 Event Modified',
+            body: `${after.title} - ${changeDescription}`,
+            data: {
+              eventId: context.params.eventId,
+              clubId: after.clubId,
+              teamId: after.teamId || '',
+              eventTitle: after.title,
+              changeDescription: changeDescription
+            },
+            read: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            clubId: after.clubId,
+            teamId: after.teamId || null,
+            eventId: context.params.eventId,
+            actionUrl: `/event/${context.params.eventId}`
+          });
+        } catch (error) {
+          console.error(`❌ Error creating in-app notification for user ${userId}:`, error);
+        }
+      }
 
       // Send push notifications to users who want them
       if (pushEnabled && filteredUsers.push.length > 0) {
@@ -825,16 +973,52 @@ exports.onEventDeleted = functions.firestore
         return;
       }
 
-      // Get users who responded
-      const responses = event.responses || {};
-      let targetUserIds = Array.from(new Set(Object.keys(responses)));
-
-      if (targetUserIds.length === 0) {
-        console.log('ℹ️ No attendees to notify');
+      // Get club data to find all users who can see this event
+      const clubDoc = await admin.firestore()
+        .collection('clubs')
+        .doc(event.clubId)
+        .get();
+      
+      if (!clubDoc.exists) {
+        console.log('⚠️ Club not found');
         return;
       }
 
-      console.log(`👥 Initial target users: ${targetUserIds.length}`);
+      const clubData = clubDoc.data();
+      let targetUserIds = new Set();
+
+      // If event is for specific team, get team members
+      if (event.teamId) {
+        console.log('🔍 Looking for team members to notify about deletion');
+        const teamData = (clubData.teams || []).find(t => t.id === event.teamId);
+        
+        if (teamData) {
+          (teamData.members || []).forEach(id => targetUserIds.add(id));
+          (teamData.assistants || []).forEach(id => targetUserIds.add(id));
+          (teamData.trainers || []).forEach(id => targetUserIds.add(id));
+        }
+      } else {
+        // Event for all club members
+        (clubData.members || []).forEach(id => targetUserIds.add(id));
+        (clubData.admins || []).forEach(id => targetUserIds.add(id));
+        (clubData.trainers || []).forEach(id => targetUserIds.add(id));
+        
+        (clubData.teams || []).forEach(team => {
+          (team.members || []).forEach(id => targetUserIds.add(id));
+          (team.assistants || []).forEach(id => targetUserIds.add(id));
+          (team.trainers || []).forEach(id => targetUserIds.add(id));
+        });
+      }
+
+      // Convert to array and remove event creator
+      targetUserIds = Array.from(targetUserIds);
+
+      if (targetUserIds.length === 0) {
+        console.log('ℹ️ No users to notify about deletion');
+        return;
+      }
+
+      console.log(`👥 Notifying ${targetUserIds.length} users about event deletion`);
 
       // Filter users by their notification preferences (eventDeleted is critical)
       const filteredUsers = await filterUsersByPreferences(
@@ -843,6 +1027,36 @@ exports.onEventDeleted = functions.firestore
         event.clubId,
         event.teamId
       );
+
+      // Create in-app notifications for ALL eligible users
+      console.log(`💾 Creating in-app notifications for ${filteredUsers.push.length + filteredUsers.email.length} users`);
+      const allNotifiedUsers = new Set([...filteredUsers.push, ...filteredUsers.email]);
+      
+      for (const userId of allNotifiedUsers) {
+        try {
+          await admin.firestore().collection('notifications').add({
+            userId: userId,
+            type: 'event_delete',
+            title: '❌ Event Cancelled',
+            body: `${event.title} has been cancelled`,
+            data: {
+              eventId: context.params.eventId,
+              clubId: event.clubId,
+              teamId: event.teamId || '',
+              eventTitle: event.title
+            },
+            read: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            clubId: event.clubId,
+            teamId: event.teamId || null,
+            eventId: context.params.eventId,
+            actionUrl: null
+          });
+        } catch (error) {
+          console.error(`❌ Error creating in-app notification for user ${userId}:`, error);
+        }
+      }
 
       // Send push notifications to users who want them
       if (pushEnabled && filteredUsers.push.length > 0) {
@@ -1146,11 +1360,13 @@ async function processWaitlistQueue(eventId) {
 
     const event = eventDoc.data();
     
-    console.log('📊 Processing queue for event:', eventId);
+    console.log('═══════════════════════════════════════');
+    console.log('📊 Processing waitlist queue for event:', eventId);
+    console.log('📊 Event title:', event.title);
     console.log('📊 Participant limit:', event.participantLimit);
     
     if (!event.participantLimit) {
-      console.log('⚠️ No participant limit set');
+      console.log('⚠️ No participant limit set - queue processing skipped');
       return;
     }
 
@@ -1158,43 +1374,67 @@ async function processWaitlistQueue(eventId) {
 
     // Get active attending users (not notified waitlist)
     const activeAttending = Object.entries(responses)
-      .filter(([_, r]) => r.status === 'attending')
-      .length;
+      .filter(([_, r]) => r.status === 'attending');
+    
+    const activeCount = activeAttending.length;
+    console.log('📊 Active attending users:', activeCount);
+    console.log('   Users:', activeAttending.map(([id]) => id).join(', '));
 
     // Get waiting users (sorted by timestamp)
     const waitingUsers = Object.entries(responses)
       .filter(([_, r]) => r.status === 'waiting')
       .sort((a, b) => (a[1].timestamp?._seconds || 0) - (b[1].timestamp?._seconds || 0));
 
-    console.log('📊 Active attending:', activeAttending);
     console.log('📊 Waiting users:', waitingUsers.length);
+    console.log('   Users:', waitingUsers.map(([id]) => id).join(', '));
 
-    const spotsAvailable = event.participantLimit - activeAttending;
-    console.log('📊 Spots available:', spotsAvailable);
+    const spotsAvailable = event.participantLimit - activeCount;
+    console.log('📊 Spots available:', spotsAvailable, `(limit: ${event.participantLimit} - active: ${activeCount})`);
 
-    if (spotsAvailable <= 0 || waitingUsers.length === 0) {
+    if (spotsAvailable <= 0) {
+      console.log('⚠️ No spots available - queue processing skipped');
+      return;
+    }
+    
+    if (waitingUsers.length === 0) {
+      console.log('⚠️ No waiting users - queue processing skipped');
       return;
     }
 
     // Get pending notifications
     const pendingNotifications = await getPendingNotifications(eventId);
     const alreadyNotified = new Set(pendingNotifications.map(n => n.userId));
+    
+    console.log('📊 Already notified (pending response):', alreadyNotified.size);
+    console.log('   Users:', Array.from(alreadyNotified).join(', '));
 
     // Notify users for available spots
     const usersToNotify = waitingUsers
       .filter(([userId]) => !alreadyNotified.has(userId))
       .slice(0, spotsAvailable);
 
-    console.log('📊 Users to notify:', usersToNotify.length);
+    console.log('📊 Users to notify NOW:', usersToNotify.length);
+    console.log('   Users:', usersToNotify.map(([id]) => id).join(', '));
+
+    if (usersToNotify.length === 0) {
+      console.log('⚠️ No new users to notify - all waitlisted users already notified');
+      console.log('═══════════════════════════════════════');
+      return;
+    }
 
     for (const [userId, userData] of usersToNotify) {
+      console.log(`🔔 Notifying user ${userId} about available spot`);
       await sendWaitlistNotification(eventId, userId, event);
       await createPendingNotification(eventId, userId);
       await scheduleTimeout(eventId, userId);
     }
+    
+    console.log('✅ Waitlist queue processing complete');
+    console.log('═══════════════════════════════════════');
 
   } catch (error) {
-    console.error('Error processing waitlist queue:', error);
+    console.error('❌ Error processing waitlist queue:', error);
+    console.log('═══════════════════════════════════════');
   }
 }
 
@@ -1209,31 +1449,85 @@ async function sendWaitlistNotification(eventId, userId, event) {
     const userData = userDoc.data();
     const tokens = userData.fcmTokens || [];
 
-    if (tokens.length === 0) return;
+    // Check user notification preferences
+    const prefs = await getUserNotificationPreferences(userId);
+    const shouldSendPush = shouldSendToUser(prefs, 'waitlist', 'push', event.clubId, event.teamId);
+    
+    console.log(`📱 User ${userId} push notification preference for waitlist: ${shouldSendPush}`);
 
-    const message = {
-      notification: {
-        title: '🎉 Spot Available!',
-        body: `A spot opened up for ${event.title}. Accept within 5 minutes!`
-      },
-      data: {
-        type: 'waitlist_promotion',
-        eventId: eventId,
+    // Create in-app notification
+    console.log(`💾 Creating in-app waitlist notification for user ${userId}`);
+    try {
+      await admin.firestore().collection('notifications').add({
         userId: userId,
-        requiresResponse: 'true'
-      },
-      tokens: tokens
-    };
+        type: 'waitlist',
+        title: '🎉 Spot Available!',
+        body: `A spot opened up for ${event.title}. Accept within 5 minutes!`,
+        data: {
+          type: 'waitlist_promotion',
+          eventId: eventId,
+          requiresResponse: true,
+          eventTitle: event.title,
+          eventDate: event.date,
+          eventTime: event.startTime || event.time
+        },
+        read: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        clubId: event.clubId || null,
+        teamId: event.teamId || null,
+        eventId: eventId,
+        actionUrl: `/event/${eventId}`
+      });
+    } catch (error) {
+      console.error(`❌ Error creating in-app waitlist notification for user ${userId}:`, error);
+    }
 
-    await admin.messaging().sendEachForMulticast(message);
-    console.log(`✅ Waitlist notification sent to user ${userId}`);
+    // Send push notification only if user preferences allow
+    if (shouldSendPush && tokens.length > 0) {
+      console.log(`📲 About to send waitlist push notification:`);
+      console.log(`   Target User ID: ${userId}`);
+      console.log(`   User Email: ${userData.email}`);
+      console.log(`   Number of tokens: ${tokens.length}`);
+      console.log(`   Tokens: ${tokens.join(', ')}`);
+      
+      const message = {
+        notification: {
+          title: '🎉 Spot Available!',
+          body: `A spot opened up for ${event.title}. Accept within 5 minutes!`
+        },
+        data: {
+          type: 'waitlist_promotion',
+          eventId: eventId,
+          clubId: event.clubId || '',
+          teamId: event.teamId || '',
+          requiresResponse: 'true'
+        },
+        tokens: tokens
+      };
 
-        const eventRef = admin.firestore().collection('events').doc(eventId);
+      const result = await admin.messaging().sendEachForMulticast(message);
+      console.log(`✅ Waitlist push notification sent to user ${userId}`);
+      console.log(`   Success: ${result.successCount}, Failures: ${result.failureCount}`);
+      
+      // Log detailed error information for failures
+      if (result.failureCount > 0) {
+        console.log(`❌ Detailed failure information:`);
+        result.responses.forEach((resp, idx) => {
+          if (!resp.success) {
+            console.log(`   Token ${idx} (${tokens[idx].substring(0, 20)}...): ${resp.error.code} - ${resp.error.message}`);
+          }
+        });
+      }
+    } else {
+      console.log(`ℹ️ Push notification skipped for user ${userId} (prefs: ${shouldSendPush}, tokens: ${tokens.length})`);
+    }
+
+    const eventRef = admin.firestore().collection('events').doc(eventId);
     await eventRef.update({
       [`responses.${userId}.waitlistNotified`]: true,
       [`responses.${userId}.notifiedAt`]: admin.firestore.FieldValue.serverTimestamp()
     });
-
 
   } catch (error) {
     console.error('Error sending waitlist notification:', error);
@@ -1431,7 +1725,7 @@ exports.onChatMessage = functions.firestore
         .doc(senderId)
         .get();
       
-      const senderName = senderDoc.exists() 
+      const senderName = senderDoc.exists
         ? (senderDoc.data().displayName || senderDoc.data().username || senderDoc.data().email)
         : 'Someone';
 
@@ -1447,6 +1741,38 @@ exports.onChatMessage = functions.firestore
       const messagePreview = message.text.length > 50 
         ? message.text.substring(0, 50) + '...'
         : message.text;
+
+      // Create in-app notifications for ALL eligible users
+      console.log(`💾 Creating in-app notifications for ${filteredUsers.push.length + filteredUsers.email.length} users`);
+      const allNotifiedUsers = new Set([...filteredUsers.push, ...filteredUsers.email]);
+      
+      for (const userId of allNotifiedUsers) {
+        try {
+          await admin.firestore().collection('notifications').add({
+            userId: userId,
+            type: 'chat',
+            title: `${senderName} • ${chat.title || 'Chat'}`,
+            body: messagePreview,
+            data: {
+              chatId: chatId,
+              messageId: messageId,
+              senderId: senderId,
+              clubId: chat.clubId || '',
+              teamId: chat.teamId || '',
+              chatTitle: chat.title
+            },
+            read: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            clubId: chat.clubId || null,
+            teamId: chat.teamId || null,
+            chatId: chatId,
+            actionUrl: `/chat/${chatId}`
+          });
+        } catch (error) {
+          console.error(`❌ Error creating in-app notification for user ${userId}:`, error);
+        }
+      }
 
       // Send push notifications to users who want them
       if (filteredUsers.push.length > 0) {
@@ -1519,6 +1845,35 @@ exports.notifyUserAdded = functions.https.onCall(async (data, context) => {
 
     const location = teamName ? `team "${teamName}"` : `club "${clubName}"`;
     
+    // Create in-app notification for the user
+    console.log(`💾 Creating in-app notification for user ${userId}`);
+    const allNotifiedUsers = new Set([...filteredUsers.push, ...filteredUsers.email]);
+    
+    for (const notifyUserId of allNotifiedUsers) {
+      try {
+        await admin.firestore().collection('notifications').add({
+          userId: notifyUserId,
+          type: 'user_added',
+          title: '🎉 You\'ve been added!',
+          body: `You are now a member of ${location}`,
+          data: {
+            clubId: clubId,
+            clubName: clubName,
+            teamId: teamId || '',
+            teamName: teamName || ''
+          },
+          read: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          clubId: clubId,
+          teamId: teamId || null,
+          actionUrl: teamId ? `/team/${teamId}` : `/club/${clubId}`
+        });
+      } catch (error) {
+        console.error(`❌ Error creating in-app notification for user ${notifyUserId}:`, error);
+      }
+    }
+    
     // Send push notification
     if (filteredUsers.push.length > 0) {
       const tokens = await getUserTokens(filteredUsers.push);
@@ -1587,6 +1942,35 @@ exports.notifyUserRemoved = functions.https.onCall(async (data, context) => {
     );
 
     const location = teamName ? `team "${teamName}"` : `club "${clubName}"`;
+    
+    // Create in-app notification for the user
+    console.log(`💾 Creating in-app notification for user ${userId}`);
+    const allNotifiedUsers = new Set([...filteredUsers.push, ...filteredUsers.email]);
+    
+    for (const notifyUserId of allNotifiedUsers) {
+      try {
+        await admin.firestore().collection('notifications').add({
+          userId: notifyUserId,
+          type: 'user_removed',
+          title: 'Membership Update',
+          body: `You have been removed from ${location}`,
+          data: {
+            clubId: clubId,
+            clubName: clubName,
+            teamId: teamId || '',
+            teamName: teamName || ''
+          },
+          read: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          clubId: clubId,
+          teamId: teamId || null,
+          actionUrl: null
+        });
+      } catch (error) {
+        console.error(`❌ Error creating in-app notification for user ${notifyUserId}:`, error);
+      }
+    }
     
     // Send push notification
     if (filteredUsers.push.length > 0) {
@@ -1665,6 +2049,37 @@ exports.notifyRoleChanged = functions.https.onCall(async (data, context) => {
     const newRoleName = roleNames[newRole] || newRole;
     const oldRoleName = roleNames[oldRole] || oldRole;
     
+    // Create in-app notification for the user
+    console.log(`💾 Creating in-app notification for user ${userId}`);
+    const allNotifiedUsers = new Set([...filteredUsers.push, ...filteredUsers.email]);
+    
+    for (const notifyUserId of allNotifiedUsers) {
+      try {
+        await admin.firestore().collection('notifications').add({
+          userId: notifyUserId,
+          type: 'role_changed',
+          title: '⭐ Role Updated!',
+          body: `You are now a ${newRoleName} in ${clubName}`,
+          data: {
+            clubId: clubId,
+            clubName: clubName,
+            newRole: newRole,
+            oldRole: oldRole,
+            newRoleName: newRoleName,
+            oldRoleName: oldRoleName
+          },
+          read: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          clubId: clubId,
+          teamId: null,
+          actionUrl: `/club/${clubId}`
+        });
+      } catch (error) {
+        console.error(`❌ Error creating in-app notification for user ${notifyUserId}:`, error);
+      }
+    }
+    
     // Send push notification
     if (filteredUsers.push.length > 0) {
       const tokens = await getUserTokens(filteredUsers.push);
@@ -1731,13 +2146,18 @@ async function scheduleEventReminders(eventId, eventData) {
 
     // Calculate event start time
     const eventDate = new Date(eventData.date);
-    if (eventData.time) {
-      const [hours, minutes] = eventData.time.split(':');
+    // Support both new (startTime) and old (time) field names
+    const timeField = eventData.startTime || eventData.time;
+    if (timeField) {
+      const [hours, minutes] = timeField.split(':');
       eventDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
     }
 
     const eventStartTime = eventDate.getTime();
     const now = Date.now();
+
+    console.log(`⏰ Event start time: ${new Date(eventStartTime).toISOString()}`);
+    console.log(`⏰ Current time: ${new Date(now).toISOString()}`);
 
     // Schedule each reminder
     for (const reminder of reminders) {
@@ -1751,7 +2171,7 @@ async function scheduleEventReminders(eventId, eventData) {
             eventId: eventId,
             eventTitle: eventData.title,
             eventDate: eventData.date,
-            eventTime: eventData.time || null,
+            eventTime: timeField || null,
             clubId: eventData.clubId || null,
             teamId: eventData.teamId || null,
             minutesBefore: reminder.minutesBefore,
@@ -1761,7 +2181,7 @@ async function scheduleEventReminders(eventId, eventData) {
             createdAt: admin.firestore.FieldValue.serverTimestamp()
           });
         
-        console.log(`✅ Scheduled reminder ${reminder.minutesBefore}min before event`);
+        console.log(`✅ Scheduled reminder ${reminder.minutesBefore}min before event at ${new Date(reminderTime).toISOString()}`);
       } else {
         console.log(`⏭️ Skipped reminder ${reminder.minutesBefore}min (time passed)`);
       }
@@ -1810,7 +2230,7 @@ exports.processEventReminders = functions.pubsub
             .doc(`events/${reminder.eventId}`)
             .get();
 
-          if (!eventDoc.exists()) {
+          if (!eventDoc.exists) {
             console.log(`⚠️ Event ${reminder.eventId} not found, marking reminder as cancelled`);
             await doc.ref.update({ status: 'cancelled' });
             return;
@@ -1848,6 +2268,40 @@ exports.processEventReminders = functions.pubsub
           const timeText = hours > 0 
             ? `${hours} hour${hours > 1 ? 's' : ''}${minutes > 0 ? ` ${minutes} min` : ''}`
             : `${minutes} minute${minutes > 1 ? 's' : ''}`;
+
+          // Create in-app notifications for all attendees
+          console.log(`💾 Creating in-app reminder notifications for ${filteredUsers.push.length + filteredUsers.email.length} users`);
+          const allNotifiedUsers = new Set([...filteredUsers.push, ...filteredUsers.email]);
+          
+          for (const userId of allNotifiedUsers) {
+            try {
+              await admin.firestore().collection('notifications').add({
+                userId: userId,
+                type: 'reminder',
+                title: `⏰ Reminder: ${reminder.eventTitle}`,
+                body: `Event starts in ${timeText}`,
+                data: {
+                  type: 'event_reminder',
+                  eventId: reminder.eventId,
+                  clubId: reminder.clubId || '',
+                  teamId: reminder.teamId || '',
+                  eventTitle: reminder.eventTitle,
+                  eventDate: reminder.eventDate,
+                  eventTime: reminder.eventTime,
+                  minutesBefore: reminder.minutesBefore
+                },
+                read: false,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                clubId: reminder.clubId || null,
+                teamId: reminder.teamId || null,
+                eventId: reminder.eventId,
+                actionUrl: `/event/${reminder.eventId}`
+              });
+            } catch (error) {
+              console.error(`❌ Error creating in-app reminder notification for user ${userId}:`, error);
+            }
+          }
 
           // Send push notifications
           if (reminder.channels.push && filteredUsers.push.length > 0) {
@@ -1957,6 +2411,7 @@ async function cancelEventReminders(eventId) {
 async function scheduleLockNotification(eventId, eventData) {
   try {
     if (!eventData.lockPeriod || !eventData.lockPeriod.enabled || !eventData.lockPeriod.notifyOnLock) {
+      console.log('ℹ️ Lock notification not configured for this event');
       return;
     }
 
@@ -1964,14 +2419,20 @@ async function scheduleLockNotification(eventId, eventData) {
 
     // Calculate event start time
     const eventDate = new Date(eventData.date);
-    if (eventData.time) {
-      const [hours, minutes] = eventData.time.split(':');
+    // Support both new (startTime) and old (time) field names
+    const timeField = eventData.startTime || eventData.time;
+    if (timeField) {
+      const [hours, minutes] = timeField.split(':');
       eventDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
     }
 
     const eventStartTime = eventDate.getTime();
     const lockTime = eventStartTime - (eventData.lockPeriod.minutesBefore * 60 * 1000);
     const now = Date.now();
+
+    console.log(`⏰ Event start time: ${new Date(eventStartTime).toISOString()}`);
+    console.log(`⏰ Lock time: ${new Date(lockTime).toISOString()}`);
+    console.log(`⏰ Current time: ${new Date(now).toISOString()}`);
 
     // Only schedule if lock time is in the future
     if (lockTime > now) {
@@ -1981,7 +2442,7 @@ async function scheduleLockNotification(eventId, eventData) {
           eventId: eventId,
           eventTitle: eventData.title,
           eventDate: eventData.date,
-          eventTime: eventData.time || null,
+          eventTime: timeField || null,
           clubId: eventData.clubId || null,
           teamId: eventData.teamId || null,
           lockMinutesBefore: eventData.lockPeriod.minutesBefore,
@@ -1990,7 +2451,7 @@ async function scheduleLockNotification(eventId, eventData) {
           createdAt: admin.firestore.FieldValue.serverTimestamp()
         });
       
-      console.log(`✅ Scheduled lock notification for event ${eventId}`);
+      console.log(`✅ Scheduled lock notification for event ${eventId} at ${new Date(lockTime).toISOString()}`);
     } else {
       console.log(`⏭️ Skipped lock notification (time passed)`);
     }
@@ -2036,7 +2497,7 @@ exports.processLockNotifications = functions.pubsub
             .doc(`events/${notification.eventId}`)
             .get();
 
-          if (!eventDoc.exists()) {
+          if (!eventDoc.exists) {
             console.log(`⚠️ Event ${notification.eventId} not found`);
             await doc.ref.update({ status: 'cancelled' });
             return;
@@ -2076,6 +2537,40 @@ exports.processLockNotifications = functions.pubsub
           const timeText = hours > 0 
             ? `${hours} hour${hours > 1 ? 's' : ''}${minutes > 0 ? ` ${minutes} min` : ''}`
             : `${minutes} minute${minutes > 1 ? 's' : ''}`;
+
+          // Create in-app notifications for all attendees
+          console.log(`💾 Creating in-app lock notifications for ${filteredUsers.push.length + filteredUsers.email.length} users`);
+          const allNotifiedUsers = new Set([...filteredUsers.push, ...filteredUsers.email]);
+          
+          for (const userId of allNotifiedUsers) {
+            try {
+              await admin.firestore().collection('notifications').add({
+                userId: userId,
+                type: 'event_lock',
+                title: `🔒 ${notification.eventTitle} is now locked`,
+                body: `Status changes are no longer allowed`,
+                data: {
+                  type: 'event_locked',
+                  eventId: notification.eventId,
+                  clubId: notification.clubId || '',
+                  teamId: notification.teamId || '',
+                  eventTitle: notification.eventTitle,
+                  eventDate: notification.eventDate,
+                  eventTime: notification.eventTime,
+                  lockMinutesBefore: notification.lockMinutesBefore
+                },
+                read: false,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                clubId: notification.clubId || null,
+                teamId: notification.teamId || null,
+                eventId: notification.eventId,
+                actionUrl: `/event/${notification.eventId}`
+              });
+            } catch (error) {
+              console.error(`❌ Error creating in-app lock notification for user ${userId}:`, error);
+            }
+          }
 
           // Send push notifications
           if (filteredUsers.push.length > 0) {
@@ -2246,13 +2741,27 @@ exports.requestSubstitute = functions.https.onCall(async (data, context) => {
         sendPushNotification(
           originalUserId,
           '✅ Substitution Completed',
-          `${substituteUser.data().username} has taken your spot for "${event.title}"`
+          `${substituteUser.data().username} has taken your spot for "${event.title}"`,
+          {
+            type: 'substitution',
+            eventId: eventId,
+            clubId: event.clubId,
+            teamId: event.teamId,
+            actionUrl: `/event/${eventId}`
+          }
         ),
         // Notify substitute
         sendPushNotification(
           substituteUserId,
           '🎉 You\'re In!',
-          `You've been moved to the active list for "${event.title}"`
+          `You've been moved to the active list for "${event.title}"`,
+          {
+            type: 'substitution',
+            eventId: eventId,
+            clubId: event.clubId,
+            teamId: event.teamId,
+            actionUrl: `/event/${eventId}`
+          }
         )
       ]);
 
@@ -2279,10 +2788,22 @@ exports.requestSubstitute = functions.https.onCall(async (data, context) => {
     });
 
     // Notify substitute
+    console.log(`📲 Sending substitution request notification:`);
+    console.log(`   Original User: ${originalUserId} (${originalUser.data().email})`);
+    console.log(`   Substitute User: ${substituteUserId} (${substituteUser.data().email})`);
+    console.log(`   Event: ${event.title} (${eventId})`);
+    
     await sendPushNotification(
       substituteUserId,
       '🔄 Substitution Request',
-      `${originalUser.data().username} requests you as substitute for "${event.title}". You have 5 minutes to respond.`
+      `${originalUser.data().username} requests you as substitute for "${event.title}". You have 5 minutes to respond.`,
+      {
+        type: 'substitution',
+        eventId: eventId,
+        clubId: event.clubId,
+        teamId: event.teamId,
+        actionUrl: `/event/${eventId}`
+      }
     );
 
     return { 
@@ -2380,7 +2901,14 @@ exports.respondToSubstitution = functions.https.onCall(async (data, context) => 
       await sendPushNotification(
         request.originalUserId,
         '✅ Substitution Confirmed',
-        `${request.substituteUserName} has accepted to substitute you for "${request.eventTitle}"`
+        `${request.substituteUserName} has accepted to substitute you for "${request.eventTitle}"`,
+        {
+          type: 'substitution',
+          eventId: request.eventId,
+          clubId: request.clubId,
+          teamId: request.teamId,
+          actionUrl: `/event/${request.eventId}`
+        }
       );
 
       return { success: true, message: 'Substitution accepted' };
@@ -2396,7 +2924,14 @@ exports.respondToSubstitution = functions.https.onCall(async (data, context) => 
       await sendPushNotification(
         request.originalUserId,
         '❌ Substitution Declined',
-        `${request.substituteUserName} declined the substitution request for "${request.eventTitle}"`
+        `${request.substituteUserName} declined the substitution request for "${request.eventTitle}"`,
+        {
+          type: 'substitution',
+          eventId: request.eventId,
+          clubId: request.clubId,
+          teamId: request.teamId,
+          actionUrl: `/event/${request.eventId}`
+        }
       );
 
       return { success: true, message: 'Substitution rejected' };
@@ -2488,12 +3023,26 @@ exports.trainerSwapUsers = functions.https.onCall(async (data, context) => {
       sendPushNotification(
         user1Id,
         '🔄 Status Changed',
-        `A trainer has updated your status for "${event.title}"`
+        `A trainer has updated your status for "${event.title}"`,
+        {
+          type: 'trainer_action',
+          eventId: eventId,
+          clubId: event.clubId,
+          teamId: event.teamId,
+          actionUrl: `/event/${eventId}`
+        }
       ),
       sendPushNotification(
         user2Id,
         '🔄 Status Changed',
-        `A trainer has updated your status for "${event.title}"`
+        `A trainer has updated your status for "${event.title}"`,
+        {
+          type: 'trainer_action',
+          eventId: eventId,
+          clubId: event.clubId,
+          teamId: event.teamId,
+          actionUrl: `/event/${eventId}`
+        }
       )
     ]);
 
@@ -2634,5 +3183,152 @@ exports.cleanupExpiredSubstitutions = functions.pubsub
       return null;
     }
   });
+
+// ============================================================================
+// IN-APP NOTIFICATION CLEANUP
+// ============================================================================
+
+/**
+ * Clean up expired in-app notifications (older than 7 days)
+ * Runs daily at midnight
+ */
+exports.cleanupExpiredNotifications = functions.pubsub
+  .schedule('0 0 * * *') // Every day at midnight
+  .timeZone('Europe/Bratislava')
+  .onRun(async (context) => {
+    try {
+      console.log('🧹 Starting notification cleanup...');
+      
+      const now = admin.firestore.Timestamp.now();
+      const snapshot = await admin.firestore()
+        .collection('notifications')
+        .where('expiresAt', '<', now)
+        .get();
+      
+      if (snapshot.empty) {
+        console.log('✅ No expired notifications to clean up');
+        return null;
+      }
+      
+      // Batch delete (max 500 per batch)
+      const batches = [];
+      let batch = admin.firestore().batch();
+      let count = 0;
+      
+      snapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+        count++;
+        
+        if (count === 500) {
+          batches.push(batch);
+          batch = admin.firestore().batch();
+          count = 0;
+        }
+      });
+      
+      if (count > 0) {
+        batches.push(batch);
+      }
+      
+      await Promise.all(batches.map(b => b.commit()));
+      
+      console.log(`✅ Deleted ${snapshot.docs.length} expired notifications`);
+      return null;
+    } catch (error) {
+      console.error('❌ Error cleaning up notifications:', error);
+      return null;
+    }
+  });
+
+/**
+ * Clean up all invalid FCM tokens from all users
+ * Callable function that can be triggered manually by admins
+ */
+exports.cleanupAllInvalidTokens = functions.https.onCall(async (data, context) => {
+  // Only allow admins to call this
+  if (!context.auth || !context.auth.token.role || context.auth.token.role !== 'admin') {
+    throw new functions.https.HttpsError(
+      'permission-denied',
+      'Only admins can clean up tokens'
+    );
+  }
+
+  console.log('🧹 Starting cleanup of ALL invalid FCM tokens...');
+  
+  try {
+    const usersSnapshot = await admin.firestore().collection('users').get();
+    
+    let totalUsers = 0;
+    let totalCleaned = 0;
+    let totalInvalidTokens = 0;
+    
+    const batches = [];
+    let batch = admin.firestore().batch();
+    let batchCount = 0;
+    const MAX_BATCH = 500;
+    
+    for (const userDoc of usersSnapshot.docs) {
+      const userData = userDoc.data();
+      const tokens = userData.fcmTokens || [];
+      
+      if (tokens.length === 0) continue;
+      
+      totalUsers++;
+      
+      // Filter out invalid tokens (empty, non-string, too short, or array notation)
+      const validTokens = tokens.filter(token => 
+        token && 
+        typeof token === 'string' && 
+        token.length > 10 &&
+        !token.includes('[') && // Remove array strings like "[]"
+        !token.includes(']')
+      );
+      
+      const invalidCount = tokens.length - validTokens.length;
+      
+      if (invalidCount > 0) {
+        console.log(`👤 User ${userData.email}: ${tokens.length} tokens → ${validTokens.length} valid (removed ${invalidCount})`);
+        
+        batch.update(userDoc.ref, { fcmTokens: validTokens });
+        totalCleaned++;
+        totalInvalidTokens += invalidCount;
+        batchCount++;
+        
+        // Commit batch if reaching limit
+        if (batchCount >= MAX_BATCH) {
+          batches.push(batch);
+          batch = admin.firestore().batch();
+          batchCount = 0;
+        }
+      }
+    }
+    
+    // Add remaining batch
+    if (batchCount > 0) {
+      batches.push(batch);
+    }
+    
+    // Commit all batches
+    await Promise.all(batches.map(b => b.commit()));
+    
+    console.log('═══════════════════════════════════════');
+    console.log(`✅ Cleanup complete!`);
+    console.log(`   Total users with tokens: ${totalUsers}`);
+    console.log(`   Users cleaned: ${totalCleaned}`);
+    console.log(`   Invalid tokens removed: ${totalInvalidTokens}`);
+    console.log('═══════════════════════════════════════');
+    
+    return {
+      success: true,
+      totalUsers,
+      usersCleaned: totalCleaned,
+      invalidTokensRemoved: totalInvalidTokens
+    };
+    
+  } catch (error) {
+    console.error('❌ Error cleaning up tokens:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
 
 

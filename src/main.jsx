@@ -37,15 +37,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         {/* ✅ SINGLE provider hierarchy - no duplicates */}
         <AuthProvider>
           <SubscriptionProvider>
-            <LanguageProvider>
-              <ToastProvider>
+          <LanguageProvider>
+            <ToastProvider>
                 <ChatProvider>
                   <NotificationProvider>
-                    <App />
+              <App />
                   </NotificationProvider>
                 </ChatProvider>
-              </ToastProvider>
-            </LanguageProvider>
+            </ToastProvider>
+          </LanguageProvider>
           </SubscriptionProvider>
         </AuthProvider>
       </BrowserRouter>

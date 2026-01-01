@@ -30,6 +30,9 @@ import AdminDashboard from './pages/AdminDashboard';
 import Chats from './pages/Chats';
 import ChatRoom from './pages/ChatRoom';
 import AttendanceEntry from './pages/AttendanceEntry';
+import ParentDashboard from './pages/ParentDashboard';
+import SubscriptionApprovals from './pages/SubscriptionApprovals';
+import Notifications from './pages/Notifications';
 
 // Component imports
 import FirebaseDiagnostic from './components/FirebaseDiagnostic';
@@ -215,6 +218,22 @@ function App() {
                         }
                       />
                       <Route
+                        path="/parent-dashboard"
+                        element={
+                          <ProtectedRoute>
+                            <ParentDashboard />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/subscription-approvals"
+                        element={
+                          <ProtectedRoute>
+                            <SubscriptionApprovals />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
                         path="/pending-requests"
                         element={
                           <ProtectedRoute>
@@ -276,6 +295,14 @@ function App() {
                         element={
                           <ProtectedRoute>
                             <ChatRoom />
+                          </ProtectedRoute>
+                        } 
+                      />
+                      <Route 
+                        path="/notifications" 
+                        element={
+                          <ProtectedRoute>
+                            <Notifications />
                           </ProtectedRoute>
                         } 
                       />

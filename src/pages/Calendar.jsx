@@ -220,27 +220,27 @@ export default function Calendar() {
       <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 mb-6">
         <div className="flex flex-wrap items-center gap-3">
           {/* View Mode Tabs */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => setViewMode('list')}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setViewMode('list')}
               className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
-                viewMode === 'list' 
-                  ? 'bg-primary text-white' 
-                  : 'bg-white/10 text-light hover:bg-white/15'
-              }`}
-            >
-              📋 List
-            </button>
-            <button
-              onClick={() => setViewMode('month')}
+                  viewMode === 'list' 
+                    ? 'bg-primary text-white' 
+                    : 'bg-white/10 text-light hover:bg-white/15'
+                }`}
+              >
+                📋 List
+              </button>
+              <button
+                onClick={() => setViewMode('month')}
               className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
-                viewMode === 'month' 
-                  ? 'bg-primary text-white' 
-                  : 'bg-white/10 text-light hover:bg-white/15'
-              }`}
-            >
-              📅 Month
-            </button>
+                  viewMode === 'month' 
+                    ? 'bg-primary text-white' 
+                    : 'bg-white/10 text-light hover:bg-white/15'
+                }`}
+              >
+                📅 Month
+              </button>
             <button
               onClick={() => setViewMode('week')}
               className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
@@ -275,7 +275,7 @@ export default function Calendar() {
                   <button
                     onClick={() => setUserFilter('all')}
                     className="hover:text-white transition-colors"
-                  >
+            >
                     ×
                   </button>
                 </div>
@@ -292,7 +292,7 @@ export default function Calendar() {
                   >
                     ×
                   </button>
-                </div>
+          </div>
               )}
               {teamFilter !== 'all' && (
                 <div className="flex items-center gap-1 px-3 py-1 bg-primary/20 text-primary rounded-full text-xs font-medium">
@@ -303,7 +303,7 @@ export default function Calendar() {
                   >
                     ×
                   </button>
-                </div>
+          </div>
               )}
               {typeFilter !== 'all' && (
                 <div className="flex items-center gap-1 px-3 py-1 bg-primary/20 text-primary rounded-full text-xs font-medium capitalize">
@@ -314,9 +314,9 @@ export default function Calendar() {
                   >
                     ×
                   </button>
-                </div>
+        </div>
               )}
-            </div>
+          </div>
           )}
         </div>
       </div>
@@ -420,7 +420,7 @@ export default function Calendar() {
                                   : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                               }`}>
                                 {attendingCount}/{totalLimit}
-                              </div>
+                            </div>
                             );
                           })()}
                           <span className="text-primary opacity-0 group-hover:opacity-100 transition-opacity">→</span>
@@ -481,7 +481,7 @@ export default function Calendar() {
                                 return (
                                   <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded text-xs font-semibold">
                                     {attendingCount}/{totalLimit}
-                                  </span>
+                                </span>
                                 );
                               })()}
                               {isDeclined && (
@@ -566,16 +566,16 @@ export default function Calendar() {
                       const isFull = event.participantLimit && attendingCount >= event.participantLimit;
                       
                       return (
-                        <Link
-                          key={event.id}
-                          to={`/event/${event.id}`}
+                      <Link
+                        key={event.id}
+                        to={`/event/${event.id}`}
                           className={`block text-xs px-1 py-0.5 rounded truncate transition-all ${
                             isAttending 
                               ? 'bg-green-500/30 text-green-200 border border-green-500/50 hover:bg-green-500/50' 
                               : 'bg-primary/30 text-light hover:bg-primary/50'
                           }`}
                           title={`${isAttending ? '✓ ' : ''}${event.title} (${attendingCount}/${totalLimit})`}
-                        >
+                      >
                           <div className="flex items-center justify-between gap-1">
                             <span className="truncate">
                               {isAttending && '✓ '}{getEventIcon(event.type)} {event.title}
@@ -584,7 +584,7 @@ export default function Calendar() {
                               {attendingCount}/{totalLimit}
                             </span>
                           </div>
-                        </Link>
+                      </Link>
                       );
                     })}
                     {dayEvents.length > 2 && (

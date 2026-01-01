@@ -4,7 +4,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { getEvent, updateEvent } from '../firebase/firestore';
-import { notifyEventModified, getNotificationRecipients } from '../utils/notifications';
+// Notifications are now handled by Cloud Functions automatically
+// import { notifyEventModified, getNotificationRecipients } from '../utils/notifications';
 
 export default function EditEvent() {
   const { eventId } = useParams();
@@ -187,16 +188,8 @@ export default function EditEvent() {
       await updateEvent(eventId, updateData);
       showToast('Event updated successfully', 'success');
 
-      // ✅ Send notification about the update
-      if (event.visibilityLevel !== 'personal') {
-        try {
-          const affectedUsers = await getNotificationRecipients(event.clubId, event.teamId);
-          const updatedEvent = { ...event, ...updateData, id: eventId };
-          await notifyEventModified(updatedEvent, affectedUsers);
-        } catch (err) {
-          console.log('Could not send notification:', err);
-        }
-      }
+      // Notifications are now handled automatically by Cloud Functions (onEventUpdated)
+      // No need to manually send notifications here
 
       navigate(`/event/${eventId}`);
     } catch (error) {

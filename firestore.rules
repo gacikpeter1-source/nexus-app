@@ -78,17 +78,30 @@ service cloud.firestore {
     
     match /users/{userId} {
       // Anyone can create their own user document during registration
-      allow create: if isOwner(userId);
+      // Parents can also create child subaccounts
+      allow create: if isOwner(userId) || 
+        (isAuthenticated() && 
+         'managedByParentId' in request.resource.data && 
+         request.resource.data.managedByParentId == request.auth.uid);
       
       // Authenticated users can read other users' profiles (for chat, team lists, etc.)
       // Users can read their own data, admins can read all
       allow read: if isAuthenticated();
       
       // Users can update their own profile, admins can update any
-      allow update: if isOwner(userId) || isAdmin();
+      // Parents can update their child subaccounts
+      allow update: if isOwner(userId) || isAdmin() ||
+        (isAuthenticated() && 
+         'managedByParentId' in resource.data && 
+         resource.data.managedByParentId == request.auth.uid);
       
       // Users can delete their own account, admins can delete any (except other admins)
-      allow delete: if isOwner(userId) || (isAdmin() && !get(/databases/$(database)/documents/users/$(userId)).data.isSuperAdmin);
+      // Parents can delete child subaccounts
+      allow delete: if isOwner(userId) || 
+        (isAdmin() && !get(/databases/$(database)/documents/users/$(userId)).data.isSuperAdmin) ||
+        (isAuthenticated() && 
+         'managedByParentId' in resource.data && 
+         resource.data.managedByParentId == request.auth.uid);
       
       /* User Settings Subcollection */
       match /settings/{settingId} {
@@ -442,7 +455,7 @@ service cloud.firestore {
     }
     
     /* ===========================
-       PENDING NOTIFICATIONS COLLECTION
+       PENDING NOTIFICATIONS COLLECTION (Waitlist only)
        =========================== */
     
     match /pendingNotifications/{notificationId} {
@@ -456,6 +469,27 @@ service cloud.firestore {
       allow update: if true;
       
       // User can delete their own notifications
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
+    /* ===========================
+       IN-APP NOTIFICATIONS COLLECTION (New)
+       =========================== */
+    
+    match /notifications/{notificationId} {
+      // System and authenticated users can create notifications
+      allow create: if isAuthenticated();
+      
+      // Users can list/query their own notifications
+      allow list: if isAuthenticated() && request.auth.uid != null;
+      
+      // Users can read their own notifications
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // Users can update (mark as read) their own notifications
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // Users can delete their own notifications
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
     
@@ -531,6 +565,65 @@ service cloud.firestore {
       // Users can delete their own trainings
       allow delete: if isAuthenticated() && 
                       resource.data.ownerId == request.auth.uid;
+    }
+    
+    /* ===========================
+       PARENT-CHILD RELATIONSHIPS
+       =========================== */
+    
+    match /parentChildRelationships/{relationshipId} {
+      // Parents and children can read their relationships
+      // For additional_parent requests, both the new parent and requesting parent can read
+      allow read: if isAuthenticated() && 
+        (resource.data.parentId == request.auth.uid || 
+         resource.data.childId == request.auth.uid ||
+         (resource.data.keys().hasAny(['requestedByParentId']) && 
+          resource.data.requestedByParentId == request.auth.uid));
+      
+      // Allow list/query operations for authenticated users
+      // (Individual document access is still controlled by read rule above)
+      allow list: if isAuthenticated();
+      
+      // Parents can create relationships
+      // For additional_parent: existing parent can create link for new parent
+      allow create: if isAuthenticated() && 
+        (request.resource.data.parentId == request.auth.uid ||
+         (request.resource.data.keys().hasAny(['requestedByParentId']) && 
+          request.resource.data.requestedByParentId == request.auth.uid));
+      
+      // Involved parties can update (for approval)
+      allow update: if isAuthenticated() && 
+        (resource.data.parentId == request.auth.uid || 
+         resource.data.childId == request.auth.uid ||
+         (resource.data.keys().hasAny(['requestedByParentId']) && 
+          resource.data.requestedByParentId == request.auth.uid));
+      
+      // Parents can delete their relationships
+      allow delete: if isAuthenticated() && 
+        resource.data.parentId == request.auth.uid;
+    }
+    
+    /* ===========================
+       SUBSCRIPTION APPROVALS
+       =========================== */
+    
+    match /subscriptionApprovals/{approvalId} {
+      // Parents and children can read their own approvals
+      allow read: if isAuthenticated() && 
+        (resource.data.childId == request.auth.uid || 
+         request.auth.uid in resource.data.parentIds);
+      
+      // Children can create approval requests
+      allow create: if isAuthenticated() && 
+        request.resource.data.childId == request.auth.uid;
+      
+      // Parents can update (approve/decline)
+      allow update: if isAuthenticated() && 
+        request.auth.uid in resource.data.parentIds;
+      
+      // Admins or the child can delete expired approvals
+      allow delete: if isAdmin() || 
+        (isAuthenticated() && resource.data.childId == request.auth.uid);
     }
     
     /* ===========================

@@ -18,6 +18,7 @@ import {
   deleteUser as deleteUserFromFirestore,
   setUserCustomClaims
 } from '../firebase/firestore';
+import { removeToken } from '../firebase/messaging';
 
 // Role constants
 export const ROLES = {
@@ -168,13 +169,21 @@ export const AuthProvider = ({ children }) => {
   // Logout user
   const logout = async () => {
     try {
+      console.log('🚪 Logout initiated...');
+      
+      // DO NOT remove FCM tokens on logout for web apps
+      // The same device/browser will reuse the same token anyway
+      // Tokens should only be removed when user explicitly disables notifications
+      // or when FCM marks them as invalid
+      
       await signOut(auth);
       setUser(null);
       localStorage.removeItem('currentUser');
-      console.log('✅ User logged out');
+      console.log('✅ User logged out successfully');
+      console.log('ℹ️ FCM tokens preserved (web app - same device reuses token)');
       return { ok: true };
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('❌ Logout error:', error);
       return { ok: false, message: 'Logout failed' };
     }
   };

@@ -75,11 +75,28 @@ export const requestNotificationPermission = async (userId) => {
  */
 const saveTokenToFirestore = async (userId, token) => {
   try {
+    console.log('═══════════════════════════════════════');
+    console.log('💾 Saving FCM token to Firestore');
+    console.log('👤 User ID:', userId);
+    console.log('🎫 Token:', token ? token.substring(0, 20) + '...' : 'INVALID');
+    
+    // Validate token before saving
+    if (!token || typeof token !== 'string' || token.length < 10) {
+      console.error('❌ Invalid token - not saving to Firestore');
+      console.log('═══════════════════════════════════════');
+      return;
+    }
+    
     const userRef = doc(db, 'users', userId);
     const userDoc = await getDoc(userRef);
     
     if (userDoc.exists()) {
-      const currentTokens = userDoc.data().fcmTokens || [];
+      const currentTokens = (userDoc.data().fcmTokens || []).filter(t => 
+        t && typeof t === 'string' && t.length > 10
+      ); // Clean existing invalid tokens
+      const userEmail = userDoc.data().email;
+      
+      console.log(`📊 User ${userEmail} currently has ${currentTokens.length} valid token(s)`);
       
       // Only add if token doesn't exist
       if (!currentTokens.includes(token)) {
@@ -87,16 +104,23 @@ const saveTokenToFirestore = async (userId, token) => {
           fcmTokens: arrayUnion(token),
           lastTokenUpdate: new Date().toISOString()
         });
-        console.log('Token saved to Firestore');
+        console.log('✅ Token saved to Firestore for user:', userEmail);
+        console.log(`📊 User now has ${currentTokens.length + 1} token(s)`);
+      } else {
+        console.log('ℹ️ Token already exists in Firestore');
       }
     } else {
+      console.log('📝 Creating new user document with token');
       await setDoc(userRef, {
         fcmTokens: [token],
         lastTokenUpdate: new Date().toISOString()
       }, { merge: true });
+      console.log('✅ User document created with token');
     }
+    console.log('═══════════════════════════════════════');
   } catch (error) {
-    console.error('Error saving token to Firestore:', error);
+    console.error('❌ Error saving token to Firestore:', error);
+    console.log('═══════════════════════════════════════');
   }
 };
 

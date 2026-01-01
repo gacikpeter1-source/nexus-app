@@ -116,7 +116,7 @@
   "canBeConfiguredIndependently": "Môžu byť nakonfigurované nezávisle",
   "usersCanDisable": "Jednotliví používatelia môžu vypnúť svoje vlastné notifikácie v profile",
   "createsInteractiveNotifications": "Vytvára interaktívne notifikácie s tlačidlami Prijať/Odmietnuť"
-},
+  },
   "userMenu": {
     "profile": "Profil",
     "profileDesc": "Upravte si svoj profil a avatara",
@@ -162,19 +162,19 @@
     "joinPlatform": "Pripojte sa k platforme pre správu tréningov vášho tímu",
     "agreeTerms": "Vytvorením účtu súhlasíte s našimi Podmienkami služby a Zásadami ochrany osobných údajov"
   },
-"profile": {
-  "title": "PROFIL",
+  "profile": {
+    "title": "PROFIL",
   "notificationTab": "Notifikácie",
   "subscriptionTab": "Predplatné",
-  "subtitle": "Prispôsobte si svoj profil a vzhľad",
-  "avatarSection": "Avatar / Obrázok",
+    "subtitle": "Prispôsobte si svoj profil a vzhľad",
+    "avatarSection": "Avatar / Obrázok",
   "uploadAvatar": "Nahrajte profilový obrázok alebo použite predvolený avatar s vašou iniciálou",
   "removePicture": "Odstrániť Obrázok",
   "displayName": "Zobrazované Meno",
-  "displayNameDesc": "Meno zobrazené vo všetkých tímoch a kluboch",
+    "displayNameDesc": "Meno zobrazené vo všetkých tímoch a kluboch",
   "contactInfo": "Kontaktné Informácie",
   "phone": "Telefónne Číslo",
-  "bio": "Bio",
+    "bio": "Bio",
   "bioPlaceholder": "Napíšte krátke bio...",
   "tellOthers": "Povedzte ostatným o sebe",
   "saveChanges": "Uložiť Zmeny",
@@ -210,7 +210,7 @@
   "warningDowngrading": "Varovanie: Zníženie na Bezplatný okamžite odstráni všetky prémiové funkcie.",
   "youllGet": "Získate:",
   "cancel": "Zrušiť"
-},
+  },
   "changePassword": {
     "title": "ZMENIŤ HESLO",
     "subtitle": "Aktualizujte heslo svojho účtu",

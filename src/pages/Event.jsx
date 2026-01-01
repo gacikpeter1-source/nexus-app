@@ -172,14 +172,8 @@ export default function EventPage() {
     }
 
     try {
-      // Get affected users before deleting
-    const affectedUsers = getAllMembers().map(m => m.id);
-
+      // Delete the event (notifications are handled automatically by Cloud Functions)
       await deleteEvent(eventId);
-
-      // Send notification
-    const { notifyEventDeleted } = await import('../utils/notifications');
-    await notifyEventDeleted(event.title, affectedUsers);
 
       showToast('Event deleted successfully', 'success');
       navigate('/calendar');

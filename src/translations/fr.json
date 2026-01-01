@@ -108,7 +108,7 @@
   "canBeConfiguredIndependently": "Peut être configuré indépendamment",
   "usersCanDisable": "Les utilisateurs individuels peuvent désactiver leurs propres notifications dans le profil",
   "createsInteractiveNotifications": "Crée des notifications interactives avec des boutons Accepter/Refuser"
-},
+  },
   "userMenu": {
     "profile": "Profil",
     "profileDesc": "Modifiez votre profil et avatar",
@@ -154,7 +154,7 @@
     "joinPlatform": "Rejoignez la plateforme de gestion d'entraînement de votre équipe",
     "agreeTerms": "En créant un compte, vous acceptez nos Conditions d'utilisation et notre Politique de confidentialité"
   },
-"profile": {
+  "profile": {
   "title": "PROFIL",
   "notificationTab": "Notifications",
   "subscriptionTab": "Abonnements",
@@ -166,7 +166,7 @@
   "displayNameDesc": "Nom affiché dans toutes les équipes et clubs",
   "contactInfo": "Informations de Contact",
   "phone": "Numéro de Téléphone",
-  "bio": "Bio",
+    "bio": "Bio",
   "bioPlaceholder": "Écrivez une courte bio...",
   "tellOthers": "Parlez de vous aux autres",
   "saveChanges": "Enregistrer les Modifications",
@@ -202,7 +202,7 @@
   "warningDowngrading": "Attention : Rétrograder vers Gratuit supprimera immédiatement toutes les fonctionnalités premium.",
   "youllGet": "Vous obtiendrez :",
   "cancel": "Annuler"
-},
+  },
   "changePassword": {
     "title": "CHANGER LE MOT DE PASSE",
     "subtitle": "Mettez à jour le mot de passe de votre compte",
@@ -911,5 +911,5 @@
   "maxSize5MB": "Taille max : 5 Mo (JPG, PNG, GIF, WebP)",
   "preview": "Aperçu :",
   "upload": "Télécharger"
-}
+  }
 }

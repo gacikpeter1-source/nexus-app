@@ -1,5 +1,13 @@
 {
   "projects": {
     "default": "nexus-app-c69da"
+  },
+  "targets": {},
+  "etags": {
+    "nexus-app-c69da": {
+      "extensionInstances": {
+        "firestore-send-email": "08d892bbc450e5b2e7eed9b5f0d7606b7f2d23b6733e1f426acc3e5074609280"
+      }
+    }
   }
 }

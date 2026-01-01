@@ -213,12 +213,12 @@ export default function Profile() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-6 border-b border-white/10">
-          {['profile', 'notifications', 'subscription'].map(tab => (
+        <div className="flex gap-2 mb-6 border-b border-white/10 overflow-x-auto">
+          {['profile', 'notifications', 'subscription', ...(user && user.role === 'parent' ? ['children'] : [])].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-3 py-2 md:px-6 md:py-3 text-sm md:text-base font-medium transition-all ${
+              className={`px-3 py-2 md:px-6 md:py-3 text-sm md:text-base font-medium transition-all whitespace-nowrap ${
                 activeTab === tab
                   ? 'text-primary border-b-2 border-primary'
                   : 'text-light/60 hover:text-light'
@@ -227,6 +227,7 @@ export default function Profile() {
               {tab === 'profile' && '👤 ' + t('profile.title')}
               {tab === 'notifications' && '🔔 ' + t('profile.notificationTab')}
               {tab === 'subscription' && '💳 ' + t('profile.subscriptionTab')}
+              {tab === 'children' && '👨‍👩‍👧‍👦 ' + t('parentchild.myChildren')}
             </button>
           ))}
         </div>
@@ -594,6 +595,101 @@ export default function Profile() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Children Tab (Parent Users Only) */}
+        {activeTab === 'children' && user && user.role === 'parent' && (
+          <div className="space-y-6 animate-fade-in">
+            {/* Parent Account Header */}
+            <div className="bg-gradient-to-br from-purple-500/20 to-blue-500/20 backdrop-blur-sm border border-purple-500/30 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-4xl">👨‍👩‍👧‍👦</span>
+                <div>
+                  <h2 className="font-title text-2xl text-light">
+                    {t('parentchild.parentAccount')}
+                  </h2>
+                  <p className="text-light/60 text-sm">
+                    Manage your children's accounts and monitor their activity
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Action Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* My Children Card */}
+              <div 
+                onClick={() => navigate('/parent-dashboard')}
+                className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 hover:bg-white/10 transition-all cursor-pointer group"
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                    👨‍👩‍👧‍👦
+                  </div>
+                  <span className="text-primary text-2xl group-hover:translate-x-1 transition-transform">→</span>
+                </div>
+                <h3 className="text-xl font-semibold text-light mb-2">
+                  {t('parentchild.myChildren')}
+                </h3>
+                <p className="text-light/60 text-sm">
+                  View and manage all your child accounts, create new children, or link existing accounts
+                </p>
+              </div>
+
+              {/* Subscription Approvals Card */}
+              <div 
+                onClick={() => navigate('/subscription-approvals')}
+                className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 hover:bg-white/10 transition-all cursor-pointer group"
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                    💳
+                  </div>
+                  <span className="text-blue-400 text-2xl group-hover:translate-x-1 transition-transform">→</span>
+                </div>
+                <h3 className="text-xl font-semibold text-light mb-2">
+                  {t('parentchild.subscriptionApprovals')}
+                </h3>
+                <p className="text-light/60 text-sm">
+                  Review and approve subscription requests from your children
+                </p>
+              </div>
+            </div>
+
+            {/* Info Section */}
+            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-light mb-3 flex items-center gap-2">
+                <span>ℹ️</span>
+                Parent Account Features
+              </h3>
+              <ul className="space-y-2 text-sm text-light/70">
+                <li className="flex items-start gap-2">
+                  <span className="text-green-400 mt-0.5">✓</span>
+                  <span>Create and manage up to 3 child subaccounts</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-400 mt-0.5">✓</span>
+                  <span>Link existing accounts as children (with their approval)</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-400 mt-0.5">✓</span>
+                  <span>Automatically included in all child's chats for supervision</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-400 mt-0.5">✓</span>
+                  <span>Approve subscription purchases for children</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-400 mt-0.5">✓</span>
+                  <span>Manage child profiles, passwords, and team assignments</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-400 mt-0.5">✓</span>
+                  <span>Add up to 3 parents per child for shared management</span>
+                </li>
+              </ul>
+            </div>
           </div>
         )}
       </div>
