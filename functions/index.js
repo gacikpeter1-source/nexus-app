@@ -1742,35 +1742,72 @@ exports.onChatMessage = functions.firestore
         ? message.text.substring(0, 50) + '...'
         : message.text;
 
-      // Create in-app notifications for ALL eligible users
-      console.log(`💾 Creating in-app notifications for ${filteredUsers.push.length + filteredUsers.email.length} users`);
+      // Create/update in-app notifications for ALL eligible users (grouped by chat)
+      console.log(`💾 Creating/updating in-app notifications for ${filteredUsers.push.length + filteredUsers.email.length} users`);
       const allNotifiedUsers = new Set([...filteredUsers.push, ...filteredUsers.email]);
       
       for (const userId of allNotifiedUsers) {
         try {
-          await admin.firestore().collection('notifications').add({
-            userId: userId,
-            type: 'chat',
-            title: `${senderName} • ${chat.title || 'Chat'}`,
-            body: messagePreview,
-            data: {
+          // Check if there's an existing unread notification for this chat
+          const existingNotifs = await admin.firestore()
+            .collection('notifications')
+            .where('userId', '==', userId)
+            .where('chatId', '==', chatId)
+            .where('read', '==', false)
+            .limit(1)
+            .get();
+          
+          if (!existingNotifs.empty) {
+            // Update existing notification with new count and latest message
+            const existingDoc = existingNotifs.docs[0];
+            const existingData = existingDoc.data();
+            const currentCount = existingData.messageCount || 1;
+            const newCount = currentCount + 1;
+            
+            await existingDoc.ref.update({
+              body: `${newCount} new message${newCount > 1 ? 's' : ''}: ${messagePreview}`,
+              messageCount: newCount,
+              latestMessage: messagePreview,
+              latestMessageId: messageId,
+              latestSenderId: senderId,
+              latestSenderName: senderName,
+              createdAt: admin.firestore.FieldValue.serverTimestamp(), // Update to latest time
+            });
+            
+            console.log(`✅ Updated existing notification for user ${userId} in chat ${chatId} (count: ${newCount})`);
+          } else {
+            // Create new notification
+            await admin.firestore().collection('notifications').add({
+              userId: userId,
+              type: 'chat',
+              title: `${senderName} • ${chat.title || 'Chat'}`,
+              body: messagePreview,
+              messageCount: 1,
+              latestMessage: messagePreview,
+              latestMessageId: messageId,
+              latestSenderId: senderId,
+              latestSenderName: senderName,
+              data: {
+                chatId: chatId,
+                messageId: messageId,
+                senderId: senderId,
+                clubId: chat.clubId || '',
+                teamId: chat.teamId || '',
+                chatTitle: chat.title
+              },
+              read: false,
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+              clubId: chat.clubId || null,
+              teamId: chat.teamId || null,
               chatId: chatId,
-              messageId: messageId,
-              senderId: senderId,
-              clubId: chat.clubId || '',
-              teamId: chat.teamId || '',
-              chatTitle: chat.title
-            },
-            read: false,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            clubId: chat.clubId || null,
-            teamId: chat.teamId || null,
-            chatId: chatId,
-            actionUrl: `/chat/${chatId}`
-          });
+              actionUrl: `/chat/${chatId}`
+            });
+            
+            console.log(`✅ Created new notification for user ${userId} in chat ${chatId}`);
+          }
         } catch (error) {
-          console.error(`❌ Error creating in-app notification for user ${userId}:`, error);
+          console.error(`❌ Error creating/updating in-app notification for user ${userId}:`, error);
         }
       }
 

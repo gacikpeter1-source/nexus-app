@@ -236,9 +236,17 @@ export default function Notifications() {
                   {/* Content */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2 mb-1">
-                      <h4 className={`font-semibold ${!notification.read ? 'text-light' : 'text-light/70'}`}>
-                        {notification.title}
-                      </h4>
+                      <div className="flex items-center gap-2">
+                        <h4 className={`font-semibold ${!notification.read ? 'text-light' : 'text-light/70'}`}>
+                          {notification.title}
+                        </h4>
+                        {/* Message count badge for chat notifications */}
+                        {notification.type === 'chat' && notification.messageCount > 1 && (
+                          <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 bg-primary rounded-full text-xs font-bold text-white">
+                            {notification.messageCount}
+                          </span>
+                        )}
+                      </div>
                       <span className="text-xs text-light/50 whitespace-nowrap">
                         {formatTimeAgo(notification.createdAt)}
                       </span>
