@@ -420,7 +420,12 @@ export default function Profile() {
                           // Step 3: Delete account
                           const result = await deleteAccount(password);
                           if (result.ok) {
-                            alert('✅ Account deleted successfully! You can now register with the same email if needed.');
+                            let message = '✅ Account deleted successfully!\n\n';
+                            if (result.childrenDeleted > 0) {
+                              message += `Also deleted ${result.childrenDeleted} child subaccount(s).\n\n`;
+                            }
+                            message += 'You can now register with the same email if needed.';
+                            alert(message);
                             navigate('/register');
                           } else {
                             alert('❌ ' + result.message);

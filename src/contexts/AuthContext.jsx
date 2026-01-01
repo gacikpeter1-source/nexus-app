@@ -11,7 +11,8 @@ import {
   EmailAuthProvider,
   reauthenticateWithCredential,
 } from 'firebase/auth';
-import { auth } from '../firebase/config';
+import { auth, functions } from '../firebase/config';
+import { httpsCallable } from 'firebase/functions';
 import {
   createUser,
   getUser,
@@ -301,30 +302,35 @@ export const AuthProvider = ({ children }) => {
         throw new Error('No user logged in');
       }
       
-      const userId = auth.currentUser.uid;
       const userEmail = auth.currentUser.email;
       
       // Re-authenticate user before deletion (Firebase security requirement)
       if (password) {
+        console.log('🔐 Re-authenticating user...');
         const credential = EmailAuthProvider.credential(userEmail, password);
         await reauthenticateWithCredential(auth.currentUser, credential);
         console.log('✅ User re-authenticated');
       }
       
-      // Delete Firestore user document first
-      console.log('🗑️ Deleting Firestore user document...');
-      await deleteUserFromFirestore(userId);
-      console.log('✅ Firestore user document deleted');
+      // Call Cloud Function to handle complete deletion
+      // This ensures proper cleanup of all data including child accounts
+      console.log('☁️ Calling Cloud Function to delete account...');
+      const deleteUserAccount = httpsCallable(functions, 'deleteUserAccount');
       
-      // Delete Firebase Authentication user
-      console.log('🗑️ Deleting Firebase Auth user...');
-      await auth.currentUser.delete();
-      console.log('✅ Firebase Auth user deleted');
+      const result = await deleteUserAccount();
+      console.log('✅ Cloud Function response:', result.data);
       
+      // Sign out locally
+      await signOut(auth);
       setUser(null);
       localStorage.removeItem('currentUser');
+      
       console.log('✅ Account fully deleted');
-      return { ok: true };
+      return { 
+        ok: true, 
+        message: result.data.message,
+        childrenDeleted: result.data.childrenDeleted 
+      };
     } catch (error) {
       console.error('❌ Delete account error:', error);
       let message = 'Failed to delete account';
@@ -335,6 +341,8 @@ export const AuthProvider = ({ children }) => {
         message = 'Incorrect password';
       } else if (error.code === 'auth/too-many-requests') {
         message = 'Too many attempts. Please try again later';
+      } else if (error.message) {
+        message = error.message;
       }
       
       return { ok: false, message };

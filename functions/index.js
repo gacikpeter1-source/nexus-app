@@ -13,6 +13,95 @@ exports.setCustomClaims = functions.https.onCall(async (data, context) => {
 });
 
 // ============================================================================
+// DELETE USER ACCOUNT (Called from client)
+// ============================================================================
+
+/**
+ * Callable function to delete user account
+ * This ensures proper deletion of both Auth and Firestore data
+ */
+exports.deleteUserAccount = functions.https.onCall(async (data, context) => {
+  // Must be authenticated
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+  
+  const userId = context.auth.uid;
+  const db = admin.firestore();
+  
+  console.log('═══════════════════════════════════════');
+  console.log('🗑️ USER ACCOUNT DELETION REQUEST');
+  console.log(`👤 User ID: ${userId}`);
+  console.log('═══════════════════════════════════════');
+  
+  try {
+    // 1. First delete all child subaccounts
+    console.log('👨‍👩‍👧 Checking for child subaccounts...');
+    const parentRelationships = await db.collection('parentChildRelationships')
+      .where('parentId', '==', userId)
+      .where('status', '==', 'active')
+      .get();
+    
+    const childrenDeleted = [];
+    for (const relDoc of parentRelationships.docs) {
+      const rel = relDoc.data();
+      if (rel.childId) {
+        try {
+          // Delete child's Auth account
+          try {
+            await admin.auth().deleteUser(rel.childId);
+            console.log(`  ✅ Deleted child Auth: ${rel.childId}`);
+          } catch (authError) {
+            if (authError.code !== 'auth/user-not-found') {
+              console.error(`  ⚠️ Error deleting child Auth:`, authError.message);
+            }
+          }
+          
+          // Delete child's Firestore document (this will trigger cleanup)
+          await db.collection('users').doc(rel.childId).delete();
+          console.log(`  ✅ Deleted child Firestore: ${rel.childId}`);
+          childrenDeleted.push(rel.childId);
+        } catch (error) {
+          console.error(`  ❌ Error deleting child ${rel.childId}:`, error.message);
+        }
+      }
+    }
+    
+    if (childrenDeleted.length > 0) {
+      console.log(`✅ Deleted ${childrenDeleted.length} child subaccount(s)`);
+    }
+    
+    // 2. Delete the main user's Firestore document
+    // This will trigger the onUserDeleted function to clean up all data
+    console.log('🗑️ Deleting Firestore user document...');
+    await db.collection('users').doc(userId).delete();
+    console.log('✅ Firestore user document deleted');
+    
+    // 3. Delete Firebase Auth user (using Admin SDK for reliability)
+    console.log('🔐 Deleting Firebase Auth user...');
+    await admin.auth().deleteUser(userId);
+    console.log('✅ Firebase Auth user deleted');
+    
+    console.log('═══════════════════════════════════════');
+    console.log('✅ USER ACCOUNT DELETION COMPLETED');
+    console.log('═══════════════════════════════════════');
+    
+    return { 
+      success: true, 
+      message: 'Account deleted successfully',
+      childrenDeleted: childrenDeleted.length 
+    };
+    
+  } catch (error) {
+    console.error('═══════════════════════════════════════');
+    console.error('❌ USER ACCOUNT DELETION FAILED');
+    console.error('Error:', error);
+    console.error('═══════════════════════════════════════');
+    throw new functions.https.HttpsError('internal', `Failed to delete account: ${error.message}`);
+  }
+});
+
+// ============================================================================
 // USER NOTIFICATION PREFERENCES SYSTEM
 // ============================================================================
 
@@ -3483,17 +3572,60 @@ exports.onUserDeleted = functions.firestore
       });
       console.log(`  ✓ Deleted ${settingsSnapshot.size} setting(s)`);
       
-      // 5. Handle parent-child relationships
+      // 5. Handle parent-child relationships and DELETE CHILD SUBACCOUNTS
       console.log('👨‍👩‍👧 Cleaning up parent-child relationships...');
       
-      // Delete relationships where user is parent
+      // Find all children (subaccounts) where this user is the parent
       const parentRelationships = await db.collection('parentChildRelationships')
         .where('parentId', '==', userId)
+        .where('status', '==', 'active')
         .get();
+      
+      const childrenToDelete = [];
       parentRelationships.forEach(relDoc => {
+        const rel = relDoc.data();
+        if (rel.childId) {
+          childrenToDelete.push(rel.childId);
+        }
         batch.delete(relDoc.ref);
         operationCount++;
       });
+      
+      // Delete all child subaccounts (they don't have their own login)
+      if (childrenToDelete.length > 0) {
+        console.log(`  🗑️ Found ${childrenToDelete.length} child subaccount(s) to delete...`);
+        
+        for (const childId of childrenToDelete) {
+          try {
+            // Delete child's Firestore document
+            const childDoc = await db.collection('users').doc(childId).get();
+            if (childDoc.exists) {
+              const childData = childDoc.data();
+              console.log(`    • Deleting child: ${childData.username || childData.email || childId}`);
+              
+              // Delete child's Auth account if it exists
+              try {
+                await admin.auth().getUser(childId);
+                await admin.auth().deleteUser(childId);
+                console.log(`      ✅ Child Auth user deleted`);
+              } catch (authError) {
+                if (authError.code === 'auth/user-not-found') {
+                  console.log(`      ℹ️ Child has no Auth account (subaccount)`);
+                } else {
+                  console.error(`      ⚠️ Error deleting child Auth:`, authError.message);
+                }
+              }
+              
+              // Delete child's Firestore document
+              batch.delete(childDoc.ref);
+              operationCount++;
+              console.log(`      ✅ Child Firestore document deleted`);
+            }
+          } catch (error) {
+            console.error(`    ❌ Error deleting child ${childId}:`, error.message);
+          }
+        }
+      }
       
       // Delete relationships where user is child
       const childRelationships = await db.collection('parentChildRelationships')
