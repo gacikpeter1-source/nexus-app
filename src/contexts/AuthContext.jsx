@@ -93,7 +93,15 @@ export const AuthProvider = ({ children }) => {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       console.log('✅ Firebase auth successful, UID:', userCredential.user.uid);
       
-      console.log('2️⃣ Fetching user document from Firestore...');
+      console.log('2️⃣ Checking email verification...');
+      if (!userCredential.user.emailVerified) {
+        console.error('❌ Email not verified!');
+        await signOut(auth); // Sign them out immediately
+        throw new Error('EMAIL_NOT_VERIFIED');
+      }
+      console.log('✅ Email verified');
+      
+      console.log('3️⃣ Fetching user document from Firestore...');
       const userDoc = await getUser(userCredential.user.uid);
       console.log('📄 User doc received:', userDoc ? 'YES' : 'NO');
       
@@ -157,7 +165,10 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('❌ Login error:', error);
       let message = 'Login failed';
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+      
+      if (error.message === 'EMAIL_NOT_VERIFIED') {
+        message = 'Please verify your email before logging in. Check your inbox for the verification link.';
+      } else if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
         message = 'Invalid email or password';
       } else if (error.code === 'auth/too-many-requests') {
         message = 'Too many failed attempts. Try again later.';
@@ -307,19 +318,36 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Resend verification email
-  const resendVerificationEmail = async () => {
+  const resendVerificationEmail = async (email = null, password = null) => {
     try {
-      if (!auth.currentUser) {
-        throw new Error('No user logged in');
+      let userToVerify = auth.currentUser;
+      let needsSignOut = false;
+      
+      // If email and password provided, sign in temporarily to send verification
+      if (email && password && !auth.currentUser) {
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        userToVerify = userCredential.user;
+        needsSignOut = true;
       }
-      await sendEmailVerification(auth.currentUser, {
-        url: 'https://nexus-app-tau.vercel.app/email-verified.html',
+      
+      if (!userToVerify) {
+        throw new Error('No user to send verification to');
+      }
+      
+      await sendEmailVerification(userToVerify, {
+        url: 'https://nexus-app-c69da.web.app/email-verified',
         handleCodeInApp: false
       });
-      return { ok: true, message: 'Verification email sent' };
+      
+      // Sign out if we signed in temporarily
+      if (needsSignOut) {
+        await signOut(auth);
+      }
+      
+      return { ok: true, message: 'Verification email sent! Please check your inbox.' };
     } catch (error) {
       console.error('Resend verification error:', error);
-      return { ok: false, message: 'Failed to send verification email' };
+      return { ok: false, message: 'Failed to send verification email. Please try again.' };
     }
   };
 

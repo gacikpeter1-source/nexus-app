@@ -10,7 +10,9 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const { login } = useAuth();
+  const [showResendButton, setShowResendButton] = useState(false);
+  const [resending, setResending] = useState(false);
+  const { login, resendVerificationEmail } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useLanguage();
@@ -51,12 +53,46 @@ const Login = () => {
     }
 
     try {
-      await login(emailValue, passwordValue);
-      navigate(from, { replace: true });
+      const result = await login(emailValue, passwordValue);
+      if (result.ok) {
+        navigate(from, { replace: true });
+      } else {
+        throw new Error(result.message);
+      }
     } catch (err) {
-      setError(err.message || 'Login failed. Please check your credentials.');
+      const errorMessage = err.message || 'Login failed. Please check your credentials.';
+      setError(errorMessage);
+      
+      // Show resend button if email not verified
+      if (errorMessage.includes('verify your email')) {
+        setShowResendButton(true);
+      } else {
+        setShowResendButton(false);
+      }
     } finally {
       setLoading(false);
+    }
+  };
+  
+  const handleResendVerification = async () => {
+    setResending(true);
+    setError('');
+    
+    const emailValue = emailRef.current?.value || email;
+    const passwordValue = passwordRef.current?.value || password;
+    
+    try {
+      const result = await resendVerificationEmail(emailValue, passwordValue);
+      if (result.ok) {
+        setError('✅ ' + result.message);
+        setShowResendButton(false);
+      } else {
+        setError('❌ ' + result.message);
+      }
+    } catch (err) {
+      setError('❌ Failed to resend verification email');
+    } finally {
+      setResending(false);
     }
   };
 
@@ -158,9 +194,35 @@ const Login = () => {
 
             {/* Error Message */}
             {error && (
-              <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-3 rounded-lg text-sm">
+              <div className={`px-4 py-3 rounded-lg text-sm ${
+                error.startsWith('✅') 
+                  ? 'bg-green-500/10 border border-green-500/50 text-green-400'
+                  : 'bg-red-500/10 border border-red-500/50 text-red-400'
+              }`}>
                 {error}
               </div>
+            )}
+            
+            {/* Resend Verification Button */}
+            {showResendButton && (
+              <button
+                type="button"
+                onClick={handleResendVerification}
+                disabled={resending}
+                className="w-full bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 py-3 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed border border-blue-500/50"
+              >
+                {resending ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Sending...</span>
+                  </div>
+                ) : (
+                  '📧 Resend Verification Email'
+                )}
+              </button>
             )}
 
             {/* Submit Button */}

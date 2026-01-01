@@ -12,7 +12,7 @@ import MemberProfileFields from '../components/MemberProfileFields';
 import { updateUserMemberProfile } from '../firebase/firestore';
 
 export default function Profile() {
-  const { user } = useAuth();
+  const { user, deleteAccount } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
   const { 
@@ -234,6 +234,7 @@ export default function Profile() {
 
         {/* Profile Tab */}
         {activeTab === 'profile' && (
+          <>
           <form onSubmit={handleSubmit} className="space-y-6 animate-fade-in">
             {/* Avatar Section */}
             <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
@@ -392,6 +393,46 @@ export default function Profile() {
               </button>
             </div>
           </form>
+          
+          {/* Danger Zone - Delete Account */}
+          <div className="mt-8 bg-red-500/5 backdrop-blur-sm border-2 border-red-500/30 rounded-xl p-6 animate-fade-in">
+            <h2 className="font-title text-2xl text-red-400 mb-4 flex items-center gap-3">
+              <span className="text-3xl">⚠️</span>
+              Danger Zone
+            </h2>
+            <div className="space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                  <h3 className="text-light font-semibold mb-1">Delete Account</h3>
+                  <p className="text-light/60 text-sm">
+                    Permanently delete your account and all associated data. This action cannot be undone.
+                  </p>
+                </div>
+                <button
+                  onClick={async () => {
+                    if (window.confirm('⚠️ Are you absolutely sure you want to delete your account?\n\nThis will:\n• Delete all your data\n• Remove you from all clubs and teams\n• Cancel any active subscriptions\n\nThis action CANNOT be undone!\n\nType "DELETE" in the next prompt to confirm.')) {
+                      const confirmation = window.prompt('Type DELETE to confirm account deletion:');
+                      if (confirmation === 'DELETE') {
+                        const result = await deleteAccount();
+                        if (result.ok) {
+                          alert('✅ Account deleted successfully');
+                          navigate('/register');
+                        } else {
+                          alert('❌ ' + result.message);
+                        }
+                      } else {
+                        alert('Account deletion cancelled');
+                      }
+                    }
+                  }}
+                  className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-all whitespace-nowrap"
+                >
+                  🗑️ Delete Account
+                </button>
+              </div>
+            </div>
+          </div>
+          </>
         )}
 
         {/* Notifications Tab */}
