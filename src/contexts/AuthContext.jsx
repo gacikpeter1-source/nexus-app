@@ -97,7 +97,11 @@ export const AuthProvider = ({ children }) => {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       console.log('✅ Firebase auth successful, UID:', userCredential.user.uid);
       
-      console.log('2️⃣ Checking email verification...');
+      console.log('2️⃣ Reloading user to get latest verification status...');
+      await userCredential.user.reload(); // ⚡ CRITICAL: Refresh auth state to get latest emailVerified status
+      console.log('✅ User reloaded, emailVerified:', userCredential.user.emailVerified);
+      
+      console.log('3️⃣ Checking email verification...');
       if (!userCredential.user.emailVerified) {
         console.error('❌ Email not verified!');
         await signOut(auth); // Sign them out immediately
@@ -105,7 +109,7 @@ export const AuthProvider = ({ children }) => {
       }
       console.log('✅ Email verified');
       
-      console.log('3️⃣ Fetching user document from Firestore...');
+      console.log('4️⃣ Fetching user document from Firestore...');
       const userDoc = await getUser(userCredential.user.uid);
       console.log('📄 User doc received:', userDoc ? 'YES' : 'NO');
       
@@ -137,7 +141,7 @@ export const AuthProvider = ({ children }) => {
       }
       
       // Update user document with login timestamps
-      console.log('3️⃣ Updating login timestamps...');
+      console.log('5️⃣ Updating login timestamps...');
       await updateUser(userCredential.user.uid, loginUpdates);
 
       const userData = { 
@@ -148,13 +152,13 @@ export const AuthProvider = ({ children }) => {
         emailVerified: userCredential.user.emailVerified 
       };
       
-      console.log('4️⃣ Setting user state...');
+      console.log('6️⃣ Setting user state...');
       setUser(userData);
       
-      console.log('5️⃣ Saving to localStorage...');
+      console.log('7️⃣ Saving to localStorage...');
       localStorage.setItem('currentUser', JSON.stringify(userData));
       
-      console.log('6️⃣ Verifying localStorage save...');
+      console.log('8️⃣ Verifying localStorage save...');
       const savedUser = localStorage.getItem('currentUser');
       console.log('✅ localStorage verification:', savedUser ? 'SAVED' : 'FAILED');
       
