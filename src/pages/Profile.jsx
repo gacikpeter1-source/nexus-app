@@ -12,7 +12,7 @@ import MemberProfileFields from '../components/MemberProfileFields';
 import { updateUserMemberProfile } from '../firebase/firestore';
 
 export default function Profile() {
-  const { user, deleteAccount } = useAuth();
+  const { user, deleteAccount, updateUserProfile } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
   const { 
@@ -68,7 +68,7 @@ export default function Profile() {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!form.displayName.trim()) {
@@ -76,34 +76,21 @@ export default function Profile() {
       return;
     }
 
-    // Update user in localStorage
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    const updatedUsers = users.map(u => {
-      if (u.id === user.id) {
-        return {
-          ...u,
-          displayName: form.displayName.trim(),
-          avatar: form.avatar,
-          phone: form.phone.trim(),
-          bio: form.bio.trim(),
-        };
-      }
-      return u;
-    });
-    localStorage.setItem('users', JSON.stringify(updatedUsers));
+    try {
+      // Update user profile in Firestore
+      await updateUserProfile(user.id, {
+        displayName: form.displayName.trim(),
+        avatar: form.avatar,
+        phone: form.phone.trim(),
+        bio: form.bio.trim(),
+      });
 
-    // Update currentUser
-    const updatedUser = {
-      ...user,
-      displayName: form.displayName.trim(),
-      avatar: form.avatar,
-      phone: form.phone.trim(),
-      bio: form.bio.trim(),
-    };
-    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-
-    alert(t('profile.profileUpdated'));
-    window.location.reload(); // Reload to update navbar
+      alert(t('profile.profileUpdated'));
+      window.location.reload(); // Reload to update navbar
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      alert('Failed to update profile: ' + error.message);
+    }
   };
 
   const handleSelectPlan = async (plan, billingCycle) => {

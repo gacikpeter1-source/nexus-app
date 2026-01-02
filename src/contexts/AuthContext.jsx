@@ -52,8 +52,9 @@ export const AuthProvider = ({ children }) => {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
       // Send verification email with static HTML success page
+      // Send verification email with continue URL to redirect back to login
       await sendEmailVerification(userCredential.user, {
-        url: 'https://nexus-app-tau.vercel.app/email-verified.html',
+        url: 'https://nexus-app-c69da.web.app/login',
         handleCodeInApp: false
       });
 
@@ -366,8 +367,9 @@ export const AuthProvider = ({ children }) => {
         throw new Error('No user to send verification to');
       }
       
+      // Send verification email with continue URL to redirect back to login
       await sendEmailVerification(userToVerify, {
-        url: 'https://nexus-app-c69da.web.app/email-verified',
+        url: 'https://nexus-app-c69da.web.app/login',
         handleCodeInApp: false
       });
       
