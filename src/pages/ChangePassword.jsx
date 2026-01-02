@@ -2,6 +2,8 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { auth } from '../firebase/config';
+import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 
 export default function ChangePassword() {
   const { user } = useAuth();
@@ -14,8 +16,9 @@ export default function ChangePassword() {
   });
 
   const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const newErrors = {};
 
@@ -39,31 +42,54 @@ export default function ChangePassword() {
       return;
     }
 
-    // Get users from localStorage
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    const userIndex = users.findIndex(u => u.id === user.id);
+    setLoading(true);
 
-    if (userIndex === -1) {
-      alert('User not found');
-      return;
+    try {
+      // Check if Firebase user exists
+      if (!auth.currentUser) {
+        alert('No user logged in. Please login again.');
+        navigate('/login');
+        return;
+      }
+
+      console.log('🔐 Re-authenticating with current password...');
+      
+      // Step 1: Re-authenticate with current password (Firebase security requirement)
+      const credential = EmailAuthProvider.credential(
+        auth.currentUser.email,
+        form.currentPassword
+      );
+      
+      await reauthenticateWithCredential(auth.currentUser, credential);
+      console.log('✅ Re-authentication successful');
+
+      // Step 2: Update to new password
+      console.log('🔄 Updating password...');
+      await updatePassword(auth.currentUser, form.newPassword);
+      console.log('✅ Password updated successfully');
+
+      alert('✅ Password changed successfully!');
+      navigate('/profile');
+    } catch (error) {
+      console.error('❌ Change password error:', error);
+      console.error('Error code:', error.code);
+      
+      // Handle specific errors
+      if (error.code === 'auth/wrong-password') {
+        setErrors({ currentPassword: 'Current password is incorrect' });
+      } else if (error.code === 'auth/weak-password') {
+        setErrors({ newPassword: 'Password is too weak. Use at least 6 characters.' });
+      } else if (error.code === 'auth/requires-recent-login') {
+        alert('For security reasons, please log out and log in again before changing your password.');
+        navigate('/login');
+      } else if (error.code === 'auth/too-many-requests') {
+        alert('Too many failed attempts. Please wait a few minutes and try again.');
+      } else {
+        alert('❌ Failed to change password: ' + error.message);
+      }
+    } finally {
+      setLoading(false);
     }
-
-    // Check current password
-    if (users[userIndex].password !== form.currentPassword) {
-      setErrors({ currentPassword: 'Current password is incorrect' });
-      return;
-    }
-
-    // Update password
-    users[userIndex].password = form.newPassword;
-    localStorage.setItem('users', JSON.stringify(users));
-
-    // Update currentUser
-    const updatedUser = { ...user, password: form.newPassword };
-    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-
-    alert('Password changed successfully!');
-    navigate('/profile');
   };
 
   if (!user) {
@@ -168,14 +194,16 @@ export default function ChangePassword() {
           <div className="flex gap-4">
             <button
               type="submit"
-              className="flex-1 btn-primary py-4 text-lg font-semibold"
+              disabled={loading}
+              className="flex-1 btn-primary py-4 text-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              🔒 Change Password
+              {loading ? '⏳ Changing Password...' : '🔒 Change Password'}
             </button>
             <button
               type="button"
               onClick={() => navigate(-1)}
-              className="px-6 py-4 bg-white/10 hover:bg-white/20 text-light rounded-lg transition-colors"
+              disabled={loading}
+              className="px-6 py-4 bg-white/10 hover:bg-white/20 text-light rounded-lg transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
