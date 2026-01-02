@@ -558,10 +558,10 @@ const handleCreateTeamChat = async () => {
       </div>
 
       {/* Tabs - Horizontal Scrollable */}
-      <div className="flex flex-wrap gap-1 mb-2 border-b border-white/10 pb-2">
+      <div className="flex overflow-x-auto gap-1 mb-2 border-b border-white/10 pb-2 scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-x' }}>
         <button
           onClick={() => setActiveTab('overview')}
-          className={`px-2 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-all whitespace-nowrap rounded-t ${
+          className={`px-3 py-2 text-xs md:text-sm font-medium transition-all whitespace-nowrap rounded-t flex-shrink-0 ${
             activeTab === 'overview'
               ? 'text-primary border-b-2 border-primary bg-primary/10'
               : 'text-light/60 hover:text-light hover:bg-white/5'
@@ -571,7 +571,7 @@ const handleCreateTeamChat = async () => {
         </button>
         <button
           onClick={() => setActiveTab('chat')}
-          className={`px-2 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-all whitespace-nowrap rounded-t ${
+          className={`px-3 py-2 text-xs md:text-sm font-medium transition-all whitespace-nowrap rounded-t flex-shrink-0 ${
             activeTab === 'chat'
               ? 'text-primary border-b-2 border-primary bg-primary/10'
               : 'text-light/60 hover:text-light hover:bg-white/5'
@@ -581,7 +581,7 @@ const handleCreateTeamChat = async () => {
         </button>
         <button
           onClick={() => setActiveTab('attendance')}
-          className={`px-2 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-all whitespace-nowrap rounded-t ${
+          className={`px-3 py-2 text-xs md:text-sm font-medium transition-all whitespace-nowrap rounded-t flex-shrink-0 ${
             activeTab === 'attendance'
               ? 'text-primary border-b-2 border-primary bg-primary/10'
               : 'text-light/60 hover:text-light hover:bg-white/5'
@@ -591,27 +591,29 @@ const handleCreateTeamChat = async () => {
         </button>
         <button
           onClick={() => setActiveTab('members')}
-          className={`px-2 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-all whitespace-nowrap rounded-t ${
+          className={`px-3 py-2 text-xs md:text-sm font-medium transition-all whitespace-nowrap rounded-t flex-shrink-0 ${
             activeTab === 'members'
               ? 'text-primary border-b-2 border-primary bg-primary/10'
               : 'text-light/60 hover:text-light hover:bg-white/5'
           }`}
         >
-          Members ({members.length})
+          <span className="hidden sm:inline">Members</span>
+          <span className="inline sm:hidden">👥</span> ({members.length})
         </button>
         <button
           onClick={() => setActiveTab('staff')}
-          className={`px-2 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-all whitespace-nowrap rounded-t ${
+          className={`px-3 py-2 text-xs md:text-sm font-medium transition-all whitespace-nowrap rounded-t flex-shrink-0 ${
             activeTab === 'staff'
               ? 'text-primary border-b-2 border-primary bg-primary/10'
               : 'text-light/60 hover:text-light hover:bg-white/5'
           }`}
         >
-          Staff ({trainers.length + assistants.length})
+          <span className="hidden sm:inline">Staff</span>
+          <span className="inline sm:hidden">👨‍🏫</span> ({trainers.length + assistants.length})
         </button>
         <button
           onClick={() => setActiveTab('statistics')}
-          className={`px-2 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-all whitespace-nowrap rounded-t ${
+          className={`px-3 py-2 text-xs md:text-sm font-medium transition-all whitespace-nowrap rounded-t flex-shrink-0 ${
             activeTab === 'statistics'
               ? 'text-primary border-b-2 border-primary bg-primary/10'
               : 'text-light/60 hover:text-light hover:bg-white/5'
@@ -626,17 +628,17 @@ const handleCreateTeamChat = async () => {
         {activeTab === 'overview' && (
           <div className="space-y-6 animate-fade-in">
             {/* Upcoming Events */}
-            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-              <h2 className="font-title text-lg md:text-2xl text-light mb-4">Upcoming Events</h2>
+            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 md:p-6">
+              <h2 className="font-title text-base md:text-2xl text-light mb-3 md:mb-4">Upcoming Events</h2>
               
               {upcomingEvents.length === 0 ? (
-                <div className="text-center py-12">
+                <div className="text-center py-8 md:py-12">
                   <div className="text-2xl md:text-4xl mb-2">📅</div>
-                  <p className="text-light/60">No upcoming events</p>
-                  <p className="text-light/40 text-sm mt-1">Events will appear here</p>
+                  <p className="text-sm md:text-base text-light/60">No upcoming events</p>
+                  <p className="text-light/40 text-xs md:text-sm mt-1">Events will appear here</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2 md:space-y-3">
                   {upcomingEvents.map((event, idx) => {
                     const userResponse = event.responses?.[user?.id];
                     const isAttending = userResponse?.status === 'attending';
@@ -645,39 +647,39 @@ const handleCreateTeamChat = async () => {
                     <div
                       key={event.id || idx}
                       onClick={() => navigate(`/event/${event.id}`)}
-                        className={`bg-white/5 border rounded-lg p-4 hover:bg-white/10 transition-all cursor-pointer group ${
+                        className={`bg-white/5 border rounded-lg p-3 md:p-4 hover:bg-white/10 transition-all cursor-pointer group ${
                           isAttending 
                             ? 'border-green-500/50 bg-green-500/5 shadow-[0_0_10px_rgba(34,197,94,0.3)] hover:border-green-500/70' 
                             : 'border-white/10 hover:border-primary/50'
                         }`}
                     >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xl">
+                            <span className="text-base md:text-xl flex-shrink-0">
                               {event.type === 'training' ? '🏋️' : 
                                event.type === 'match' || event.type === 'game' ? '⚽' :
                                event.type === 'tournament' ? '🏆' :
                                event.type === 'meeting' ? '💼' : '📅'}
                             </span>
-                            <h3 className="font-semibold text-light group-hover:text-primary transition-colors">
+                            <h3 className="font-semibold text-sm md:text-base text-light group-hover:text-primary transition-colors truncate">
                               {event.title}
                             </h3>
                           </div>
                           <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm text-light/60 capitalize">{event.type || 'Event'}</p>
+                          <p className="text-xs md:text-sm text-light/60 capitalize">{event.type || 'Event'}</p>
                             {isAttending && (
                               <span className="px-2 py-0.5 bg-green-500/20 text-green-300 rounded text-xs font-medium">
-                                ✓ You are registered
+                                ✓ Registered
                               </span>
                             )}
                           </div>
                           {event.location && (
-                            <p className="text-xs text-light/50 mt-1">📍 {event.location}</p>
+                            <p className="text-xs text-light/50 mt-1 truncate">📍 {event.location}</p>
                           )}
                         </div>
-                        <div className="text-right space-y-1">
-                          <div className="text-sm text-light/80 font-medium">
+                        <div className="text-right space-y-1 flex-shrink-0">
+                          <div className="text-xs md:text-sm text-light/80 font-medium whitespace-nowrap">
                             {new Date(event.date).toLocaleDateString('en-US', { 
                               month: 'short', 
                               day: 'numeric' 
@@ -695,7 +697,7 @@ const handleCreateTeamChat = async () => {
                             const isFull = event.participantLimit && attendingCount >= event.participantLimit;
                             
                             return (
-                              <div className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
+                              <div className={`inline-block px-1.5 md:px-2 py-0.5 rounded text-xs font-bold ${
                                 isFull 
                                   ? 'bg-red-500/20 text-red-300 border border-red-500/30' 
                                   : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
@@ -714,29 +716,29 @@ const handleCreateTeamChat = async () => {
             </div>
 
             {/* Quick Stats - Enhanced with Orders */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 text-center">
-                <div className="text-2xl mb-1">🏋️</div>
-                <div className="text-xl font-bold text-light">{statistics.trainings}</div>
-                <div className="text-xs text-light/60">Trainings</div>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-3">
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg md:rounded-xl p-3 md:p-4 text-center">
+                <div className="text-xl md:text-2xl mb-1">🏋️</div>
+                <div className="text-lg md:text-xl font-bold text-light">{statistics.trainings}</div>
+                <div className="text-[10px] md:text-xs text-light/60">Trainings</div>
               </div>
-              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 text-center">
-                <div className="text-2xl mb-1">⚽</div>
-                <div className="text-xl font-bold text-light">{statistics.matches}</div>
-                <div className="text-xs text-light/60">Matches</div>
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg md:rounded-xl p-3 md:p-4 text-center">
+                <div className="text-xl md:text-2xl mb-1">⚽</div>
+                <div className="text-lg md:text-xl font-bold text-light">{statistics.matches}</div>
+                <div className="text-[10px] md:text-xs text-light/60">Matches</div>
               </div>
-              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 text-center">
-                <div className="text-2xl mb-1">🏆</div>
-                <div className="text-xl font-bold text-light">{statistics.tournaments}</div>
-                <div className="text-xs text-light/60">Tournaments</div>
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg md:rounded-xl p-3 md:p-4 text-center">
+                <div className="text-xl md:text-2xl mb-1">🏆</div>
+                <div className="text-lg md:text-xl font-bold text-light">{statistics.tournaments}</div>
+                <div className="text-[10px] md:text-xs text-light/60">Tournaments</div>
               </div>
-              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 text-center">
-                <div className="text-2xl mb-1">💼</div>
-                <div className="text-xl font-bold text-light">{statistics.meetings}</div>
-                <div className="text-xs text-light/60">Meetings</div>
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg md:rounded-xl p-3 md:p-4 text-center">
+                <div className="text-xl md:text-2xl mb-1">💼</div>
+                <div className="text-lg md:text-xl font-bold text-light">{statistics.meetings}</div>
+                <div className="text-[10px] md:text-xs text-light/60">Meetings</div>
               </div>
               <div 
-                className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 text-center cursor-pointer hover:bg-white/10 hover:border-primary/50 transition-all relative"
+                className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg md:rounded-xl p-3 md:p-4 text-center cursor-pointer hover:bg-white/10 hover:border-primary/50 transition-all relative"
                 onClick={() => {
                   const ordersSection = document.getElementById('orders-section');
                   if (ordersSection) {
@@ -757,15 +759,15 @@ const handleCreateTeamChat = async () => {
                     </span>
                   </div>
                 )}
-                <div className="text-2xl mb-1">📋</div>
-                <div className="text-xl font-bold text-light">{orders.length}</div>
-                <div className="text-xs text-light/60">Orders</div>
+                <div className="text-xl md:text-2xl mb-1">📋</div>
+                <div className="text-lg md:text-xl font-bold text-light">{orders.length}</div>
+                <div className="text-[10px] md:text-xs text-light/60">Orders</div>
               </div>
             </div>
             
             {/* Orders Section */}
-            <div id="orders-section" className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-              <h2 className="font-title text-2xl text-light mb-4">Team Orders</h2>
+            <div id="orders-section" className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 md:p-6">
+              <h2 className="font-title text-base md:text-2xl text-light mb-3 md:mb-4">Team Orders</h2>
               
               {orders.length === 0 ? (
                 <div className="text-center py-12">
@@ -887,33 +889,33 @@ onUpdateTeamSettings={async (settings) => {
         )}
 
         {activeTab === 'staff' && (
-          <div className="space-y-6 animate-fade-in">
+          <div className="space-y-4 md:space-y-6 animate-fade-in">
             {/* Trainers */}
-            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-              <h2 className="font-title text-2xl text-light mb-4">Trainers</h2>
+            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 md:p-6">
+              <h2 className="font-title text-base md:text-2xl text-light mb-3 md:mb-4">Trainers</h2>
               
               {trainers.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="text-2xl md:text-3xl mb-2">👨‍🏫</div>
-                  <p className="text-light/60">No trainers assigned</p>
+                <div className="text-center py-6 md:py-8">
+                  <div className="text-xl md:text-3xl mb-2">👨‍🏫</div>
+                  <p className="text-sm md:text-base text-light/60">No trainers assigned</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2 md:space-y-3">
                   {trainers.map((trainer, idx) => (
                     <div
                       key={trainer.id || idx}
-                      className="bg-white/5 border border-white/10 rounded-lg p-4 hover:bg-white/10 transition-all"
+                      className="bg-white/5 border border-white/10 rounded-lg p-3 md:p-4 hover:bg-white/10 transition-all"
                     >
-                      <div className="flex items-start gap-4">
-                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white text-2xl font-bold">
+                      <div className="flex items-center gap-3 md:gap-4">
+                        <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white text-lg md:text-2xl font-bold flex-shrink-0">
                           {trainer.username?.charAt(0).toUpperCase() || '👨‍🏫'}
                         </div>
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-light text-lg mb-2">{trainer.username || 'Unknown Trainer'}</h3>
-                          <div className="space-y-1 text-sm">
-                            <div className="flex items-center gap-2 text-light/70">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-light text-sm md:text-lg mb-1 md:mb-2 truncate">{trainer.username || 'Unknown Trainer'}</h3>
+                          <div className="space-y-0.5 md:space-y-1 text-xs md:text-sm">
+                            <div className="flex items-center gap-2 text-light/70 truncate">
                               <span>📧</span>
-                              <span>{trainer.email || 'No email'}</span>
+                              <span className="truncate">{trainer.email || 'No email'}</span>
                             </div>
                             {trainer.phone && (
                               <div className="flex items-center gap-2 text-light/70">
@@ -923,7 +925,7 @@ onUpdateTeamSettings={async (settings) => {
                             )}
                           </div>
                         </div>
-                        <div className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-medium">
+                        <div className="px-2 md:px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-[10px] md:text-xs font-medium whitespace-nowrap flex-shrink-0">
                           Trainer
                         </div>
                       </div>
@@ -934,35 +936,35 @@ onUpdateTeamSettings={async (settings) => {
             </div>
 
             {/* Assistants */}
-            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-              <h2 className="font-title text-2xl text-light mb-4">Assistants</h2>
+            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 md:p-6">
+              <h2 className="font-title text-base md:text-2xl text-light mb-3 md:mb-4">Assistants</h2>
               
               {assistants.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="text-2xl md:text-3xl mb-2">👨‍💼</div>
-                  <p className="text-light/60">No assistants assigned</p>
+                <div className="text-center py-6 md:py-8">
+                  <div className="text-xl md:text-3xl mb-2">👨‍💼</div>
+                  <p className="text-sm md:text-base text-light/60">No assistants assigned</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2 md:space-y-3">
                   {assistants.map((assistant, idx) => (
                     <div
                       key={assistant.id || idx}
-                      className="bg-white/5 border border-white/10 rounded-lg p-4 hover:bg-white/10 transition-all"
+                      className="bg-white/5 border border-white/10 rounded-lg p-3 md:p-4 hover:bg-white/10 transition-all"
                     >
-                      <div className="flex items-start gap-4">
-                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-accent to-secondary flex items-center justify-center text-white text-2xl font-bold">
+                      <div className="flex items-center gap-3 md:gap-4">
+                        <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-accent to-secondary flex items-center justify-center text-white text-lg md:text-2xl font-bold flex-shrink-0">
                           {assistant.username?.charAt(0).toUpperCase() || '👨‍💼'}
                         </div>
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-light text-lg mb-2">{assistant.username || 'Unknown Assistant'}</h3>
-                          <div className="space-y-1 text-sm">
-                            <div className="flex items-center gap-2 text-light/70">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-light text-sm md:text-lg mb-1 md:mb-2 truncate">{assistant.username || 'Unknown Assistant'}</h3>
+                          <div className="space-y-0.5 md:space-y-1 text-xs md:text-sm">
+                            <div className="flex items-center gap-2 text-light/70 truncate">
                               <span>📧</span>
-                              <span>{assistant.email || 'No email'}</span>
+                              <span className="truncate">{assistant.email || 'No email'}</span>
                             </div>
                           </div>
                         </div>
-                        <div className="px-3 py-1 bg-accent/20 text-accent rounded-full text-xs font-medium">
+                        <div className="px-2 md:px-3 py-1 bg-accent/20 text-accent rounded-full text-[10px] md:text-xs font-medium whitespace-nowrap flex-shrink-0">
                           Assistant
                         </div>
                       </div>
@@ -976,84 +978,84 @@ onUpdateTeamSettings={async (settings) => {
 
         {activeTab === 'statistics' && (
           <div className="animate-fade-in">
-            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-              <h2 className="font-title text-2xl text-light mb-6">Team Statistics</h2>
+            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 md:p-6">
+              <h2 className="font-title text-base md:text-2xl text-light mb-4 md:mb-6">Team Statistics</h2>
               
-              <div className="grid md:grid-cols-2 gap-6">
+              <div className="grid md:grid-cols-2 gap-4 md:gap-6">
                 {/* Events Breakdown */}
-                <div className="space-y-4">
-                  <h3 className="font-semibold text-light/80">Events Breakdown</h3>
+                <div className="space-y-3 md:space-y-4">
+                  <h3 className="font-semibold text-sm md:text-base text-light/80">Events Breakdown</h3>
                   
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">🏋️</span>
-                        <span className="text-light">Trainings</span>
+                  <div className="space-y-2 md:space-y-3">
+                    <div className="flex items-center justify-between p-2 md:p-3 bg-white/5 rounded-lg">
+                      <div className="flex items-center gap-2 md:gap-3">
+                        <span className="text-lg md:text-2xl">🏋️</span>
+                        <span className="text-sm md:text-base text-light">Trainings</span>
                       </div>
-                      <span className="text-2xl font-bold text-primary">{statistics.trainings}</span>
+                      <span className="text-lg md:text-2xl font-bold text-primary">{statistics.trainings}</span>
                     </div>
                     
-                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">⚽</span>
-                        <span className="text-light">Matches</span>
+                    <div className="flex items-center justify-between p-2 md:p-3 bg-white/5 rounded-lg">
+                      <div className="flex items-center gap-2 md:gap-3">
+                        <span className="text-lg md:text-2xl">⚽</span>
+                        <span className="text-sm md:text-base text-light">Matches</span>
                       </div>
-                      <span className="text-2xl font-bold text-primary">{statistics.matches}</span>
+                      <span className="text-lg md:text-2xl font-bold text-primary">{statistics.matches}</span>
                     </div>
                     
-                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">🏆</span>
-                        <span className="text-light">Tournaments</span>
+                    <div className="flex items-center justify-between p-2 md:p-3 bg-white/5 rounded-lg">
+                      <div className="flex items-center gap-2 md:gap-3">
+                        <span className="text-lg md:text-2xl">🏆</span>
+                        <span className="text-sm md:text-base text-light">Tournaments</span>
                       </div>
-                      <span className="text-2xl font-bold text-primary">{statistics.tournaments}</span>
+                      <span className="text-lg md:text-2xl font-bold text-primary">{statistics.tournaments}</span>
                     </div>
                     
-                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">💼</span>
-                        <span className="text-light">Meetings</span>
+                    <div className="flex items-center justify-between p-2 md:p-3 bg-white/5 rounded-lg">
+                      <div className="flex items-center gap-2 md:gap-3">
+                        <span className="text-lg md:text-2xl">💼</span>
+                        <span className="text-sm md:text-base text-light">Meetings</span>
                       </div>
-                      <span className="text-2xl font-bold text-primary">{statistics.meetings}</span>
+                      <span className="text-lg md:text-2xl font-bold text-primary">{statistics.meetings}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Team Composition */}
-                <div className="space-y-4">
-                  <h3 className="font-semibold text-light/80">Team Composition</h3>
+                <div className="space-y-3 md:space-y-4">
+                  <h3 className="font-semibold text-sm md:text-base text-light/80">Team Composition</h3>
                   
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">👥</span>
-                        <span className="text-light">Members</span>
+                  <div className="space-y-2 md:space-y-3">
+                    <div className="flex items-center justify-between p-2 md:p-3 bg-white/5 rounded-lg">
+                      <div className="flex items-center gap-2 md:gap-3">
+                        <span className="text-lg md:text-2xl">👥</span>
+                        <span className="text-sm md:text-base text-light">Members</span>
                       </div>
-                      <span className="text-2xl font-bold text-accent">{members.length}</span>
+                      <span className="text-lg md:text-2xl font-bold text-accent">{members.length}</span>
                     </div>
                     
-                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">👨‍🏫</span>
-                        <span className="text-light">Trainers</span>
+                    <div className="flex items-center justify-between p-2 md:p-3 bg-white/5 rounded-lg">
+                      <div className="flex items-center gap-2 md:gap-3">
+                        <span className="text-lg md:text-2xl">👨‍🏫</span>
+                        <span className="text-sm md:text-base text-light">Trainers</span>
                       </div>
-                      <span className="text-2xl font-bold text-accent">{trainers.length}</span>
+                      <span className="text-lg md:text-2xl font-bold text-accent">{trainers.length}</span>
                     </div>
                     
-                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">👨‍💼</span>
-                        <span className="text-light">Assistants</span>
+                    <div className="flex items-center justify-between p-2 md:p-3 bg-white/5 rounded-lg">
+                      <div className="flex items-center gap-2 md:gap-3">
+                        <span className="text-lg md:text-2xl">👨‍💼</span>
+                        <span className="text-sm md:text-base text-light">Assistants</span>
                       </div>
-                      <span className="text-2xl font-bold text-accent">{assistants.length}</span>
+                      <span className="text-lg md:text-2xl font-bold text-accent">{assistants.length}</span>
                     </div>
                     
-                    <div className="flex items-center justify-between p-3 bg-primary/10 rounded-lg border border-primary/30">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">📊</span>
-                        <span className="text-light font-semibold">Total</span>
+                    <div className="flex items-center justify-between p-2 md:p-3 bg-primary/10 rounded-lg border border-primary/30">
+                      <div className="flex items-center gap-2 md:gap-3">
+                        <span className="text-lg md:text-2xl">📊</span>
+                        <span className="text-sm md:text-base text-light font-semibold">Total</span>
                       </div>
-                      <span className="text-2xl font-bold text-primary">
+                      <span className="text-lg md:text-2xl font-bold text-primary">
                         {members.length + trainers.length + assistants.length}
                       </span>
                     </div>
@@ -1071,28 +1073,28 @@ onUpdateTeamSettings={async (settings) => {
         )}
 
         {activeTab === 'chat' && (
-          <div className="bg-mid-dark rounded-lg p-6">
-            <h3 className="text-xl font-bold text-light mb-4">Team Chat</h3>
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 md:p-6">
+            <h3 className="text-base md:text-xl font-bold text-light mb-3 md:mb-4">Team Chat</h3>
             {teamChat ? (
-              <div className="space-y-4">
-                <p className="text-light/60">
+              <div className="space-y-3 md:space-y-4">
+                <p className="text-sm md:text-base text-light/60">
                   This team has an active chat room
                 </p>
                 <button
                   onClick={() => navigate(`/chat/${teamChat.id}`)}
-                  className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium"
+                  className="px-4 md:px-6 py-2 md:py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium text-sm md:text-base"
                 >
                   Open Team Chat
                 </button>
               </div>
             ) : (
-              <div className="space-y-4">
-                <p className="text-light/60">
+              <div className="space-y-3 md:space-y-4">
+                <p className="text-sm md:text-base text-light/60">
                   No team chat exists yet. Create one to start communicating with your team members.
                 </p>
                 <button
                   onClick={handleCreateTeamChat}
-                  className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium"
+                  className="px-4 md:px-6 py-2 md:py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium text-sm md:text-base"
                 >
                   Create Team Chat
                 </button>
@@ -1105,8 +1107,8 @@ onUpdateTeamSettings={async (settings) => {
         {activeTab === 'attendance' && (
           <div>
             {/* Header with Take Attendance Button */}
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-light">📋 Attendance History</h3>
+            <div className="flex items-center justify-between gap-2 mb-4 md:mb-6">
+              <h3 className="text-base md:text-2xl font-bold text-light">📋 Attendance</h3>
               {/* Only show button for Admin, ClubOwner, Trainer, or Assistant */}
               {(user?.isSuperAdmin || 
                 club?.ownerId === user?.id || 
@@ -1114,15 +1116,15 @@ onUpdateTeamSettings={async (settings) => {
                 team?.assistants?.includes(user?.id)) && (
               <button
                 onClick={() => navigate(`/team/${clubId}/${teamId}/attendance`)}
-                className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium"
+                className="px-3 md:px-6 py-2 md:py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium text-xs md:text-base whitespace-nowrap"
               >
-                + Take Attendance
+                + Take
               </button>
               )}
             </div>
             {/* Filters */}
-            <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
-              <div className="grid md:grid-cols-2 gap-4">
+            <div className="bg-white/5 border border-white/10 rounded-xl p-4 md:p-6 mb-4 md:mb-6">
+              <div className="grid md:grid-cols-2 gap-3 md:gap-4">
                 <div>
                   <label className="block text-sm font-medium text-light/80 mb-2">Filter by Type</label>
                   <select
@@ -1153,15 +1155,15 @@ onUpdateTeamSettings={async (settings) => {
 
             {/* Attendance Records */}
             {loadingAttendance ? (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-                <p className="text-light/60">Loading attendance...</p>
+              <div className="text-center py-8 md:py-12">
+                <div className="animate-spin rounded-full h-8 md:h-12 w-8 md:w-12 border-b-2 border-primary mx-auto mb-3 md:mb-4"></div>
+                <p className="text-sm md:text-base text-light/60">Loading attendance...</p>
               </div>
             ) : filteredAttendanceRecords.length === 0 ? (
-              <div className="bg-white/5 border border-white/10 rounded-xl p-12 text-center">
-                <div className="text-2xl md:text-3xl md:text-6xl mb-4">📋</div>
-                <h3 className="font-title text-2xl text-light mb-2">No Attendance Records</h3>
-                <p className="text-light/60 mb-4">
+              <div className="bg-white/5 border border-white/10 rounded-xl p-8 md:p-12 text-center">
+                <div className="text-3xl md:text-6xl mb-3 md:mb-4">📋</div>
+                <h3 className="font-title text-lg md:text-2xl text-light mb-2">No Attendance Records</h3>
+                <p className="text-sm md:text-base text-light/60 mb-3 md:mb-4">
                   {attendanceSearchQuery || attendanceFilterType !== 'all' 
                     ? 'No records match your filters'
                     : 'Start by taking attendance for your team'
@@ -1170,14 +1172,14 @@ onUpdateTeamSettings={async (settings) => {
                 {!attendanceSearchQuery && attendanceFilterType === 'all' && (
                   <button
                     onClick={() => navigate(`/team/${clubId}/${teamId}/attendance`)}
-                    className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition"
+                    className="px-4 md:px-6 py-2 md:py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition text-sm md:text-base"
                   >
                     Take Attendance
                   </button>
                 )}
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3 md:space-y-4">
                 {filteredAttendanceRecords.map((record) => {
                   const displayType = record.type === 'custom' && record.customType 
                     ? record.customType 
@@ -1186,40 +1188,40 @@ onUpdateTeamSettings={async (settings) => {
                   return (
                     <div
                       key={record.id}
-                      className="bg-white/5 border border-white/10 rounded-xl p-6 hover:bg-white/10 transition"
+                      className="bg-white/5 border border-white/10 rounded-xl p-3 md:p-6 hover:bg-white/10 transition"
                     >
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-4 flex-1">
-                          <div className="text-2xl md:text-4xl">{getAttendanceTypeIcon(record.type)}</div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              <h3 className="font-title text-xl text-light capitalize">
+                      <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
+                        <div className="flex items-start gap-2 md:gap-4 flex-1">
+                          <div className="text-xl md:text-4xl flex-shrink-0">{getAttendanceTypeIcon(record.type)}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3 mb-2">
+                              <h3 className="font-title text-sm md:text-xl text-light capitalize truncate">
                                 {displayType}
                                 {record.sessionName && (
-                                  <span className="ml-2 text-base font-normal text-primary">
+                                  <span className="ml-2 text-xs md:text-base font-normal text-primary">
                                     • {record.sessionName}
                                   </span>
                                 )}
                               </h3>
-                              <span className="text-sm text-light/60">
+                              <span className="text-xs md:text-sm text-light/60">
                                 {formatAttendanceDate(record.date)}
                               </span>
                             </div>
 
-                            <div className="flex items-center gap-6 text-sm">
-                              <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-3 md:gap-6 text-xs md:text-sm">
+                              <div className="flex items-center gap-1 md:gap-2">
                                 <span className="text-light/60">Total:</span>
                                 <span className="font-semibold text-light">{record.statistics.total}</span>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-green-400">✓ Present:</span>
+                              <div className="flex items-center gap-1 md:gap-2">
+                                <span className="text-green-400">✓</span>
                                 <span className="font-semibold text-green-400">{record.statistics.present}</span>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-red-400">✗ Absent:</span>
+                              <div className="flex items-center gap-1 md:gap-2">
+                                <span className="text-red-400">✗</span>
                                 <span className="font-semibold text-red-400">{record.statistics.absent}</span>
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1 md:gap-2">
                                 <span className="text-blue-400">Rate:</span>
                                 <span className="font-semibold text-blue-400">{record.statistics.percentage}%</span>
                               </div>
@@ -1227,12 +1229,12 @@ onUpdateTeamSettings={async (settings) => {
                           </div>
                         </div>
 
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                           <button
                             onClick={() => handleViewAttendanceDetails(record)}
-                            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm transition"
+                            className="px-3 md:px-4 py-1.5 md:py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs md:text-sm transition whitespace-nowrap"
                           >
-                            View Details
+                            View
                           </button>
                           {/* Only show Edit/Delete for Admin, ClubOwner, Trainer, or Assistant */}
                           {(user?.isSuperAdmin || 
@@ -1242,13 +1244,13 @@ onUpdateTeamSettings={async (settings) => {
                             <>
                           <button
                             onClick={() => navigate(`/team/${clubId}/${teamId}/attendance`)}
-                            className="px-4 py-2 bg-white/10 hover:bg-white/20 text-light rounded-lg text-sm transition"
+                            className="px-3 md:px-4 py-1.5 md:py-2 bg-white/10 hover:bg-white/20 text-light rounded-lg text-xs md:text-sm transition whitespace-nowrap"
                           >
                             Edit
                           </button>
                           <button
                             onClick={() => handleDeleteAttendance(record.id)}
-                            className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm transition"
+                            className="px-3 md:px-4 py-1.5 md:py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-xs md:text-sm transition whitespace-nowrap"
                           >
                             Delete
                           </button>
