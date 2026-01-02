@@ -132,7 +132,24 @@ service cloud.firestore {
       
       // ✅ FIX: Allow club owners and trainers to update
       // (Subscription validation handled in app logic)
-      allow update: if isAuthenticated() && (isAdmin() || isClubOwner(clubId) || isClubTrainer(clubId));
+      // ✅ ALSO allow members to remove themselves (Leave Club functionality)
+      // ✅ ALSO allow team members to remove themselves from teams (Leave Team functionality)
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        isClubOwner(clubId) || 
+        isClubTrainer(clubId) ||
+        // Allow user to remove themselves from club (Leave Club)
+        // User must be currently in the club AND removing themselves from members/trainers/assistants/teams
+        ((request.auth.uid in resource.data.members || 
+          request.auth.uid in resource.data.trainers || 
+          request.auth.uid in resource.data.assistants) &&
+         !(request.auth.uid in request.resource.data.members) &&
+         !(request.auth.uid in request.resource.data.trainers) &&
+         !(request.auth.uid in request.resource.data.assistants)) ||
+        // Allow user to update only teams array (Leave Team functionality)
+        // This allows removing oneself from a team within the club
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teams', 'updatedAt']))
+      );
       
       // Only club owners, trainers, or admins can delete clubs
       allow delete: if isAdmin() || isClubOwner(clubId) || isClubTrainer(clubId);
