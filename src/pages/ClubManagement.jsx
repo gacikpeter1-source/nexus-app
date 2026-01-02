@@ -1697,7 +1697,7 @@ const filteredOrderResponses = useMemo(() => {
                   <select
                     value={teamTrainerFilter}
                     onChange={e => setTeamTrainerFilter(e.target.value)}
-                    className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                    className="w-full bg-white/10 border border-white/20 rounded-lg px-3 md:px-4 py-2 text-sm md:text-base text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                   >
                     <option value="" className="bg-mid-dark">{t('clubmgmt.allTeams')}</option>
                     {(() => {
@@ -1768,16 +1768,16 @@ const filteredOrderResponses = useMemo(() => {
                       const assistantCount = (team.assistants || []).length;
                       
                       return (
-                        <div key={team.id} className="bg-white/5 border border-white/10 rounded-lg p-4 hover:bg-white/10 transition-all overflow-visible">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
+                        <div key={team.id} className="bg-white/5 border border-white/10 rounded-lg p-3 md:p-4 hover:bg-white/10 transition-all overflow-visible">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
                               <h3 
                                 onClick={() => navigate(`/team/${selectedClubId}/${team.id}`)}
-                                className="font-semibold text-light text-base md:text-lg mb-2 cursor-pointer hover:text-primary transition-colors"
+                                className="font-semibold text-light text-base md:text-lg mb-2 cursor-pointer hover:text-primary transition-colors truncate"
                               >
                                 {team.name}
                               </h3>
-                              <div className="flex gap-4 text-sm text-light/70">
+                              <div className="flex flex-wrap gap-2 md:gap-4 text-xs md:text-sm text-light/70">
                                 <div className="flex items-center gap-1">
                                   <span>👥</span>
                                   <span>{memberCount} member{memberCount !== 1 ? 's' : ''}</span>
@@ -1794,7 +1794,7 @@ const filteredOrderResponses = useMemo(() => {
                             </div>
                             
                             {isClubManager(clubs.find(c => c.id === selectedClubId)) && (
-                              <div className="relative">
+                              <div className="relative flex-shrink-0">
                                 <button 
                                   ref={(el) => {
                                     if (el) actionButtonRefs.current[team.id] = el;
@@ -1814,7 +1814,7 @@ const filteredOrderResponses = useMemo(() => {
                                       setTeamActionDropdown(team.id);
                                     }
                                   }}
-                                  className="px-4 py-2 bg-white/10 hover:bg-white/15 text-light rounded-lg text-sm font-medium transition-all flex items-center gap-2"
+                                  className="px-3 md:px-4 py-1.5 md:py-2 bg-white/10 hover:bg-white/15 text-light rounded-lg text-xs md:text-sm font-medium transition-all flex items-center gap-1 md:gap-2 whitespace-nowrap"
                                 >
                                   <span>{t('clubmgmt.actions')}</span>
                                   <span className="text-xs">▼</span>
@@ -1934,15 +1934,15 @@ const filteredOrderResponses = useMemo(() => {
               ) : filteredMembers.length === 0 ? (
                 <div className="py-8 text-center text-light/40">{t('clubmgmt.noMembersFound')}</div>
               ) : (
-                <table className="w-full">
+                <table className="w-full min-w-[640px]">
                   <thead>
                     <tr className="border-b border-white/10">
-                      <th className="px-4 py-3 text-left text-light font-semibold">{t('clubmgmt.username')}</th>
-                      <th className="px-4 py-3 text-left text-light font-semibold">{t('clubmgmt.email')}</th>
-                      <th className="px-4 py-3 text-left text-light font-semibold">{t('clubmgmt.clubRole')}</th>
-                      <th className="px-4 py-3 text-left text-light font-semibold">{t('clubmgmt.userRole')}</th>
-                      <th className="px-4 py-3 text-left text-light font-semibold">{t('nav.teams')}</th>
-                      <th className="px-4 py-3 text-left text-light font-semibold">{t('clubmgmt.actions')}</th>
+                      <th className="px-2 md:px-4 py-3 text-left text-light font-semibold text-sm md:text-base">{t('clubmgmt.username')}</th>
+                      <th className="px-2 md:px-4 py-3 text-left text-light font-semibold text-sm md:text-base hidden sm:table-cell">{t('clubmgmt.email')}</th>
+                      <th className="px-2 md:px-4 py-3 text-left text-light font-semibold text-sm md:text-base">{t('clubmgmt.clubRole')}</th>
+                      <th className="px-2 md:px-4 py-3 text-left text-light font-semibold text-sm md:text-base hidden lg:table-cell">{t('clubmgmt.userRole')}</th>
+                      <th className="px-2 md:px-4 py-3 text-left text-light font-semibold text-sm md:text-base hidden md:table-cell">{t('nav.teams')}</th>
+                      <th className="px-2 md:px-4 py-3 text-left text-light font-semibold text-sm md:text-base">{t('clubmgmt.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1954,9 +1954,9 @@ const filteredOrderResponses = useMemo(() => {
                           m.id === selectedMemberId ? 'bg-primary/10' : 'hover:bg-white/5'
                         }`}
                       >
-                        <td className="px-4 py-3 text-light">{m.username}</td>
-                        <td className="px-4 py-3 text-light">{m.email}</td>
-                        <td className="px-4 py-3 text-light">
+                        <td className="px-2 md:px-4 py-3 text-light text-sm md:text-base">{m.username}</td>
+                        <td className="px-2 md:px-4 py-3 text-light text-sm md:text-base hidden sm:table-cell">{m.email}</td>
+                        <td className="px-2 md:px-4 py-3 text-light">
                           <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
                             m.clubRole === 'trainer' ? 'bg-primary/20 text-primary' :
                             m.clubRole === 'assistant' ? 'bg-blue-500/20 text-blue-300' :
@@ -1965,7 +1965,7 @@ const filteredOrderResponses = useMemo(() => {
                             {m.clubRole}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-light">
+                        <td className="px-2 md:px-4 py-3 text-light hidden lg:table-cell">
                           <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
                             m.userRole === 'admin' ? 'bg-red-500/20 text-red-300' :
                             m.userRole === 'parent' ? 'bg-purple-500/20 text-purple-300' :
@@ -1974,13 +1974,13 @@ const filteredOrderResponses = useMemo(() => {
                             {m.userRole === 'parent' ? '👨‍👩‍👧 ' : ''}{m.userRole}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-light">
+                        <td className="px-2 md:px-4 py-3 text-light hidden md:table-cell">
                           {m.teamNames && m.teamNames.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
                               {m.teamNames.map((tn, idx) => (
                                 <span
                                   key={`${m.id}-t-${idx}`}
-                                  className="inline-flex items-center gap-2 bg-white/5 px-2 py-1 rounded text-sm"
+                                  className="inline-flex items-center gap-2 bg-white/5 px-2 py-1 rounded text-xs md:text-sm"
                                 >
                                   <span 
                                     onClick={e => {
@@ -2004,19 +2004,19 @@ const filteredOrderResponses = useMemo(() => {
                               ))}
                             </div>
                           ) : (
-                            <span className="text-light/50">No teams</span>
+                            <span className="text-light/50 text-xs md:text-sm">No teams</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-light">
+                        <td className="px-2 md:px-4 py-3 text-light">
                           {isClubManager(clubs.find(c => c.id === selectedClubId)) ? (
-                            <div className="flex gap-2">
+                            <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
                               <button
                                 onClick={e => {
                                   e.stopPropagation();
                                   setUserToAssign(m);
                                   setShowTeamAssignModal(true);
                                 }}
-                                className="px-2 py-1 bg-white/10 text-light rounded text-sm hover:bg-white/15"
+                                className="px-2 py-1 bg-white/10 text-light rounded text-xs sm:text-sm hover:bg-white/15 whitespace-nowrap"
                               >
                                 Assign
                               </button>
@@ -2026,7 +2026,7 @@ const filteredOrderResponses = useMemo(() => {
                                   e.stopPropagation();
                                   handleChangeRole(m.id, e.target.value);
                                 }}
-                                className="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-light text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                className="bg-white/10 border border-white/20 rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 text-light text-xs sm:text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                               >
                                 <option value="user" className="bg-mid-dark">{t('clubmgmt.user')}</option>
                                 <option value="parent" className="bg-mid-dark">{t('clubmgmt.parent')}</option>
@@ -2038,7 +2038,7 @@ const filteredOrderResponses = useMemo(() => {
                                   e.stopPropagation();
                                   handleRemoveMember(m);
                                 }}
-                                className="bg-red-500 text-white px-3 py-1.5 rounded-lg hover:bg-red-600 text-sm font-medium transition-all"
+                                className="bg-red-500 text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg hover:bg-red-600 text-xs sm:text-sm font-medium transition-all whitespace-nowrap"
                               >
                                 Remove
                               </button>

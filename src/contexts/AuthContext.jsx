@@ -221,6 +221,12 @@ export const AuthProvider = ({ children }) => {
         console.log('🔥 UID:', firebaseUser.uid);
         
         try {
+          // ⚡ Force token refresh to ensure Firestore has auth context
+          // This prevents "Missing or insufficient permissions" errors
+          console.log('🔄 Getting fresh auth token...');
+          await firebaseUser.getIdToken(true);
+          console.log('✅ Auth token refreshed');
+          
           const userDoc = await getUser(firebaseUser.uid);
           
           if (userDoc) {
