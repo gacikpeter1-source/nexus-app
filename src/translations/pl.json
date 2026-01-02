@@ -108,7 +108,7 @@
   "canBeConfiguredIndependently": "Można skonfigurować niezależnie",
   "usersCanDisable": "Poszczególni użytkownicy mogą wyłączyć własne powiadomienia w profilu",
   "createsInteractiveNotifications": "Tworzy interaktywne powiadomienia z przyciskami Akceptuj/Odrzuć"
-},
+  },
   "userMenu": {
     "profile": "Profil",
     "profileDesc": "Edytuj swój profil i awatar",
@@ -154,7 +154,7 @@
     "joinPlatform": "Dołącz do platformy zarządzania treningami swojego zespołu",
     "agreeTerms": "Tworząc konto, akceptujesz nasze Warunki korzystania z usługi i Politykę prywatności"
   },
-"profile": {
+  "profile": {
   "title": "PROFIL",
   "notificationTab": "Powiadomienia",
   "subscriptionTab": "Subskrypcje",
@@ -166,7 +166,7 @@
   "displayNameDesc": "Nazwa wyświetlana we wszystkich zespołach i klubach",
   "contactInfo": "Informacje Kontaktowe",
   "phone": "Numer Telefonu",
-  "bio": "Bio",
+    "bio": "Bio",
   "bioPlaceholder": "Napisz krótkie bio...",
   "tellOthers": "Opowiedz innym o sobie",
   "saveChanges": "Zapisz Zmiany",
@@ -202,7 +202,7 @@
   "warningDowngrading": "Ostrzeżenie: Obniżenie do Darmowego natychmiast usunie wszystkie funkcje premium.",
   "youllGet": "Otrzymasz:",
   "cancel": "Anuluj"
-},
+  },
   "changePassword": {
     "title": "ZMIEŃ HASŁO",
     "subtitle": "Zaktualizuj hasło swojego konta",
@@ -911,5 +911,5 @@
   "maxSize5MB": "Maks. rozmiar: 5MB (JPG, PNG, GIF, WebP)",
   "preview": "Podgląd:",
   "upload": "Prześlij"
-}
+  }
 }

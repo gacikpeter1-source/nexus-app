@@ -2039,7 +2039,7 @@ const filteredOrderResponses = useMemo(() => {
                         {isClubManager(clubs.find(c => c.id === selectedClubId)) && (
                           <div className="flex-shrink-0">
                             <select
-                              onChange={e => {
+                              onChange={async e => {
                                 e.stopPropagation();
                                 const action = e.target.value;
                                 if (action === 'assign') {
@@ -2051,6 +2051,26 @@ const filteredOrderResponses = useMemo(() => {
                                   handleChangeRole(m.id, 'assistant');
                                 } else if (action === 'demote-member') {
                                   handleChangeRole(m.id, 'user');
+                                } else if (action === 'set-parent') {
+                                  // Update USER role (not club role)
+                                  try {
+                                    await updateUser(m.id, { role: 'parent' });
+                                    showToast('User role set to Parent', 'success');
+                                    await loadClubData(selectedClubId);
+                                  } catch (error) {
+                                    console.error('Error setting parent role:', error);
+                                    showToast('Failed to set parent role', 'error');
+                                  }
+                                } else if (action === 'remove-parent') {
+                                  // Remove parent role (set back to 'user')
+                                  try {
+                                    await updateUser(m.id, { role: 'user' });
+                                    showToast('Parent role removed', 'success');
+                                    await loadClubData(selectedClubId);
+                                  } catch (error) {
+                                    console.error('Error removing parent role:', error);
+                                    showToast('Failed to remove parent role', 'error');
+                                  }
                                 } else if (action === 'remove') {
                                   handleRemoveMember(m);
                                 }
@@ -2069,6 +2089,12 @@ const filteredOrderResponses = useMemo(() => {
                               )}
                               {(m.clubRole === 'trainer' || m.clubRole === 'assistant') && (
                                 <option value="demote-member" className="bg-mid-dark">↓ Member</option>
+                              )}
+                              <option disabled className="bg-mid-dark">───</option>
+                              {m.userRole !== 'parent' ? (
+                                <option value="set-parent" className="bg-mid-dark">👨‍👩‍👧 Set Parent</option>
+                              ) : (
+                                <option value="remove-parent" className="bg-mid-dark">× Remove Parent</option>
                               )}
                               <option disabled className="bg-mid-dark">───</option>
                               <option value="remove" className="bg-mid-dark">🗑️ Remove</option>
