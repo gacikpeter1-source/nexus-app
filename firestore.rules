@@ -91,13 +91,19 @@ service cloud.firestore {
       // Users can update their own profile, admins can update any
       // Parents can update their child subaccounts
       // ✅ FIX: Club owners/trainers can update clubIds when approving join requests
+      // ✅ FIX: Club owners/trainers can update role field (to assign parent role)
       allow update: if isOwner(userId) || isAdmin() ||
         (isAuthenticated() && 
          'managedByParentId' in resource.data && 
          resource.data.managedByParentId == request.auth.uid) ||
         // Allow club owners/trainers to update clubIds only (for join request approval)
         (isAuthenticated() && 
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clubIds', 'updatedAt']));
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clubIds', 'updatedAt'])) ||
+        // Allow club owners/trainers to update role field (e.g., assign parent role)
+        // Restrict to non-admin roles for security
+        (isAuthenticated() && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'updatedAt']) &&
+         request.resource.data.role in ['user', 'parent', 'trainer', 'assistant']);
       
       // Users can delete their own account, admins can delete any (except other admins)
       // Parents can delete child subaccounts
