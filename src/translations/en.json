@@ -822,6 +822,7 @@
   "clubColon": "Club:",
   "teamColon": "Team:",
   "approve": "Approve",
+  "deny": "Deny",
   "totalPending": "Total Pending:",
   "trainerStatistics": "Trainer Statistics",
   "searchTrainersByNameOrEmail": "Search trainers by name or email...",

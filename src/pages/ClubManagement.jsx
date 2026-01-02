@@ -1516,7 +1516,7 @@ const filteredOrderResponses = useMemo(() => {
 
         {/* Club selector */}
         <div className="mb-2 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-          <label className="block mb-1 text-light/80 font-medium">{t('clubmgmt.selectclub')}</label>
+          <label className="block mb-1 text-light/80 font-medium">{t('clubmgmt.selectClub')}</label>
           <select
             value={selectedClubId}
             onChange={e => setSelectedClubId(e.target.value)}
