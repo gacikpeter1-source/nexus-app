@@ -90,10 +90,14 @@ service cloud.firestore {
       
       // Users can update their own profile, admins can update any
       // Parents can update their child subaccounts
+      // ✅ FIX: Club owners/trainers can update clubIds when approving join requests
       allow update: if isOwner(userId) || isAdmin() ||
         (isAuthenticated() && 
          'managedByParentId' in resource.data && 
-         resource.data.managedByParentId == request.auth.uid);
+         resource.data.managedByParentId == request.auth.uid) ||
+        // Allow club owners/trainers to update clubIds only (for join request approval)
+        (isAuthenticated() && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clubIds', 'updatedAt']));
       
       // Users can delete their own account, admins can delete any (except other admins)
       // Parents can delete child subaccounts
@@ -240,7 +244,11 @@ service cloud.firestore {
       // Authenticated users can create requests
       allow create: if isAuthenticated();
       
-      // Request creator and club owners/trainers can read
+      // ✅ FIX: Allow list/query operations for trainers to see pending requests
+      // This is needed for getPendingRequests() function in PendingRequests page
+      allow list: if isAuthenticated();
+      
+      // Request creator and club owners/trainers can read individual documents
       allow read: if isAuthenticated() && (
         isAdmin() ||
         resource.data.userId == request.auth.uid ||
