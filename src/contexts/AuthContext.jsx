@@ -51,12 +51,15 @@ export const AuthProvider = ({ children }) => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
-      // Send verification email with static HTML success page
-      // Send verification email with continue URL to redirect back to login
+      // Send verification email
+      // Firebase will use the action URL configured in Firebase Console
+      // The continue URL will redirect user after verification
       await sendEmailVerification(userCredential.user, {
-        url: 'https://nexus-app-c69da.web.app/login',
+        url: 'https://nexus-app-tau.vercel.app/login',
         handleCodeInApp: false
       });
+      
+      console.log('✅ Verification email sent to:', email);
 
       const userData = {
         email: email.toLowerCase(),
@@ -118,10 +121,11 @@ export const AuthProvider = ({ children }) => {
         throw new Error('User data not found');
       }
 
-      // Track login timestamps
+      // Track login timestamps and update emailVerified status in Firestore
       const now = new Date().toISOString();
       const loginUpdates = {
-        lastLoginAt: now
+        lastLoginAt: now,
+        emailVerified: userCredential.user.emailVerified // ⚡ Sync verification status from Firebase Auth to Firestore
       };
       try {
         await setUserCustomClaims(userCredential.user.uid, userDoc.role, userDoc.isSuperAdmin);
@@ -220,6 +224,12 @@ export const AuthProvider = ({ children }) => {
           const userDoc = await getUser(firebaseUser.uid);
           
           if (userDoc) {
+            // ⚡ Sync emailVerified status from Firebase Auth to Firestore if different
+            if (userDoc.emailVerified !== firebaseUser.emailVerified) {
+              console.log('🔄 Syncing emailVerified status to Firestore:', firebaseUser.emailVerified);
+              await updateUser(firebaseUser.uid, { emailVerified: firebaseUser.emailVerified });
+            }
+            
             const userData = { 
               ...userDoc, 
               id: firebaseUser.uid,
@@ -357,35 +367,63 @@ export const AuthProvider = ({ children }) => {
   // Resend verification email
   const resendVerificationEmail = async (email = null, password = null) => {
     try {
+      console.log('📧 Resending verification email...');
       let userToVerify = auth.currentUser;
       let needsSignOut = false;
       
       // If email and password provided, sign in temporarily to send verification
       if (email && password && !auth.currentUser) {
+        console.log('🔐 Signing in temporarily to send verification...');
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         userToVerify = userCredential.user;
         needsSignOut = true;
+        console.log('✅ Temporary sign-in successful');
       }
       
       if (!userToVerify) {
         throw new Error('No user to send verification to');
       }
       
+      console.log('📬 Sending verification email to:', userToVerify.email);
+      console.log('📬 Email already verified?', userToVerify.emailVerified);
+      
+      if (userToVerify.emailVerified) {
+        console.log('⚠️ Email is already verified!');
+        if (needsSignOut) await signOut(auth);
+        return { ok: false, message: 'Your email is already verified! You can login now.' };
+      }
+      
       // Send verification email with continue URL to redirect back to login
       await sendEmailVerification(userToVerify, {
-        url: 'https://nexus-app-c69da.web.app/login',
+        url: 'https://nexus-app-tau.vercel.app/login',
         handleCodeInApp: false
       });
+      
+      console.log('✅ Verification email sent successfully!');
       
       // Sign out if we signed in temporarily
       if (needsSignOut) {
         await signOut(auth);
       }
       
-      return { ok: true, message: 'Verification email sent! Please check your inbox.' };
+      return { ok: true, message: 'Verification email sent! Please check your inbox (and spam folder).' };
     } catch (error) {
-      console.error('Resend verification error:', error);
-      return { ok: false, message: 'Failed to send verification email. Please try again.' };
+      console.error('❌ Resend verification error:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      
+      let message = 'Failed to send verification email. ';
+      if (error.code === 'auth/too-many-requests') {
+        message = 'Too many requests. Please wait a few minutes before trying again.';
+      } else if (error.code === 'auth/user-not-found') {
+        message = 'Account not found. Please register first.';
+      } else if (error.code === 'auth/wrong-password') {
+        message = 'Incorrect password.';
+      } else {
+        message += error.message;
+      }
+      
+      return { ok: false, message };
     }
   };
 
