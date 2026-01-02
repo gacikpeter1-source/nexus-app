@@ -1927,155 +1927,205 @@ const filteredOrderResponses = useMemo(() => {
               </select>
             </div>
 
-            {/* Members Table - Mobile Optimized */}
-            <div className="overflow-x-auto bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-1">
+            {/* Members Cards - Card-Based Layout */}
+            <div className="space-y-3">
               {loading ? (
                 <div className="py-8 text-center text-light/60">Loading members...</div>
               ) : filteredMembers.length === 0 ? (
                 <div className="py-8 text-center text-light/40">{t('clubmgmt.noMembersFound')}</div>
               ) : (
-                <table className="w-full min-w-[500px]">
-                  <thead>
-                    <tr className="border-b border-white/10">
-                      <th className="px-1 md:px-3 py-2 text-left text-light font-semibold text-xs md:text-sm">{t('clubmgmt.username')}</th>
-                      <th className="px-1 md:px-3 py-2 text-left text-light font-semibold text-xs md:text-sm hidden sm:table-cell">{t('clubmgmt.email')}</th>
-                      <th className="px-1 md:px-3 py-2 text-left text-light font-semibold text-xs md:text-sm">{t('clubmgmt.clubRole')}</th>
-                      <th className="px-1 md:px-3 py-2 text-left text-light font-semibold text-xs md:text-sm hidden lg:table-cell">{t('clubmgmt.userRole')}</th>
-                      <th className="px-1 md:px-3 py-2 text-left text-light font-semibold text-xs md:text-sm hidden md:table-cell">{t('nav.teams')}</th>
-                      <th className="px-1 md:px-3 py-2 text-left text-light font-semibold text-xs md:text-sm">{t('clubmgmt.actions')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredMembers.map(m => (
-                      <tr
-                        key={m.id}
-                        onClick={() => setSelectedMemberId(m.id)}
-                        className={`cursor-pointer border-b border-white/5 transition-colors ${
-                          m.id === selectedMemberId ? 'bg-primary/10' : 'hover:bg-white/5'
-                        }`}
-                      >
-                        <td className="px-1 md:px-3 py-2 text-light text-xs md:text-sm">
-                          <div className="max-w-[100px] md:max-w-none truncate">{m.username}</div>
-                        </td>
-                        <td className="px-1 md:px-3 py-2 text-light text-xs md:text-sm hidden sm:table-cell">
-                          <div className="max-w-[120px] md:max-w-none truncate">{m.email}</div>
-                        </td>
-                        <td className="px-1 md:px-3 py-2 text-light">
-                          <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] md:text-xs font-medium ${
-                            m.clubRole === 'trainer' ? 'bg-primary/20 text-primary' :
-                            m.clubRole === 'assistant' ? 'bg-blue-500/20 text-blue-300' :
-                            'bg-white/10 text-light/70'
-                          }`}>
-                            {m.clubRole}
-                          </span>
-                        </td>
-                        <td className="px-1 md:px-3 py-2 text-light hidden lg:table-cell">
-                          <div className="flex items-center gap-1">
-                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] md:text-xs font-medium ${
-                              m.userRole === 'admin' ? 'bg-red-500/20 text-red-300' :
-                              m.userRole === 'parent' ? 'bg-purple-500/20 text-purple-300' :
-                              'bg-white/10 text-light/70'
-                            }`}>
-                              {m.userRole === 'parent' ? '👨‍👩‍👧 ' : ''}{m.userRole}
-                            </span>
-                            {/* Remove Parent Role Button */}
-                            {m.userRole === 'parent' && isClubManager(clubs.find(c => c.id === selectedClubId)) && (
-                              <button
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  if (confirm(`Remove parent role from ${m.username}?`)) {
-                                    handleChangeRole(m.id, 'user');
-                                  }
-                                }}
-                                className="text-red-400 hover:text-red-300 text-xs ml-1"
-                                title="Remove parent role"
-                              >
-                                ×
-                              </button>
-                            )}
+                filteredMembers.map(m => {
+                  // Get user initials for avatar
+                  const getInitials = () => {
+                    return m.username
+                      .split(' ')
+                      .map(n => n[0])
+                      .join('')
+                      .toUpperCase()
+                      .slice(0, 2);
+                  };
+
+                  // Role-based colors (like the screenshot)
+                  const getRoleColors = () => {
+                    if (m.clubRole === 'trainer') {
+                      return {
+                        bg: 'from-purple-600 to-purple-700',
+                        bgSolid: 'bg-purple-600',
+                        text: 'text-white',
+                        label: 'TRAINER'
+                      };
+                    } else if (m.clubRole === 'assistant') {
+                      return {
+                        bg: 'from-teal-600 to-teal-700',
+                        bgSolid: 'bg-teal-600',
+                        text: 'text-white',
+                        label: 'ASSISTANT'
+                      };
+                    } else if (m.userRole === 'parent') {
+                      return {
+                        bg: 'from-pink-600 to-pink-700',
+                        bgSolid: 'bg-pink-600',
+                        text: 'text-white',
+                        label: 'PARENT'
+                      };
+                    } else {
+                      return {
+                        bg: 'from-green-600 to-green-700',
+                        bgSolid: 'bg-green-600',
+                        text: 'text-white',
+                        label: 'MEMBER'
+                      };
+                    }
+                  };
+
+                  const colors = getRoleColors();
+
+                  return (
+                    <div
+                      key={m.id}
+                      className={`relative bg-gradient-to-r ${colors.bg} rounded-xl shadow-lg overflow-hidden transform transition-all hover:scale-[1.02] hover:shadow-xl ${
+                        m.id === selectedMemberId ? 'ring-4 ring-white/50' : ''
+                      }`}
+                    >
+                      <div className="flex items-stretch">
+                        {/* LEFT: User Avatar */}
+                        <div className="flex-shrink-0 w-24 md:w-32 bg-white/10 flex items-center justify-center">
+                          <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-white flex items-center justify-center shadow-lg">
+                            <div 
+                              className="text-2xl md:text-3xl font-black"
+                              style={{ 
+                                background: `linear-gradient(135deg, ${colors.bgSolid.replace('bg-', '')} 0%, #1e293b 100%)`,
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                                backgroundClip: 'text'
+                              }}
+                            >
+                              {getInitials()}
+                            </div>
                           </div>
-                        </td>
-                        <td className="px-1 md:px-3 py-2 text-light hidden md:table-cell">
-                          {m.teamNames && m.teamNames.length > 0 ? (
-                            <div className="flex flex-wrap gap-1 max-w-[150px] lg:max-w-none">
-                              {m.teamNames.map((tn, idx) => (
-                                <span
-                                  key={`${m.id}-t-${idx}`}
-                                  className="inline-flex items-center gap-1 bg-white/5 px-1.5 py-0.5 rounded text-[10px] md:text-xs"
-                                >
-                                  <span 
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      navigate(`/team/${selectedClubId}/${m.teamIds[idx]}`);
-                                    }}
-                                    className="cursor-pointer hover:text-primary transition-colors truncate max-w-[60px] md:max-w-none"
+                        </div>
+
+                        {/* RIGHT: Content */}
+                        <div className="flex-1 p-3 md:p-4 flex flex-col justify-between">
+                          {/* Top Section */}
+                          <div>
+                            {/* Role Label */}
+                            <div className="inline-block px-2 py-0.5 bg-white/20 rounded text-[10px] md:text-xs font-bold text-white mb-2 uppercase">
+                              {colors.label}
+                            </div>
+
+                            {/* Username */}
+                            <h3 className="text-white font-bold text-base md:text-lg mb-1 truncate">
+                              {m.username}
+                            </h3>
+
+                            {/* Email */}
+                            <p className="text-white/80 text-xs md:text-sm mb-2 truncate">
+                              {m.email}
+                            </p>
+
+                            {/* Teams */}
+                            {m.teamNames && m.teamNames.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mb-2">
+                                {m.teamNames.map((tn, idx) => (
+                                  <span
+                                    key={`${m.id}-t-${idx}`}
+                                    className="inline-flex items-center gap-1 bg-white/20 px-2 py-0.5 rounded text-[10px] md:text-xs text-white"
                                   >
-                                    {tn}
+                                    <span 
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        navigate(`/team/${selectedClubId}/${m.teamIds[idx]}`);
+                                      }}
+                                      className="cursor-pointer hover:underline"
+                                    >
+                                      🏆 {tn}
+                                    </span>
+                                    <button
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        handleRemoveFromTeam(m.id, m.teamIds[idx]);
+                                      }}
+                                      className="text-white hover:text-red-200"
+                                    >
+                                      ×
+                                    </button>
                                   </span>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* User Role Badge */}
+                            {m.userRole === 'parent' && (
+                              <div className="flex items-center gap-1 mb-2">
+                                <span className="inline-block px-2 py-0.5 bg-white/30 rounded text-[10px] md:text-xs font-bold text-white">
+                                  👨‍👩‍👧 PARENT ACCOUNT
+                                </span>
+                                {isClubManager(clubs.find(c => c.id === selectedClubId)) && (
                                   <button
                                     onClick={e => {
                                       e.stopPropagation();
-                                      handleRemoveFromTeam(m.id, m.teamIds[idx]);
+                                      if (confirm(`Remove parent role from ${m.username}?`)) {
+                                        handleChangeRole(m.id, 'user');
+                                      }
                                     }}
-                                    className="text-red-400 hover:text-red-300 text-xs"
+                                    className="text-white/80 hover:text-red-200 text-xs"
+                                    title="Remove parent role"
                                   >
                                     ×
                                   </button>
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-light/50 text-[10px] md:text-xs">-</span>
-                          )}
-                        </td>
-                        <td className="px-1 md:px-3 py-2 text-light">
-                          {isClubManager(clubs.find(c => c.id === selectedClubId)) ? (
-                            <div className="flex flex-col gap-1">
-                              {/* Assign Button */}
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Bottom: Actions */}
+                          {isClubManager(clubs.find(c => c.id === selectedClubId)) && (
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {/* Assign to Teams */}
                               <button
                                 onClick={e => {
                                   e.stopPropagation();
                                   setUserToAssign(m);
                                   setShowTeamAssignModal(true);
                                 }}
-                                className="px-1.5 py-0.5 bg-white/10 text-light rounded text-[10px] md:text-xs hover:bg-white/15 whitespace-nowrap"
+                                className="px-3 py-1 bg-white/90 hover:bg-white text-gray-800 rounded-lg text-xs md:text-sm font-medium transition-all shadow-md"
                               >
-                                📌 Assign
+                                📌 Assign Team
                               </button>
-                              {/* User Role Dropdown - Compact */}
+
+                              {/* Change Role */}
                               <select
                                 value={m.role}
                                 onChange={e => {
                                   e.stopPropagation();
                                   handleChangeRole(m.id, e.target.value);
                                 }}
-                                className="bg-white/10 border border-white/20 rounded px-1.5 py-0.5 text-light text-[10px] md:text-xs focus:border-primary transition-all"
-                                title="User Role"
+                                className="px-2 py-1 bg-white/90 hover:bg-white text-gray-800 rounded-lg text-xs md:text-sm font-medium transition-all shadow-md border-0 focus:ring-2 focus:ring-white"
                               >
-                                <option value="user" className="bg-mid-dark">👤 User</option>
-                                <option value="parent" className="bg-mid-dark">👨‍👩‍👧 Parent</option>
-                                <option value="assistant" className="bg-mid-dark">👔 Assistant</option>
-                                <option value="trainer" className="bg-mid-dark">🏋️ Trainer</option>
+                                <option value="user" className="bg-white">👤 User</option>
+                                <option value="parent" className="bg-white">👨‍👩‍👧 Parent</option>
+                                <option value="assistant" className="bg-white">👔 Assistant</option>
+                                <option value="trainer" className="bg-white">🏋️ Trainer</option>
                               </select>
-                              {/* Remove Button */}
+
+                              {/* Remove */}
                               <button
                                 onClick={e => {
                                   e.stopPropagation();
                                   handleRemoveMember(m);
                                 }}
-                                className="bg-red-500 text-white px-1.5 py-0.5 rounded hover:bg-red-600 text-[10px] md:text-xs font-medium transition-all whitespace-nowrap"
+                                className="px-3 py-1 bg-red-500/90 hover:bg-red-500 text-white rounded-lg text-xs md:text-sm font-medium transition-all shadow-md"
                               >
                                 🗑️ Remove
                               </button>
                             </div>
-                          ) : (
-                            <span className="text-[10px] text-light/50">-</span>
                           )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
 
