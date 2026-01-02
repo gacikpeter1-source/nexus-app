@@ -151,6 +151,10 @@ const [orderSearchQuery, setOrderSearchQuery] = useState('');
   const [selectedTrainer, setSelectedTrainer] = useState(null);
   const [trainerSearchQuery, setTrainerSearchQuery] = useState('');
 
+  // Teams Modal state
+  const [showTeamsModal, setShowTeamsModal] = useState(false);
+  const [selectedMemberTeams, setSelectedMemberTeams] = useState(null);
+
   // Pending requests state
   const [pendingRequests, setPendingRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
@@ -1928,7 +1932,7 @@ const filteredOrderResponses = useMemo(() => {
             </div>
 
             {/* Members Cards - Card-Based Layout */}
-            <div className="space-y-3">
+            <div className="space-y-2">
               {loading ? (
                 <div className="py-8 text-center text-light/60">Loading members...</div>
               ) : filteredMembers.length === 0 ? (
@@ -1945,35 +1949,39 @@ const filteredOrderResponses = useMemo(() => {
                       .slice(0, 2);
                   };
 
-                  // Role-based colors (like the screenshot)
+                  // Role-based dark colors (matching app theme)
                   const getRoleColors = () => {
                     if (m.clubRole === 'trainer') {
                       return {
-                        bg: 'from-purple-600 to-purple-700',
-                        bgSolid: 'bg-purple-600',
-                        text: 'text-white',
-                        label: 'TRAINER'
+                        border: 'border-primary/30',
+                        bg: 'bg-primary/10',
+                        label: 'Trainer',
+                        labelBg: 'bg-primary/20',
+                        labelText: 'text-primary'
                       };
                     } else if (m.clubRole === 'assistant') {
                       return {
-                        bg: 'from-teal-600 to-teal-700',
-                        bgSolid: 'bg-teal-600',
-                        text: 'text-white',
-                        label: 'ASSISTANT'
+                        border: 'border-blue-500/30',
+                        bg: 'bg-blue-500/10',
+                        label: 'Assistant',
+                        labelBg: 'bg-blue-500/20',
+                        labelText: 'text-blue-300'
                       };
                     } else if (m.userRole === 'parent') {
                       return {
-                        bg: 'from-pink-600 to-pink-700',
-                        bgSolid: 'bg-pink-600',
-                        text: 'text-white',
-                        label: 'PARENT'
+                        border: 'border-purple-500/30',
+                        bg: 'bg-purple-500/10',
+                        label: 'Parent',
+                        labelBg: 'bg-purple-500/20',
+                        labelText: 'text-purple-300'
                       };
                     } else {
                       return {
-                        bg: 'from-green-600 to-green-700',
-                        bgSolid: 'bg-green-600',
-                        text: 'text-white',
-                        label: 'MEMBER'
+                        border: 'border-white/10',
+                        bg: 'bg-white/5',
+                        label: 'Member',
+                        labelBg: 'bg-white/10',
+                        labelText: 'text-light/70'
                       };
                     }
                   };
@@ -1983,145 +1991,109 @@ const filteredOrderResponses = useMemo(() => {
                   return (
                     <div
                       key={m.id}
-                      className={`relative bg-gradient-to-r ${colors.bg} rounded-xl shadow-lg overflow-hidden transform transition-all hover:scale-[1.02] hover:shadow-xl ${
-                        m.id === selectedMemberId ? 'ring-4 ring-white/50' : ''
+                      className={`relative ${colors.bg} backdrop-blur-sm border ${colors.border} rounded-lg overflow-hidden transition-all hover:bg-white/10 ${
+                        m.id === selectedMemberId ? 'ring-2 ring-primary' : ''
                       }`}
                     >
-                      <div className="flex items-stretch">
-                        {/* LEFT: User Avatar */}
-                        <div className="flex-shrink-0 w-24 md:w-32 bg-white/10 flex items-center justify-center">
-                          <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-white flex items-center justify-center shadow-lg">
-                            <div 
-                              className="text-2xl md:text-3xl font-black"
-                              style={{ 
-                                background: `linear-gradient(135deg, ${colors.bgSolid.replace('bg-', '')} 0%, #1e293b 100%)`,
-                                WebkitBackgroundClip: 'text',
-                                WebkitTextFillColor: 'transparent',
-                                backgroundClip: 'text'
-                              }}
-                            >
+                      <div className="flex items-center gap-3 p-2 md:p-3">
+                        {/* LEFT: User Avatar - FIXED SIZE */}
+                        <div className="flex-shrink-0">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center border-2 border-white/20">
+                            <div className="text-lg font-black text-primary">
                               {getInitials()}
                             </div>
                           </div>
                         </div>
 
-                        {/* RIGHT: Content */}
-                        <div className="flex-1 p-3 md:p-4 flex flex-col justify-between">
-                          {/* Top Section */}
-                          <div>
-                            {/* Role Label */}
-                            <div className="inline-block px-2 py-0.5 bg-white/20 rounded text-[10px] md:text-xs font-bold text-white mb-2 uppercase">
+                        {/* MIDDLE: User Info */}
+                        <div className="flex-1 min-w-0">
+                          {/* Role Label + User Role */}
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`inline-block px-2 py-0.5 ${colors.labelBg} ${colors.labelText} rounded text-[10px] font-semibold uppercase`}>
                               {colors.label}
-                            </div>
-
-                            {/* Username */}
-                            <h3 className="text-white font-bold text-base md:text-lg mb-1 truncate">
-                              {m.username}
-                            </h3>
-
-                            {/* Email */}
-                            <p className="text-white/80 text-xs md:text-sm mb-2 truncate">
-                              {m.email}
-                            </p>
-
-                            {/* Teams */}
-                            {m.teamNames && m.teamNames.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mb-2">
-                                {m.teamNames.map((tn, idx) => (
-                                  <span
-                                    key={`${m.id}-t-${idx}`}
-                                    className="inline-flex items-center gap-1 bg-white/20 px-2 py-0.5 rounded text-[10px] md:text-xs text-white"
-                                  >
-                                    <span 
-                                      onClick={e => {
-                                        e.stopPropagation();
-                                        navigate(`/team/${selectedClubId}/${m.teamIds[idx]}`);
-                                      }}
-                                      className="cursor-pointer hover:underline"
-                                    >
-                                      🏆 {tn}
-                                    </span>
-                                    <button
-                                      onClick={e => {
-                                        e.stopPropagation();
-                                        handleRemoveFromTeam(m.id, m.teamIds[idx]);
-                                      }}
-                                      className="text-white hover:text-red-200"
-                                    >
-                                      ×
-                                    </button>
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-
-                            {/* User Role Badge */}
+                            </span>
                             {m.userRole === 'parent' && (
-                              <div className="flex items-center gap-1 mb-2">
-                                <span className="inline-block px-2 py-0.5 bg-white/30 rounded text-[10px] md:text-xs font-bold text-white">
-                                  👨‍👩‍👧 PARENT ACCOUNT
-                                </span>
-                                {isClubManager(clubs.find(c => c.id === selectedClubId)) && (
-                                  <button
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      if (confirm(`Remove parent role from ${m.username}?`)) {
-                                        handleChangeRole(m.id, 'user');
-                                      }
-                                    }}
-                                    className="text-white/80 hover:text-red-200 text-xs"
-                                    title="Remove parent role"
-                                  >
-                                    ×
-                                  </button>
-                                )}
-                              </div>
+                              <span className="inline-block px-2 py-0.5 bg-purple-500/20 text-purple-300 rounded text-[10px] font-semibold">
+                                👨‍👩‍👧 Parent
+                              </span>
                             )}
                           </div>
 
-                          {/* Bottom: Actions */}
-                          {isClubManager(clubs.find(c => c.id === selectedClubId)) && (
-                            <div className="flex flex-wrap gap-2 mt-2">
-                              {/* Assign to Teams */}
-                              <button
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  setUserToAssign(m);
-                                  setShowTeamAssignModal(true);
-                                }}
-                                className="px-3 py-1 bg-white/90 hover:bg-white text-gray-800 rounded-lg text-xs md:text-sm font-medium transition-all shadow-md"
-                              >
-                                📌 Assign Team
-                              </button>
+                          {/* Username */}
+                          <h3 className="text-light font-semibold text-sm md:text-base truncate">
+                            {m.username}
+                          </h3>
 
-                              {/* Change Role */}
-                              <select
-                                value={m.role}
-                                onChange={e => {
-                                  e.stopPropagation();
-                                  handleChangeRole(m.id, e.target.value);
-                                }}
-                                className="px-2 py-1 bg-white/90 hover:bg-white text-gray-800 rounded-lg text-xs md:text-sm font-medium transition-all shadow-md border-0 focus:ring-2 focus:ring-white"
-                              >
-                                <option value="user" className="bg-white">👤 User</option>
-                                <option value="parent" className="bg-white">👨‍👩‍👧 Parent</option>
-                                <option value="assistant" className="bg-white">👔 Assistant</option>
-                                <option value="trainer" className="bg-white">🏋️ Trainer</option>
-                              </select>
+                          {/* Email */}
+                          <p className="text-light/60 text-xs truncate">
+                            {m.email}
+                          </p>
 
-                              {/* Remove */}
-                              <button
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  handleRemoveMember(m);
-                                }}
-                                className="px-3 py-1 bg-red-500/90 hover:bg-red-500 text-white rounded-lg text-xs md:text-sm font-medium transition-all shadow-md"
-                              >
-                                🗑️ Remove
-                              </button>
+                          {/* Club Name (Optional) */}
+                          {(() => {
+                            const club = clubs.find(c => c.id === selectedClubId);
+                            return club ? (
+                              <p className="text-light/40 text-[10px] mt-0.5">
+                                {club.name}
+                              </p>
+                            ) : null;
+                          })()}
+
+                          {/* Teams - Clickable if multiple */}
+                          {m.teamNames && m.teamNames.length > 0 && (
+                            <div className="mt-1">
+                              {m.teamNames.length === 1 ? (
+                                <span className="inline-block text-[10px] text-light/50">
+                                  Team: {m.teamNames[0]}
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    setSelectedMemberTeams(m);
+                                    setShowTeamsModal(true);
+                                  }}
+                                  className="text-[10px] text-accent hover:text-accent/80 underline"
+                                >
+                                  Teams: {m.teamNames.length} team{m.teamNames.length > 1 ? 's' : ''}
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
+
+                        {/* RIGHT: Actions Dropdown */}
+                        {isClubManager(clubs.find(c => c.id === selectedClubId)) && (
+                          <div className="flex-shrink-0">
+                            <select
+                              onChange={e => {
+                                e.stopPropagation();
+                                const action = e.target.value;
+                                if (action === 'assign') {
+                                  setUserToAssign(m);
+                                  setShowTeamAssignModal(true);
+                                } else if (action === 'user' || action === 'parent' || action === 'assistant' || action === 'trainer') {
+                                  handleChangeRole(m.id, action);
+                                } else if (action === 'remove') {
+                                  handleRemoveMember(m);
+                                }
+                                e.target.value = ''; // Reset dropdown
+                              }}
+                              className="px-3 py-2 bg-white/10 hover:bg-white/15 border border-white/20 text-light rounded-lg text-xs font-medium transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 cursor-pointer"
+                              defaultValue=""
+                            >
+                              <option value="" disabled className="bg-mid-dark">Action</option>
+                              <option value="assign" className="bg-mid-dark">📌 Assign to Team</option>
+                              <option disabled className="bg-mid-dark">───────────</option>
+                              <option value="user" className="bg-mid-dark">👤 Set as User</option>
+                              <option value="parent" className="bg-mid-dark">👨‍👩‍👧 Set as Parent</option>
+                              <option value="assistant" className="bg-mid-dark">👔 Set as Assistant</option>
+                              <option value="trainer" className="bg-mid-dark">🏋️ Set as Trainer</option>
+                              <option disabled className="bg-mid-dark">───────────</option>
+                              <option value="remove" className="bg-mid-dark">🗑️ Remove User</option>
+                            </select>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -3538,6 +3510,103 @@ const filteredOrderResponses = useMemo(() => {
                 Upload
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Teams List Modal */}
+      {showTeamsModal && selectedMemberTeams && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-md w-full">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-title text-xl text-light">
+                {selectedMemberTeams.username}'s Teams
+              </h3>
+              <button
+                onClick={() => {
+                  setShowTeamsModal(false);
+                  setSelectedMemberTeams(null);
+                }}
+                className="text-light/60 hover:text-light transition-colors text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+              {selectedMemberTeams.teamNames && selectedMemberTeams.teamNames.length > 0 ? (
+                selectedMemberTeams.teamNames.map((teamName, idx) => {
+                  const teamId = selectedMemberTeams.teamIds[idx];
+                  return (
+                    <div
+                      key={`${selectedMemberTeams.id}-team-${idx}`}
+                      className="bg-white/5 border border-white/10 rounded-lg p-3 hover:bg-white/10 transition-all"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <h4 className="text-light font-semibold text-sm">
+                            🏆 {teamName}
+                          </h4>
+                          <p className="text-light/50 text-xs mt-1">
+                            {(() => {
+                              const club = clubs.find(c => c.id === selectedClubId);
+                              return club ? club.name : '';
+                            })()}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              navigate(`/team/${selectedClubId}/${teamId}`);
+                              setShowTeamsModal(false);
+                            }}
+                            className="px-3 py-1 bg-primary/20 hover:bg-primary/30 text-primary rounded text-xs font-medium transition-all"
+                          >
+                            View
+                          </button>
+                          {isClubManager(clubs.find(c => c.id === selectedClubId)) && (
+                            <button
+                              onClick={() => {
+                                if (confirm(`Remove ${selectedMemberTeams.username} from ${teamName}?`)) {
+                                  handleRemoveFromTeam(selectedMemberTeams.id, teamId);
+                                  // Update local state
+                                  const updatedTeamNames = selectedMemberTeams.teamNames.filter((_, i) => i !== idx);
+                                  const updatedTeamIds = selectedMemberTeams.teamIds.filter((_, i) => i !== idx);
+                                  if (updatedTeamNames.length === 0) {
+                                    setShowTeamsModal(false);
+                                  } else {
+                                    setSelectedMemberTeams({
+                                      ...selectedMemberTeams,
+                                      teamNames: updatedTeamNames,
+                                      teamIds: updatedTeamIds
+                                    });
+                                  }
+                                }
+                              }}
+                              className="px-3 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded text-xs font-medium transition-all"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-center text-light/50 py-4">No teams</p>
+              )}
+            </div>
+
+            <button
+              onClick={() => {
+                setShowTeamsModal(false);
+                setSelectedMemberTeams(null);
+              }}
+              className="w-full mt-4 px-4 py-2 bg-white/10 hover:bg-white/15 text-light rounded-lg font-medium transition-all"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}
