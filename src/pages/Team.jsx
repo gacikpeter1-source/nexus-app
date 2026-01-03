@@ -40,7 +40,7 @@ export default function Team() {
   const [orderResponseForm, setOrderResponseForm] = useState({});
   const [respondingToOrder, setRespondingToOrder] = useState(false);  
   const [showOrdersDropdown, setShowOrdersDropdown] = useState(false);
-  const [teamChat, setTeamChat] = useState(null);
+  const [teamChats, setTeamChats] = useState([]);
   
   
   // Attendance state
@@ -209,20 +209,19 @@ async function handleSubmitOrderResponse(status) {
 
 // Load team chat
 useEffect(() => {
-  const loadTeamChat = async () => {
+  const loadTeamChats = async () => {
     if (!team) return;
     
     try {
       const chats = await getTeamChats(team.id);
-      if (chats.length > 0) {
-        setTeamChat(chats[0]); // Use first team chat
-      }
+      setTeamChats(chats || []);
     } catch (error) {
-      console.error('Error loading team chat:', error);
+      console.error('Error loading team chats:', error);
+      setTeamChats([]);
     }
   };
 
-  loadTeamChat();
+  loadTeamChats();
 }, [team]);
 
 // Load attendance when Attendance tab is active
@@ -264,11 +263,50 @@ const handleCreateTeamChat = async () => {
       ],
     });
     
+    // Reload chats to show the new one
+    const chats = await getTeamChats(team.id);
+    setTeamChats(chats || []);
+    
     // Navigate to the new chat
     navigate(`/chat/${chatId}`);
   } catch (error) {
     console.error('Error creating team chat:', error);
     alert('Failed to create team chat');
+  }
+};
+
+// Function to create event-specific chat
+const handleCreateEventChat = async (event) => {
+  try {
+    // Check if chat already exists for this event
+    const existingChat = teamChats.find(chat => chat.eventId === event.id);
+    if (existingChat) {
+      navigate(`/chat/${existingChat.id}`);
+      return;
+    }
+
+    const chatId = await createChat({
+      title: `${event.title} - Event Chat`,
+      clubId: clubId,
+      teamId: team.id,
+      eventId: event.id,
+      createdBy: user.id,
+      members: [
+        ...team.trainers,
+        ...team.assistants,
+        ...team.members
+      ],
+    });
+    
+    // Reload chats to show the new one
+    const chats = await getTeamChats(team.id);
+    setTeamChats(chats || []);
+    
+    // Navigate to the new chat
+    navigate(`/chat/${chatId}`);
+  } catch (error) {
+    console.error('Error creating event chat:', error);
+    alert('Failed to create event chat');
   }
 };
 
@@ -646,68 +684,98 @@ const handleCreateTeamChat = async () => {
                     return (
                     <div
                       key={event.id || idx}
-                      onClick={() => navigate(`/event/${event.id}`)}
-                        className={`bg-white/5 border rounded-lg p-3 md:p-4 hover:bg-white/10 transition-all cursor-pointer group ${
-                          isAttending 
-                            ? 'border-green-500/50 bg-green-500/5 shadow-[0_0_10px_rgba(34,197,94,0.3)] hover:border-green-500/70' 
-                            : 'border-white/10 hover:border-primary/50'
-                        }`}
+                      className={`bg-white/5 border rounded-lg p-3 md:p-4 hover:bg-white/10 transition-all group ${
+                        isAttending 
+                          ? 'border-green-500/50 bg-green-500/5 shadow-[0_0_10px_rgba(34,197,94,0.3)] hover:border-green-500/70' 
+                          : 'border-white/10 hover:border-primary/50'
+                      }`}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-base md:text-xl flex-shrink-0">
-                              {event.type === 'training' ? '🏋️' : 
-                               event.type === 'match' || event.type === 'game' ? '⚽' :
-                               event.type === 'tournament' ? '🏆' :
-                               event.type === 'meeting' ? '💼' : '📅'}
-                            </span>
-                            <h3 className="font-semibold text-sm md:text-base text-light group-hover:text-primary transition-colors truncate">
-                              {event.title}
-                            </h3>
-                          </div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-xs md:text-sm text-light/60 capitalize">{event.type || 'Event'}</p>
-                            {isAttending && (
-                              <span className="px-2 py-0.5 bg-green-500/20 text-green-300 rounded text-xs font-medium">
-                                ✓ Registered
+                      <div 
+                        onClick={() => navigate(`/event/${event.id}`)}
+                        className="cursor-pointer"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-base md:text-xl flex-shrink-0">
+                                {event.type === 'training' ? '🏋️' : 
+                                 event.type === 'match' || event.type === 'game' ? '⚽' :
+                                 event.type === 'tournament' ? '🏆' :
+                                 event.type === 'meeting' ? '💼' : '📅'}
                               </span>
+                              <h3 className="font-semibold text-sm md:text-base text-light group-hover:text-primary transition-colors truncate">
+                                {event.title}
+                              </h3>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-xs md:text-sm text-light/60 capitalize">{event.type || 'Event'}</p>
+                              {isAttending && (
+                                <span className="px-2 py-0.5 bg-green-500/20 text-green-300 rounded text-xs font-medium">
+                                  ✓ Registered
+                                </span>
+                              )}
+                            </div>
+                            {event.location && (
+                              <p className="text-xs text-light/50 mt-1 truncate">📍 {event.location}</p>
                             )}
                           </div>
-                          {event.location && (
-                            <p className="text-xs text-light/50 mt-1 truncate">📍 {event.location}</p>
-                          )}
-                        </div>
-                        <div className="text-right space-y-1 flex-shrink-0">
-                          <div className="text-xs md:text-sm text-light/80 font-medium whitespace-nowrap">
-                            {new Date(event.date).toLocaleDateString('en-US', { 
-                              month: 'short', 
-                              day: 'numeric' 
-                            })}
+                          <div className="text-right space-y-1 flex-shrink-0">
+                            <div className="text-xs md:text-sm text-light/80 font-medium whitespace-nowrap">
+                              {new Date(event.date).toLocaleDateString('en-US', { 
+                                month: 'short', 
+                                day: 'numeric' 
+                              })}
+                            </div>
+                            {event.time && (
+                              <div className="text-xs text-light/60">{event.time}</div>
+                            )}
+                            {/* Attendance Count */}
+                            {(() => {
+                              const attendingCount = event.responses 
+                                ? Object.values(event.responses).filter(r => r.status === 'attending').length 
+                                : 0;
+                              const totalLimit = event.participantLimit || '∞';
+                              const isFull = event.participantLimit && attendingCount >= event.participantLimit;
+                              
+                              return (
+                                <div className={`inline-block px-1.5 md:px-2 py-0.5 rounded text-xs font-bold ${
+                                  isFull 
+                                    ? 'bg-red-500/20 text-red-300 border border-red-500/30' 
+                                    : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                                }`}>
+                                  {attendingCount}/{totalLimit}
                           </div>
-                          {event.time && (
-                            <div className="text-xs text-light/60">{event.time}</div>
-                          )}
-                          {/* Attendance Count */}
-                          {(() => {
-                            const attendingCount = event.responses 
-                              ? Object.values(event.responses).filter(r => r.status === 'attending').length 
-                              : 0;
-                            const totalLimit = event.participantLimit || '∞';
-                            const isFull = event.participantLimit && attendingCount >= event.participantLimit;
-                            
-                            return (
-                              <div className={`inline-block px-1.5 md:px-2 py-0.5 rounded text-xs font-bold ${
-                                isFull 
-                                  ? 'bg-red-500/20 text-red-300 border border-red-500/30' 
-                                  : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                              }`}>
-                                {attendingCount}/{totalLimit}
+                              );
+                            })()}
                         </div>
+                      </div>
+                      </div>
+                      
+                      {/* Event Chat Button */}
+                      <div className="mt-3 pt-3 border-t border-white/10">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCreateEventChat(event);
+                          }}
+                          className="w-full px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-primary/50 text-light text-xs rounded transition-all flex items-center justify-center gap-2"
+                        >
+                          {(() => {
+                            const eventChat = teamChats.find(chat => chat.eventId === event.id);
+                            return eventChat ? (
+                              <>
+                                <span>💬</span>
+                                <span>Open Event Chat</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>➕</span>
+                                <span>Create Event Chat</span>
+                              </>
                             );
                           })()}
+                        </button>
                       </div>
-                    </div>
                     </div>
                     );
                   })}
@@ -1074,23 +1142,83 @@ onUpdateTeamSettings={async (settings) => {
 
         {activeTab === 'chat' && (
           <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 md:p-6">
-            <h3 className="text-base md:text-xl font-bold text-light mb-3 md:mb-4">Team Chat</h3>
-            {teamChat ? (
-              <div className="space-y-3 md:space-y-4">
-                <p className="text-sm md:text-base text-light/60">
-                  This team has an active chat room
-                </p>
-                <button
-                  onClick={() => navigate(`/chat/${teamChat.id}`)}
-                  className="px-4 md:px-6 py-2 md:py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium text-sm md:text-base"
-                >
-                  Open Team Chat
-                </button>
+            <div className="flex items-center justify-between mb-4 md:mb-6">
+              <h3 className="text-base md:text-xl font-bold text-light">💬 Team Chats</h3>
+              <button
+                onClick={handleCreateTeamChat}
+                className="px-3 py-1.5 md:px-4 md:py-2 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium text-xs md:text-sm flex items-center gap-2"
+              >
+                <span>➕</span>
+                <span className="hidden sm:inline">Create Chat</span>
+              </button>
+            </div>
+            
+            {teamChats.length > 0 ? (
+              <div className="space-y-3">
+                {teamChats.map((chat) => {
+                  // Find event if this chat is event-related
+                  const relatedEvent = chat.eventId ? events.find(e => e.id === chat.eventId) : null;
+                  
+                  return (
+                    <div
+                      key={chat.id}
+                      onClick={() => navigate(`/chat/${chat.id}`)}
+                      className="bg-white/5 hover:bg-white/10 border border-white/10 hover:border-primary/50 rounded-lg p-3 md:p-4 cursor-pointer transition-all group"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          {/* Chat Title */}
+                          <h4 className="font-semibold text-light text-sm md:text-base mb-1 group-hover:text-primary transition-colors truncate">
+                            {chat.title}
+                          </h4>
+                          
+                          {/* Event Info (if event-related) */}
+                          {relatedEvent && (
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded border border-blue-500/30">
+                                📅 {relatedEvent.title}
+                              </span>
+                              <span className="text-xs text-light/50">
+                                {new Date(relatedEvent.date).toLocaleDateString()}
+                              </span>
+                            </div>
+                          )}
+                          
+                          {/* Last Message */}
+                          {chat.lastMessage && (
+                            <p className="text-xs md:text-sm text-light/60 truncate">
+                              {chat.lastMessage}
+                            </p>
+                          )}
+                          
+                          {/* Members Count & Last Activity */}
+                          <div className="flex items-center gap-3 mt-2 text-xs text-light/50">
+                            <span>👥 {chat.members?.length || 0} members</span>
+                            {chat.lastMessageAt && (
+                              <span>
+                                · {new Date(chat.lastMessageAt.toDate()).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Arrow Icon */}
+                        <div className="flex-shrink-0 text-light/40 group-hover:text-primary transition-colors">
+                          <span className="text-xl">→</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <div className="space-y-3 md:space-y-4">
-                <p className="text-sm md:text-base text-light/60">
-                  No team chat exists yet. Create one to start communicating with your team members.
+              <div className="text-center py-8 md:py-12">
+                <div className="text-4xl md:text-6xl mb-3 md:mb-4">💬</div>
+                <p className="text-sm md:text-base text-light/60 mb-4">
+                  No team chats exist yet
+                </p>
+                <p className="text-xs md:text-sm text-light/40 mb-4">
+                  Create a chat to start communicating with your team members
                 </p>
                 <button
                   onClick={handleCreateTeamChat}

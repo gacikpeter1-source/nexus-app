@@ -65,6 +65,7 @@ export const createChat = async (chatData) => {
       title,
       clubId = null,
       teamId = null,
+      eventId = null,
       createdBy,
       members = [],
     } = chatData;
@@ -86,6 +87,7 @@ export const createChat = async (chatData) => {
       title,
       clubId,
       teamId,
+      eventId,
       createdBy,
       members: allMembers, // Includes children AND their parents
       createdAt: serverTimestamp(),
