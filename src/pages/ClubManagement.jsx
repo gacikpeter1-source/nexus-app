@@ -464,10 +464,25 @@ useEffect(() => {
 
   // Close dropdown when clicking outside
   useEffect(() => {
-    const handleClickOutside = () => setTeamActionDropdown(null);
+    const handleClickOutside = (e) => {
+      // Don't close dropdown if clicking inside the dropdown itself or on a button inside it
+      const clickedElement = e.target;
+      const isInsideDropdown = clickedElement.closest('.team-action-dropdown');
+      const isActionButton = clickedElement.closest('.team-action-button');
+      
+      if (isInsideDropdown || isActionButton) {
+        return;
+      }
+      
+      setTeamActionDropdown(null);
+    };
+    
     if (teamActionDropdown) {
-      document.addEventListener('click', handleClickOutside);
-      return () => document.removeEventListener('click', handleClickOutside);
+      // Use capture phase and add a small delay to ensure button clicks register first
+      setTimeout(() => {
+        document.addEventListener('click', handleClickOutside, true);
+      }, 100);
+      return () => document.removeEventListener('click', handleClickOutside, true);
     }
   }, [teamActionDropdown]);
 
@@ -1952,6 +1967,7 @@ const filteredOrderResponses = useMemo(() => {
                                 {/* Dropdown Menu - Rendered via Portal */}
                                 {teamActionDropdown === team.id && createPortal(
                                   <div 
+                                    onMouseDown={(e) => e.stopPropagation()}
                                     onClick={(e) => e.stopPropagation()}
                                     style={{
                                       position: 'fixed',
@@ -1959,10 +1975,14 @@ const filteredOrderResponses = useMemo(() => {
                                       right: `${dropdownPosition.right}px`,
                                       zIndex: 9999
                                     }}
-                                    className="w-48 bg-mid-dark border border-white/20 rounded-lg shadow-xl"
+                                    className="team-action-dropdown w-48 bg-mid-dark border border-white/20 rounded-lg shadow-xl"
                                   >
                                     <button
-                                      onClick={() => {
+                                      type="button"
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
                                         setTeamActionDropdown(null);
                                         setTeamToRename(team);
                                         setRenameTeamName(team.name);
@@ -1974,7 +1994,11 @@ const filteredOrderResponses = useMemo(() => {
                                       <span>{t('clubmgmt.renameTeam')}</span>
                                     </button>
                                     <button
-                                      onClick={() => {
+                                      type="button"
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
                                         setTeamActionDropdown(null);
                                         openQuickAssignModal(team);
                                       }}
@@ -1984,18 +2008,26 @@ const filteredOrderResponses = useMemo(() => {
                                       <span>Assign User</span>
                                     </button>
                                     <button
-                                      onClick={() => {
+                                      type="button"
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
                                         setTeamActionDropdown(null);
                                         setTeamForRoleManagement(team);
                                         setShowManageTeamRolesModal(true);
                                       }}
-                                      className="w-full px-4 py-2 text-left text-light hover:bg-white/10 transition flex items-center gap-2"
+                                      className="w-full px-4 py-2 text-left text-light hover:bg-white/10 transition flex items-center gap-2 cursor-pointer"
                                     >
                                       <span>👥</span>
                                       <span>Manage Roles</span>
                                     </button>
                                     <button
-                                      onClick={() => {
+                                      type="button"
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
                                         setTeamActionDropdown(null);
                                         setTeamForUserRemoval(team);
                                         setShowRemoveUserFromTeamModal(true);
@@ -2006,11 +2038,15 @@ const filteredOrderResponses = useMemo(() => {
                                       <span>{t('clubmgmt.removeUser')}</span>
                                     </button>
                                     <button
-                                      onClick={() => {
+                                      type="button"
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setTeamActionDropdown(null);
                                         setSelectedTeamForLogo(team);
                                         setLogoUploadType('team');
                                         setShowLogoUpload(true);
-                                        setTeamActionDropdown(null);
                                       }}
                                       className="w-full px-4 py-2 text-left hover:bg-white/10 transition flex items-center gap-2"
                                     >
@@ -2019,7 +2055,11 @@ const filteredOrderResponses = useMemo(() => {
                                     </button>
                                     <div className="border-t border-white/10"></div>
                                     <button
-                                      onClick={() => {
+                                      type="button"
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
                                         setTeamActionDropdown(null);
                                         handleDeleteTeam(team.id);
                                       }}
