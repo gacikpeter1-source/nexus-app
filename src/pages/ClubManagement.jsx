@@ -114,6 +114,10 @@ export default function ClubManagement() {
   const [teamToRename, setTeamToRename] = useState(null);
   const [renameTeamName, setRenameTeamName] = useState('');
 
+  // Manage Team Roles modal state (for Assistants & Parents)
+  const [showManageTeamRolesModal, setShowManageTeamRolesModal] = useState(false);
+  const [teamForRoleManagement, setTeamForRoleManagement] = useState(null);
+
   // Team trainer filter
   const [teamTrainerFilter, setTeamTrainerFilter] = useState('');
 
@@ -254,14 +258,50 @@ const [orderSearchQuery, setOrderSearchQuery] = useState('');
       const members = uniqueMembers.map(m => {
         const u = allUsers.find(u => u.id === m.id) || {};
         const teams = club.teams || [];
-        const userTeamIds = teams.filter(team => (team.members || []).includes(m.id)).map(team => team.id);
-        const userTeamNames = teams.filter(team => (team.members || []).includes(m.id)).map(team => team.name);
+        
+        // Get all teams where user is a member (in any role)
+        const userTeamIds = teams.filter(team => 
+          (team.members || []).includes(m.id) ||
+          (team.trainers || []).includes(m.id) ||
+          (team.assistants || []).includes(m.id) ||
+          (team.parents || []).includes(m.id)
+        ).map(team => team.id);
+        
+        const userTeamNames = teams.filter(team => 
+          (team.members || []).includes(m.id) ||
+          (team.trainers || []).includes(m.id) ||
+          (team.assistants || []).includes(m.id) ||
+          (team.parents || []).includes(m.id)
+        ).map(team => team.name);
+        
+        // Determine displayed club role:
+        // 1. If in club.trainers → show "trainer" (club-wide)
+        // 2. Else if in ANY team.assistants → show "assistant" (team-specific)
+        // 3. Else → show "member"
+        let displayedClubRole = m.role; // Default from club arrays
+        
+        if (m.role !== 'trainer') {
+          // Check if user is assistant in ANY team
+          const isAssistantInAnyTeam = teams.some(team => 
+            (team.assistants || []).includes(m.id)
+          );
+          if (isAssistantInAnyTeam) {
+            displayedClubRole = 'assistant';
+          }
+        }
+        
+        // Check if user is parent in ANY team (team-specific parent role)
+        const isParentInAnyTeam = teams.some(team => 
+          (team.parents || []).includes(m.id)
+        );
+        
         return { 
           ...m, 
           username: u.username || '', 
           email: u.email || '', 
-          userRole: u.role || 'user', // Global user role (parent/admin/user)
-          clubRole: m.role, // Club role (trainer/assistant/user)
+          userRole: u.role || 'user', // Global user role (admin/user only - NOT parent anymore)
+          clubRole: displayedClubRole, // Displayed role (trainer club-wide, assistant team-specific, or member)
+          isParentInAnyTeam: isParentInAnyTeam, // NEW: team-specific parent flag
           teamIds: userTeamIds, 
           teamNames: userTeamNames 
         };
@@ -703,6 +743,90 @@ useEffect(() => {
     }
   };
 
+  // Toggle Assistant role for a team member
+  const toggleTeamAssistant = async (teamId, userId) => {
+    if (!selectedClubId || !teamId || !userId) return;
+
+    try {
+      const club = await getClub(selectedClubId);
+      if (!club) return;
+
+      const updatedTeams = (club.teams || []).map(team => {
+        if (team.id === teamId) {
+          const assistants = team.assistants || [];
+          const isCurrentlyAssistant = assistants.includes(userId);
+
+          return {
+            ...team,
+            assistants: isCurrentlyAssistant
+              ? assistants.filter(id => id !== userId)
+              : [...assistants, userId]
+          };
+        }
+        return team;
+      });
+
+      await updateClub(selectedClubId, { teams: updatedTeams });
+      
+      const team = updatedTeams.find(t => t.id === teamId);
+      const isNowAssistant = (team.assistants || []).includes(userId);
+      
+      showToast(
+        isNowAssistant 
+          ? 'User promoted to Assistant for this team' 
+          : 'User removed from Assistant role for this team',
+        'success'
+      );
+      
+      await loadClubData(selectedClubId);
+    } catch (error) {
+      console.error('Error toggling assistant role:', error);
+      showToast('Failed to update assistant role', 'error');
+    }
+  };
+
+  // Toggle Parent role for a team member
+  const toggleTeamParent = async (teamId, userId) => {
+    if (!selectedClubId || !teamId || !userId) return;
+
+    try {
+      const club = await getClub(selectedClubId);
+      if (!club) return;
+
+      const updatedTeams = (club.teams || []).map(team => {
+        if (team.id === teamId) {
+          const parents = team.parents || [];
+          const isCurrentlyParent = parents.includes(userId);
+
+          return {
+            ...team,
+            parents: isCurrentlyParent
+              ? parents.filter(id => id !== userId)
+              : [...parents, userId]
+          };
+        }
+        return team;
+      });
+
+      await updateClub(selectedClubId, { teams: updatedTeams });
+      
+      const team = updatedTeams.find(t => t.id === teamId);
+      const isNowParent = (team.parents || []).includes(userId);
+      
+      showToast(
+        isNowParent 
+          ? 'User assigned as Parent for this team' 
+          : 'User removed from Parent role for this team',
+        'success'
+      );
+      
+      await loadClubData(selectedClubId);
+    } catch (error) {
+      console.error('Error toggling parent role:', error);
+      showToast('Failed to update parent role', 'error');
+    }
+  };
+
   const handleDeleteTeam = async (teamId) => {
     if (!selectedClubId || !teamId) return;
 
@@ -804,7 +928,7 @@ useEffect(() => {
   const handleChangeRole = async (userId, newClubRole) => {
     if (!selectedClubId) return;
     
-    console.log('🔄 Changing CLUB role:', { userId, newClubRole, selectedClubId });
+    console.log('🔄 Changing CLUB-WIDE role:', { userId, newClubRole, selectedClubId });
     
     try {
       // Get fresh club data
@@ -814,34 +938,29 @@ useEffect(() => {
         return showToast(t('clubmgmt.clubNotFound'), 'error');
       }
 
-      // Remove user from all club role arrays first
+      // Remove user from club-level role arrays
+      // NOTE: We do NOT touch club.assistants - assistants are team-specific only!
       let updatedTrainers = (club.trainers || []).filter(id => id !== userId);
-      let updatedAssistants = (club.assistants || []).filter(id => id !== userId);
       let updatedMembers = (club.members || []).filter(id => id !== userId);
 
       // Add user to correct array based on new CLUB role
       if (newClubRole === 'trainer') {
         updatedTrainers.push(userId);
-        console.log('➕ Added to trainers array');
-      } else if (newClubRole === 'assistant') {
-        updatedAssistants.push(userId);
-        console.log('➕ Added to assistants array');
+        console.log('➕ Added to club-wide trainers array');
       } else {
         // 'user' or default goes to members
         updatedMembers.push(userId);
         console.log('➕ Added to members array');
       }
 
-      // Update club arrays ONLY (do NOT touch user's role field)
+      // Update club arrays (trainers and members only - NOT assistants)
       await updateClub(selectedClubId, {
         trainers: updatedTrainers,
-        assistants: updatedAssistants,
         members: updatedMembers
       });
-      console.log('✅ Club role arrays updated successfully');
+      console.log('✅ Club-wide role arrays updated successfully');
       
       // Send notification to user
-      const targetUser = await getUser(userId);
       await notifyRoleChanged(
         userId,
         selectedClubId,
@@ -1675,9 +1794,9 @@ const filteredOrderResponses = useMemo(() => {
               <div className="mb-6 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 overflow-visible">
                 <h2 className="font-title text-xl md:text-2xl text-light mb-4">Teams in this Club</h2>
                 
-                {/* Filter by Trainer/Assistant */}
+                {/* Filter by Trainer/Assistant/Parent */}
 <div className="mb-4">
-                  <label className="block text-sm font-medium text-light/80 mb-2">{t('clubmgmt.filterByTrainerAssistant')}</label>
+                  <label className="block text-sm font-medium text-light/80 mb-2">Filter by Role (Trainer / Assistant / Parent)</label>
                   <select
                     value={teamTrainerFilter}
                     onChange={e => setTeamTrainerFilter(e.target.value)}
@@ -1685,17 +1804,20 @@ const filteredOrderResponses = useMemo(() => {
                   >
                     <option value="" className="bg-mid-dark">{t('clubmgmt.allTeams')}</option>
                     {(() => {
-                      // Get unique trainers and assistants from all teams
+                      // Get unique trainers, assistants, and parents from all teams
                       const trainersSet = new Set();
                       const assistantsSet = new Set();
+                      const parentsSet = new Set();
                       
                       clubTeams.forEach(team => {
                         (team.trainers || []).forEach(id => trainersSet.add(id));
                         (team.assistants || []).forEach(id => assistantsSet.add(id));
+                        (team.parents || []).forEach(id => parentsSet.add(id));
                       });
 
                       const trainersList = [];
                       const assistantsList = [];
+                      const parentsList = [];
                       
                       // Get trainers
                       trainersSet.forEach(id => {
@@ -1710,6 +1832,14 @@ const filteredOrderResponses = useMemo(() => {
                         const member = clubMembers.find(m => m.id === id);
                         if (member && !trainersSet.has(id)) {
                           assistantsList.push(member);
+                        }
+                      });
+
+                      // Get parents
+                      parentsSet.forEach(id => {
+                        const member = clubMembers.find(m => m.id === id);
+                        if (member && !trainersSet.has(id) && !assistantsSet.has(id)) {
+                          parentsList.push(member);
                         }
                       });
 
@@ -1733,6 +1863,15 @@ const filteredOrderResponses = useMemo(() => {
                               ))}
                             </optgroup>
                           )}
+                          {parentsList.length > 0 && (
+                            <optgroup label="Parents" className="bg-mid-dark">
+                              {parentsList.map(m => (
+                                <option key={m.id} value={m.id} className="bg-mid-dark">
+                                  {m.username} - {m.email}
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
                         </>
                       );
                     })()}
@@ -1744,12 +1883,14 @@ const filteredOrderResponses = useMemo(() => {
                     .filter(t => {
                       if (!teamTrainerFilter) return true;
                       return (t.trainers || []).includes(teamTrainerFilter) || 
-                             (t.assistants || []).includes(teamTrainerFilter);
+                             (t.assistants || []).includes(teamTrainerFilter) ||
+                             (t.parents || []).includes(teamTrainerFilter);
                     })
                     .map(team => {
                       const memberCount = (team.members || []).length;
                       const trainerCount = (team.trainers || []).length;
                       const assistantCount = (team.assistants || []).length;
+                      const parentCount = (team.parents || []).length;
                       
                       return (
                         <div key={team.id} className="bg-white/5 border border-white/10 rounded-lg p-3 md:p-4 hover:bg-white/10 transition-all overflow-visible">
@@ -1773,6 +1914,10 @@ const filteredOrderResponses = useMemo(() => {
                                 <div className="flex items-center gap-1">
                                   <span>👨‍💼</span>
                                   <span>{assistantCount} assistant{assistantCount !== 1 ? 's' : ''}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span>👨‍👩‍👧</span>
+                                  <span>{parentCount} parent{parentCount !== 1 ? 's' : ''}</span>
                                 </div>
                               </div>
                             </div>
@@ -1837,6 +1982,17 @@ const filteredOrderResponses = useMemo(() => {
                                     >
                                       <span>➕</span>
                                       <span>Assign User</span>
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setTeamActionDropdown(null);
+                                        setTeamForRoleManagement(team);
+                                        setShowManageTeamRolesModal(true);
+                                      }}
+                                      className="w-full px-4 py-2 text-left text-light hover:bg-white/10 transition flex items-center gap-2"
+                                    >
+                                      <span>👥</span>
+                                      <span>Manage Roles</span>
                                     </button>
                                     <button
                                       onClick={() => {
@@ -1911,6 +2067,13 @@ const filteredOrderResponses = useMemo(() => {
               </select>
             </div>
 
+            {/* Role System Info */}
+            <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+              <p className="text-xs text-blue-300">
+                <strong>Role System:</strong> <span className="text-primary">Trainer</span> = club-wide access | <span className="text-blue-300">Assistant</span> & <span className="text-purple-300">Parent</span> = team-specific (managed per team in Teams section above)
+              </p>
+            </div>
+
             {/* Members Cards - Card-Based Layout */}
             <div className="space-y-2">
               {loading ? (
@@ -1980,12 +2143,12 @@ const filteredOrderResponses = useMemo(() => {
 
                         {/* MIDDLE: User Info */}
                         <div className="flex-1 min-w-0">
-                          {/* Role Label (Team Role + User Role if parent) */}
+                          {/* Role Label (Team Role + Team-Specific Parent if applicable) */}
                           <div className="flex items-center gap-2 mb-1">
                             <span className={`inline-block px-2 py-0.5 ${colors.labelBg} ${colors.labelText} rounded text-[10px] font-semibold uppercase`}>
                               {colors.label}
                             </span>
-                            {m.userRole === 'parent' && (
+                            {m.isParentInAnyTeam && (
                               <span className="inline-block px-2 py-0.5 bg-purple-500/20 text-purple-300 rounded text-[10px] font-semibold uppercase">
                                 Parent
                               </span>
@@ -2046,31 +2209,11 @@ const filteredOrderResponses = useMemo(() => {
                                   setUserToAssign(m);
                                   setShowTeamAssignModal(true);
                                 } else if (action === 'promote-trainer') {
+                                  // Promote to CLUB-WIDE trainer
                                   handleChangeRole(m.id, 'trainer');
-                                } else if (action === 'promote-assistant') {
-                                  handleChangeRole(m.id, 'assistant');
                                 } else if (action === 'demote-member') {
+                                  // Demote from club-wide trainer to member
                                   handleChangeRole(m.id, 'user');
-                                } else if (action === 'set-parent') {
-                                  // Update USER role (not club role)
-                                  try {
-                                    await updateUser(m.id, { role: 'parent' });
-                                    showToast('User role set to Parent', 'success');
-                                    await loadClubData(selectedClubId);
-                                  } catch (error) {
-                                    console.error('Error setting parent role:', error);
-                                    showToast('Failed to set parent role', 'error');
-                                  }
-                                } else if (action === 'remove-parent') {
-                                  // Remove parent role (set back to 'user')
-                                  try {
-                                    await updateUser(m.id, { role: 'user' });
-                                    showToast('Parent role removed', 'success');
-                                    await loadClubData(selectedClubId);
-                                  } catch (error) {
-                                    console.error('Error removing parent role:', error);
-                                    showToast('Failed to remove parent role', 'error');
-                                  }
                                 } else if (action === 'remove') {
                                   handleRemoveMember(m);
                                 }
@@ -2082,19 +2225,10 @@ const filteredOrderResponses = useMemo(() => {
                               <option value="" disabled className="bg-mid-dark">Action</option>
                               <option value="assign" className="bg-mid-dark">📌 Assign Team</option>
                               {m.clubRole !== 'trainer' && (
-                                <option value="promote-trainer" className="bg-mid-dark">↑ Trainer</option>
+                                <option value="promote-trainer" className="bg-mid-dark">↑ Club Trainer</option>
                               )}
-                              {m.clubRole !== 'assistant' && (
-                                <option value="promote-assistant" className="bg-mid-dark">↑ Assistant</option>
-                              )}
-                              {(m.clubRole === 'trainer' || m.clubRole === 'assistant') && (
+                              {m.clubRole === 'trainer' && (
                                 <option value="demote-member" className="bg-mid-dark">↓ Member</option>
-                              )}
-                              <option disabled className="bg-mid-dark">───</option>
-                              {m.userRole !== 'parent' ? (
-                                <option value="set-parent" className="bg-mid-dark">👨‍👩‍👧 Set Parent</option>
-                              ) : (
-                                <option value="remove-parent" className="bg-mid-dark">× Remove Parent</option>
                               )}
                               <option disabled className="bg-mid-dark">───</option>
                               <option value="remove" className="bg-mid-dark">🗑️ Remove</option>
@@ -3219,6 +3353,118 @@ const filteredOrderResponses = useMemo(() => {
                   setTeamToAssign(null);
                   setQuickAssignSearch('');
                   setQuickAssignMatches([]);
+                }}
+                className="flex-1 px-4 py-3 bg-white/10 text-light rounded-lg hover:bg-white/15 font-medium transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manage Team Roles Modal (Assistants & Parents) */}
+      {showManageTeamRolesModal && teamForRoleManagement && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-2xl font-bold text-light mb-2">
+              Manage Roles: {teamForRoleManagement.name}
+            </h3>
+            
+            <p className="text-light/70 text-sm mb-6">
+              Assign team-specific roles: <span className="text-blue-300">Assistant</span> & <span className="text-purple-300">Parent</span>
+            </p>
+
+            {/* Team Members List */}
+            <div className="space-y-3 mb-6">
+              {(() => {
+                // Get all members of this team (members + trainers + assistants + parents)
+                const teamMemberIds = new Set([
+                  ...(teamForRoleManagement.members || []),
+                  ...(teamForRoleManagement.trainers || []),
+                  ...(teamForRoleManagement.assistants || []),
+                  ...(teamForRoleManagement.parents || [])
+                ]);
+
+                const teamMembers = clubMembers.filter(m => teamMemberIds.has(m.id));
+
+                if (teamMembers.length === 0) {
+                  return (
+                    <p className="text-light/50 text-center py-4">No members in this team yet</p>
+                  );
+                }
+
+                return teamMembers.map(member => {
+                  const isAssistant = (teamForRoleManagement.assistants || []).includes(member.id);
+                  const isParent = (teamForRoleManagement.parents || []).includes(member.id);
+                  const isTrainer = (teamForRoleManagement.trainers || []).includes(member.id);
+
+                  return (
+                    <div
+                      key={member.id}
+                      className="bg-white/5 border border-white/10 rounded-lg p-4 hover:bg-white/8 transition"
+                    >
+                      <div className="flex items-center justify-between gap-4">
+                        {/* Member Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="font-semibold text-light truncate">{member.username}</h4>
+                            {isTrainer && (
+                              <span className="px-2 py-0.5 text-[10px] bg-primary/20 text-primary rounded font-semibold">
+                                TRAINER
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-light/60 truncate">{member.email}</p>
+                        </div>
+
+                        {/* Role Toggle Buttons */}
+                        <div className="flex gap-2 flex-shrink-0">
+                          {/* Assistant Toggle */}
+                          <button
+                            onClick={() => toggleTeamAssistant(teamForRoleManagement.id, member.id)}
+                            className={`px-3 py-1.5 rounded text-xs font-medium transition ${
+                              isAssistant
+                                ? 'bg-blue-500/30 text-blue-300 border border-blue-500/50 hover:bg-blue-500/40'
+                                : 'bg-white/10 text-light/70 border border-white/20 hover:bg-white/15'
+                            }`}
+                          >
+                            {isAssistant ? '✓ Assistant' : 'Assistant'}
+                          </button>
+
+                          {/* Parent Toggle */}
+                          <button
+                            onClick={() => toggleTeamParent(teamForRoleManagement.id, member.id)}
+                            className={`px-3 py-1.5 rounded text-xs font-medium transition ${
+                              isParent
+                                ? 'bg-purple-500/30 text-purple-300 border border-purple-500/50 hover:bg-purple-500/40'
+                                : 'bg-white/10 text-light/70 border border-white/20 hover:bg-white/15'
+                            }`}
+                          >
+                            {isParent ? '✓ Parent' : 'Parent'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            {/* Info Note */}
+            <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+              <p className="text-xs text-blue-300">
+                <strong>Note:</strong> Assistant and Parent roles are <strong>team-specific</strong>. 
+                These roles only apply within this team. Trainer role is club-wide and managed separately.
+              </p>
+            </div>
+
+            {/* Close Button */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowManageTeamRolesModal(false);
+                  setTeamForRoleManagement(null);
                 }}
                 className="flex-1 px-4 py-3 bg-white/10 text-light rounded-lg hover:bg-white/15 font-medium transition"
               >
