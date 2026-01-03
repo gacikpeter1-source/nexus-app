@@ -252,7 +252,13 @@ service cloud.firestore {
         allow read: if isAuthenticated();
         
         // Message sender can update their own message
-        allow update: if isAuthenticated() && resource.data.senderId == request.auth.uid;
+        // OR chat members can update reactions field only
+        allow update: if isAuthenticated() && (
+          resource.data.senderId == request.auth.uid ||
+          // Allow chat members to add/remove reactions only
+          (request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.members &&
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']))
+        );
         
         // Message sender or admin can delete message
         allow delete: if isAdmin() || resource.data.senderId == request.auth.uid;
