@@ -1055,13 +1055,30 @@ onUpdateTeamSettings={async (settings) => {
                   <h3 className="font-semibold text-sm md:text-base text-light/80">Events Breakdown</h3>
                   
                   <div className="space-y-2 md:space-y-3">
-                    <div className="flex items-center justify-between p-2 md:p-3 bg-white/5 rounded-lg">
+                    <button
+                      onClick={() => {
+                        // Check if user is trainer or assistant
+                        const isTrainer = club.trainers?.includes(user?.id);
+                        const team = club.teams?.find(t => t.id === teamId);
+                        const isAssistant = team?.assistants?.includes(user?.id);
+                        
+                        if (isTrainer || isAssistant) {
+                          navigate(`/team/${clubId}/${teamId}/statistics`);
+                        } else {
+                          showToast('Only trainers and assistants can view detailed statistics', 'error');
+                        }
+                      }}
+                      className="w-full flex items-center justify-between p-2 md:p-3 bg-white/5 hover:bg-white/10 rounded-lg transition-all group cursor-pointer"
+                    >
                       <div className="flex items-center gap-2 md:gap-3">
                         <span className="text-lg md:text-2xl">🏋️</span>
-                        <span className="text-sm md:text-base text-light">Trainings</span>
+                        <span className="text-sm md:text-base text-light group-hover:text-primary transition">Trainings</span>
                       </div>
-                      <span className="text-lg md:text-2xl font-bold text-primary">{statistics.trainings}</span>
-                    </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg md:text-2xl font-bold text-primary">{statistics.trainings}</span>
+                        <span className="text-primary opacity-0 group-hover:opacity-100 transition">→</span>
+                      </div>
+                    </button>
                     
                     <div className="flex items-center justify-between p-2 md:p-3 bg-white/5 rounded-lg">
                       <div className="flex items-center gap-2 md:gap-3">

@@ -49,6 +49,7 @@ export default function ChatRoom() {
   const [userColors, setUserColors] = useState({});
   const [showImportantModal, setShowImportantModal] = useState(false);
   const [selectedImportantMsg, setSelectedImportantMsg] = useState(null);
+  const [replyToMessage, setReplyToMessage] = useState(null);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -130,11 +131,23 @@ export default function ChatRoom() {
     if (!messageText.trim()) return;
 
     try {
-      await sendMessage(chatId, {
+      const messageData = {
         senderId: user.id,
         text: messageText.trim(),
-      });
+      };
+
+      // Add reply information if replying to a message
+      if (replyToMessage) {
+        messageData.replyTo = {
+          messageId: replyToMessage.id,
+          senderId: replyToMessage.senderId,
+          text: replyToMessage.text.substring(0, 100), // Truncate for preview
+        };
+      }
+
+      await sendMessage(chatId, messageData);
       setMessageText('');
+      setReplyToMessage(null); // Clear reply after sending
       inputRef.current?.focus();
     } catch (error) {
       console.error('Error sending message:', error);
@@ -419,6 +432,18 @@ export default function ChatRoom() {
                                 : `bg-mid-dark text-light border-l-4 ${senderColor}`
                         }`}
                       >
+                        {/* Replied-to message preview (WhatsApp style) */}
+                        {message.replyTo && (
+                          <div className="bg-black/40 border-l-4 border-teal-400 rounded px-3 py-2 mb-2">
+                            <p className="text-teal-400 font-semibold text-xs mb-0.5">
+                              {members.find(m => m.id === message.replyTo.senderId)?.username || 'Unknown'}
+                            </p>
+                            <p className="text-white/80 text-xs line-clamp-2">
+                              {message.replyTo.text}
+                            </p>
+                          </div>
+                        )}
+                        
                         {message.isPoll ? (
                           <PollMessage
                             message={message}
@@ -457,6 +482,18 @@ export default function ChatRoom() {
                         className="text-xs text-light/40 hover:text-light/60"
                       >
                         +
+                      </button>
+                      
+                      {/* Reply button */}
+                      <button
+                        onClick={() => {
+                          setReplyToMessage(message);
+                          inputRef.current?.focus();
+                        }}
+                        className="text-xs text-light/40 hover:text-light/60"
+                        title="Reply"
+                      >
+                        ↩️
                       </button>
                       
                       {/* Mark as important button */}
@@ -500,29 +537,67 @@ export default function ChatRoom() {
       {/* Input */}
       <div className="bg-mid-dark border-t border-white/10 p-4 flex-shrink-0">
         <div className="container mx-auto max-w-4xl">
-          <form onSubmit={handleSendMessage} className="flex gap-2">
+          {/* Reply Preview */}
+          {replyToMessage && (
+            <div className="bg-blue-500/20 border-l-4 border-blue-400 rounded-lg p-3 mb-2 flex items-start justify-between">
+              <div className="flex-1">
+                <p className="text-sm text-blue-300 font-semibold mb-1">
+                  ↩️ Replying to {members.find(m => m.id === replyToMessage.senderId)?.username || 'Unknown'}
+                </p>
+                <p className="text-sm text-light/90 italic line-clamp-2">
+                  {replyToMessage.text}
+                </p>
+              </div>
+              <button
+                onClick={() => setReplyToMessage(null)}
+                className="ml-2 p-1 hover:bg-white/10 rounded text-light/60 hover:text-light flex-shrink-0"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+          
+          <form onSubmit={handleSendMessage} className="flex gap-2 items-end">
             <button
               type="button"
               onClick={() => setShowPollCreator(true)}
-              className="p-3 hover:bg-white/10 rounded-lg transition"
+              className="p-3 hover:bg-white/10 rounded-lg transition flex-shrink-0"
               title="Create poll"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
             </button>
-            <input
+            <textarea
               ref={inputRef}
-              type="text"
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
-              placeholder="Type a message..."
-              className="flex-1 px-4 py-3 bg-dark border border-white/10 rounded-lg text-light placeholder-light/40 focus:outline-none focus:border-primary transition"
+              onKeyDown={(e) => {
+                // Submit on Ctrl/Cmd + Enter, allow Enter for new line
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  if (messageText.trim()) {
+                    handleSendMessage(e);
+                  }
+                }
+              }}
+              placeholder="Type a message... (Enter for new line, Ctrl+Enter to send)"
+              rows={1}
+              className="flex-1 px-4 py-3 bg-dark border border-white/10 rounded-lg text-light placeholder-light/40 focus:outline-none focus:border-primary transition resize-none overflow-hidden"
+              style={{
+                minHeight: '48px',
+                maxHeight: '200px',
+              }}
+              onInput={(e) => {
+                // Auto-resize textarea
+                e.target.style.height = 'auto';
+                e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px';
+              }}
             />
             <button
               type="submit"
               disabled={!messageText.trim()}
-              className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
             >
               Send
             </button>

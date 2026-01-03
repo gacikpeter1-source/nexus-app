@@ -416,13 +416,14 @@ export const subscribeToUserChats = (userId, callback) => {
  */
 export const sendMessage = async (chatId, messageData) => {
   try {
-    const { senderId, text, isPoll = false, pollData = null } = messageData;
+    const { senderId, text, isPoll = false, pollData = null, replyTo = null } = messageData;
 
     const message = {
       senderId,
       text,
       isPoll,
       pollData,
+      replyTo, // Add reply information
       reactions: {},
       createdAt: serverTimestamp(),
       editedAt: null,
@@ -441,7 +442,7 @@ export const sendMessage = async (chatId, messageData) => {
       updatedAt: serverTimestamp(),
     });
 
-    console.log('✅ Message sent:', messageRef.id);
+    console.log('✅ Message sent:', messageRef.id, replyTo ? '(with reply)' : '');
     return messageRef.id;
   } catch (error) {
     console.error('❌ Error sending message:', error);

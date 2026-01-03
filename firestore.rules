@@ -664,6 +664,35 @@ service cloud.firestore {
     }
     
     /* ===========================
+       EVENT FEEDBACK
+       =========================== */
+    
+    match /eventFeedback/{feedbackId} {
+      // Anyone can read feedback (for statistics)
+      // But userId is not exposed in queries (anonymous display)
+      allow read: if isAuthenticated();
+      
+      // Allow list/query for statistics
+      allow list: if isAuthenticated();
+      
+      // Users can create their own feedback
+      // Format: {eventId}_{userId}
+      allow create: if isAuthenticated() && 
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.keys().hasAll(['eventId', 'userId', 'clubId', 'teamId', 'rating']) &&
+        request.resource.data.rating >= 1 && request.resource.data.rating <= 5;
+      
+      // Users can update their own feedback
+      allow update: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.rating >= 1 && request.resource.data.rating <= 5;
+      
+      // Users can delete their own feedback
+      allow delete: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid;
+    }
+    
+    /* ===========================
        DEFAULT DENY ALL
        =========================== */
     

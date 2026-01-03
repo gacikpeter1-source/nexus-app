@@ -4,6 +4,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { getTraining, deleteTraining } from '../firebase/firestore';
+import { getTrainingPlanRating } from '../firebase/feedback';
 import { DEFAULT_CATEGORIES } from '../components/CategorySelector';
 
 export default function TrainingDetail() {
@@ -15,6 +16,7 @@ export default function TrainingDetail() {
   const [training, setTraining] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
+  const [rating, setRating] = useState(null);
   
   useEffect(() => {
     loadTraining();
@@ -26,6 +28,10 @@ export default function TrainingDetail() {
       const data = await getTraining(id);
       if (data) {
         setTraining(data);
+        
+        // Load rating
+        const ratingData = await getTrainingPlanRating(id);
+        setRating(ratingData);
       } else {
         showToast('Training not found', 'error');
         navigate('/training-library');
@@ -104,6 +110,29 @@ export default function TrainingDetail() {
                 </span>
               ))}
             </div>
+
+            {/* Rating & Usage Stats */}
+            {rating && rating.usageCount > 0 && (
+              <div className="mt-4 flex items-center gap-4">
+                {rating.totalResponses > 0 ? (
+                  <>
+                    <div className="flex items-center gap-2 px-4 py-2 bg-yellow-500/20 border border-yellow-500/30 rounded-lg">
+                      <span className="text-2xl font-bold text-yellow-300">{rating.averageRating}</span>
+                      <span className="text-2xl">⭐</span>
+                    </div>
+                    <div className="text-light/70">
+                      <p className="font-semibold">{rating.totalResponses} feedback response{rating.totalResponses !== 1 ? 's' : ''}</p>
+                      <p className="text-sm text-light/50">Used in {rating.usageCount} event{rating.usageCount !== 1 ? 's' : ''}</p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-light/60">
+                    <p className="font-semibold">No feedback yet</p>
+                    <p className="text-sm">Used in {rating.usageCount} event{rating.usageCount !== 1 ? 's' : ''}</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           
           {isOwner && (

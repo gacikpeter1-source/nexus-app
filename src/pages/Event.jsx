@@ -9,6 +9,8 @@ import { isClubOwner } from '../firebase/privileges';
 import { ShowIf } from '../components/PermissionGuard';
 import { isEventLocked, canChangeEventStatus, getLockTimeText } from '../utils/eventLockUtils';
 import { requestSubstitute, trainerSwapUsers, getPendingSubstitutions, respondToSubstitution, deleteSubstitutionRequest } from '../utils/substitutionUtils';
+import { submitEventFeedback, getUserFeedback, getEventRating } from '../firebase/feedback';
+import FeedbackModal from '../components/FeedbackModal';
 
 export default function EventPage() {
   const { eventId } = useParams();
@@ -48,6 +50,11 @@ export default function EventPage() {
 
   // Pending substitution requests
   const [pendingRequests, setPendingRequests] = useState([]);
+
+  // Feedback state
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [userFeedback, setUserFeedback] = useState(null);
+  const [eventRating, setEventRating] = useState(null);
   const [respondingToRequest, setRespondingToRequest] = useState(null);
   const [deletingRequest, setDeletingRequest] = useState(null);
 
@@ -103,6 +110,60 @@ export default function EventPage() {
     } finally {
       setLoading(false);
     }
+
+    // Load feedback data
+    loadFeedbackData();
+  }
+
+  // Load user's feedback and event rating
+  async function loadFeedbackData() {
+    if (!user || !event) return;
+
+    try {
+      // Load user's feedback
+      const feedback = await getUserFeedback(eventId, user.id);
+      setUserFeedback(feedback);
+
+      // Load event rating
+      const rating = await getEventRating(eventId);
+      setEventRating(rating);
+    } catch (error) {
+      console.error('Error loading feedback:', error);
+    }
+  }
+
+  // Handle feedback submission
+  async function handleFeedbackSubmit(feedbackData) {
+    try {
+      await submitEventFeedback(eventId, user.id, {
+        ...feedbackData,
+        clubId: event.clubId,
+        teamId: event.teamId,
+      });
+
+      showToast('✅ Thank you for your feedback!', 'success');
+      setShowFeedbackModal(false);
+
+      // Reload feedback data
+      await loadFeedbackData();
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+      showToast('Failed to submit feedback', 'error');
+      throw error;
+    }
+  }
+
+  // Check if user can provide feedback
+  function canProvideFeedback() {
+    if (!user || !event || !userResponse) return false;
+
+    // Must be attending
+    if (userResponse.status !== 'attending') return false;
+
+    // Event must have already happened
+    const eventDate = new Date(event.date);
+    const now = new Date();
+    return eventDate < now;
   }
 
     async function handleRsvp(status, message = null) {
@@ -691,6 +752,20 @@ export default function EventPage() {
               </div>
             )}
           </div>
+
+          {/* Feedback Button - Show only after event for attending users */}
+          {canProvideFeedback() && (
+            <button
+              onClick={() => setShowFeedbackModal(true)}
+              className={`flex-1 min-w-[100px] px-3 py-1.5 rounded-lg font-medium transition-all text-xs ${
+                userFeedback 
+                  ? 'bg-blue-600 text-white ring-2 ring-blue-400' 
+                  : 'bg-blue-500 text-white hover:bg-blue-600'
+              }`}
+            >
+              {userFeedback ? '✓ Feedback' : '📝 Give Feedback'}
+            </button>
+          )}
           
           {/* Request Substitute Button - Show when locked and user is attending */}
           {userResponse?.status === 'attending' && event.lockPeriod?.enabled && (
@@ -1523,6 +1598,16 @@ export default function EventPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Feedback Modal */}
+      {showFeedbackModal && event && (
+        <FeedbackModal
+          event={event}
+          existingFeedback={userFeedback}
+          onSubmit={handleFeedbackSubmit}
+          onClose={() => setShowFeedbackModal(false)}
+        />
       )}
     </div>
   );

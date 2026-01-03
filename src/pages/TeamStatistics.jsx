@@ -1,374 +1,396 @@
 // src/pages/TeamStatistics.jsx
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { getClub, getEvent } from '../firebase/firestore';
+import { getTeamFeedbackStats } from '../firebase/feedback';
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
 export default function TeamStatistics() {
-  const { id } = useParams();
+  const { clubId, teamId } = useParams();
   const navigate = useNavigate();
-  
-  const [filterType, setFilterType] = useState('all'); // all, training, game, match, tournament
-  const [filterDate, setFilterDate] = useState('all'); // all, week, month, year, custom
-  const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate, setCustomEndDate] = useState('');
+  const { user } = useAuth();
 
-  // Load team data
-  const team = useMemo(() => {
+  const [club, setClub] = useState(null);
+  const [team, setTeam] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [feedbackStats, setFeedbackStats] = useState([]);
+  const [eventsData, setEventsData] = useState([]);
+  const [showRating, setShowRating] = useState(true);
+  const [showEventCount, setShowEventCount] = useState(true);
+  const [showAttendance, setShowAttendance] = useState(true);
+
+  useEffect(() => {
+    if (clubId && teamId) {
+      loadData();
+    }
+  }, [clubId, teamId]);
+
+  async function loadData() {
     try {
-      const clubs = JSON.parse(localStorage.getItem('clubs') || '[]');
-      for (const club of clubs) {
-        if (!Array.isArray(club.teams)) continue;
-        const foundTeam = club.teams.find(t => t.id === id);
-        if (foundTeam) {
-          return { ...foundTeam, clubId: club.id, clubName: club.name };
-        }
-      }
-      return null;
-    } catch {
-      return null;
-    }
-  }, [id]);
+      setLoading(true);
 
-  // Load all events
-  const allEvents = useMemo(() => {
+      // Load club data
+      const clubData = await getClub(clubId);
+      setClub(clubData);
+
+      // Find team
+      const foundTeam = clubData.teams?.find(t => t.id === teamId);
+      setTeam(foundTeam);
+
+      // Load feedback stats
+      await loadFeedbackStats();
+    } catch (error) {
+      console.error('Error loading statistics:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadFeedbackStats() {
     try {
-      // Events are stored in 'sportsapp:localEvents', not 'events'
-      return JSON.parse(localStorage.getItem('sportsapp:localEvents') || '[]');
-    } catch {
-      return [];
-    }
-  }, []);
+      // Parse date range
+      const start = startDate ? new Date(startDate) : null;
+      const end = endDate ? new Date(endDate) : null;
 
-  // Load users
-  const users = useMemo(() => {
-    try {
-      return JSON.parse(localStorage.getItem('users') || '[]');
-    } catch {
-      return [];
-    }
-  }, []);
+      // Get feedback stats
+      const stats = await getTeamFeedbackStats(teamId, start, end);
 
-  // Get team events
-  const teamEvents = useMemo(() => {
-    if (!team) return [];
-    return allEvents.filter(e => e.teamId === team.id);
-  }, [team, allEvents]);
-
-  // Apply filters
-  const filteredEvents = useMemo(() => {
-    let events = [...teamEvents];
-
-    // Filter by type
-    if (filterType !== 'all') {
-      events = events.filter(e => e.type?.toLowerCase() === filterType);
-    }
-
-    // Filter by date
-    const now = new Date();
-    if (filterDate === 'week') {
-      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      events = events.filter(e => new Date(e.date) >= weekAgo && new Date(e.date) <= now);
-    } else if (filterDate === 'month') {
-      const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      events = events.filter(e => new Date(e.date) >= monthAgo && new Date(e.date) <= now);
-    } else if (filterDate === 'year') {
-      const yearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-      events = events.filter(e => new Date(e.date) >= yearAgo && new Date(e.date) <= now);
-    } else if (filterDate === 'custom' && customStartDate && customEndDate) {
-      const start = new Date(customStartDate);
-      const end = new Date(customEndDate);
-      events = events.filter(e => {
-        const eventDate = new Date(e.date);
-        return eventDate >= start && eventDate <= end;
-      });
-    }
-
-    // Sort by date (newest first)
-    return events.sort((a, b) => new Date(b.date) - new Date(a.date));
-  }, [teamEvents, filterType, filterDate, customStartDate, customEndDate]);
-
-  // Calculate statistics
-  const stats = useMemo(() => {
-    const total = filteredEvents.length;
-    const byType = {};
-    
-    filteredEvents.forEach(event => {
-      const type = event.type?.toLowerCase() || 'other';
-      byType[type] = (byType[type] || 0) + 1;
-    });
-
-    return {
-      total,
-      training: byType.training || 0,
-      game: byType.game || 0,
-      match: byType.match || 0,
-      tournament: byType.tournament || 0,
-      other: byType.other || 0
-    };
-  }, [filteredEvents]);
-
-  // Get attendance for an event
-  const getAttendance = (event) => {
-    try {
-      const responses = JSON.parse(localStorage.getItem(`event_responses_${event.id}`) || '{}');
-      const attended = Object.entries(responses).filter(([_, r]) => r.status === 'confirmed');
-      return attended.length;
-    } catch {
-      return 0;
-    }
-  };
-
-  // Get attendance details for an event
-  const getAttendanceDetails = (event) => {
-    try {
-      const responses = JSON.parse(localStorage.getItem(`event_responses_${event.id}`) || '{}');
-      const attended = [];
-      
-      Object.entries(responses).forEach(([userId, response]) => {
-        if (response.status === 'confirmed') {
-          const user = users.find(u => u.id === userId);
-          if (user) {
-            attended.push(user.username || 'Unknown');
+      // Load event details for each stat
+      const eventsWithStats = await Promise.all(
+        stats.map(async (stat) => {
+          try {
+            const event = await getEvent(stat.eventId);
+            return {
+              ...stat,
+              event,
+            };
+          } catch (error) {
+            console.error(`Error loading event ${stat.eventId}:`, error);
+            return null;
           }
-        }
+        })
+      );
+
+      // Filter out null and sort by date (newest first)
+      const validEvents = eventsWithStats
+        .filter(e => e && e.event)
+        .sort((a, b) => new Date(b.event.date) - new Date(a.event.date));
+
+      setEventsData(validEvents);
+      setFeedbackStats(stats);
+    } catch (error) {
+      console.error('Error loading feedback stats:', error);
+    }
+  }
+
+  // Handle date filter update
+  function handleDateRangeChange() {
+    loadFeedbackStats();
+  }
+
+  // Prepare chart data
+  function getChartData() {
+    // Sort events by date (oldest first for chart)
+    const sortedEvents = [...eventsData].sort((a, b) => 
+      new Date(a.event.date) - new Date(b.event.date)
+    );
+
+    const labels = sortedEvents.map(e => 
+      new Date(e.event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    );
+
+    const datasets = [];
+
+    // Rating dataset
+    if (showRating) {
+      datasets.push({
+        label: 'Average Rating',
+        data: sortedEvents.map(e => e.averageRating),
+        borderColor: 'rgb(234, 179, 8)', // yellow-500
+        backgroundColor: 'rgba(234, 179, 8, 0.2)',
+        yAxisID: 'y',
+        tension: 0.3,
       });
-      
-      return attended;
-    } catch {
-      return [];
     }
-  };
 
-  const formatDate = (dateStr) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'short', 
-      month: 'short', 
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
-
-  const getEventIcon = (type) => {
-    switch(type?.toLowerCase()) {
-      case 'training': return '🏋️';
-      case 'game': return '⚽';
-      case 'match': return '🏆';
-      case 'tournament': return '🥇';
-      default: return '📅';
+    // Event count dataset (cumulative)
+    if (showEventCount) {
+      const cumulative = sortedEvents.map((_, idx) => idx + 1);
+      datasets.push({
+        label: 'Event Count',
+        data: cumulative,
+        borderColor: 'rgb(59, 130, 246)', // blue-500
+        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+        yAxisID: 'y1',
+        tension: 0.3,
+      });
     }
+
+    // Attendance dataset
+    if (showAttendance) {
+      datasets.push({
+        label: 'Feedback Responses',
+        data: sortedEvents.map(e => e.totalResponses),
+        borderColor: 'rgb(34, 197, 94)', // green-500
+        backgroundColor: 'rgba(34, 197, 94, 0.2)',
+        yAxisID: 'y1',
+        tension: 0.3,
+      });
+    }
+
+    return { labels, datasets };
+  }
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+      mode: 'index',
+      intersect: false,
+    },
+    plugins: {
+      legend: {
+        position: 'top',
+        labels: {
+          color: 'rgb(229, 231, 235)', // gray-200
+          font: {
+            size: 12,
+          },
+        },
+      },
+      title: {
+        display: true,
+        text: 'Training Statistics Over Time',
+        color: 'rgb(229, 231, 235)',
+        font: {
+          size: 16,
+          weight: 'bold',
+        },
+      },
+    },
+    scales: {
+      x: {
+        grid: {
+          color: 'rgba(255, 255, 255, 0.1)',
+        },
+        ticks: {
+          color: 'rgb(156, 163, 175)', // gray-400
+        },
+      },
+      y: {
+        type: 'linear',
+        display: showRating,
+        position: 'left',
+        min: 0,
+        max: 5,
+        title: {
+          display: showRating,
+          text: 'Rating (⭐)',
+          color: 'rgb(234, 179, 8)',
+        },
+        grid: {
+          color: 'rgba(255, 255, 255, 0.1)',
+        },
+        ticks: {
+          color: 'rgb(156, 163, 175)',
+        },
+      },
+      y1: {
+        type: 'linear',
+        display: showEventCount || showAttendance,
+        position: 'right',
+        title: {
+          display: showEventCount || showAttendance,
+          text: 'Count',
+          color: 'rgb(59, 130, 246)',
+        },
+        grid: {
+          drawOnChartArea: false,
+        },
+        ticks: {
+          color: 'rgb(156, 163, 175)',
+        },
+      },
+    },
   };
 
-  if (!team) {
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-6xl mb-4">😕</div>
-          <h2 className="font-title text-2xl text-light mb-2">Team Not Found</h2>
-          <button
-            onClick={() => navigate('/clubs')}
-            className="btn-primary mt-4"
-          >
-            ← Back to Clubs
-          </button>
+      <div className="max-w-7xl mx-auto p-6">
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="max-w-7xl mx-auto p-6">
       {/* Header */}
-      <div className="mb-8 animate-fade-in">
-        <div className="flex items-center gap-4 mb-4">
-          <button
-            onClick={() => navigate(`/teams/${id}`)}
-            className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center text-light transition-all"
-          >
-            ←
-          </button>
-          <div>
-            <h1 className="font-display text-5xl md:text-6xl text-light tracking-wider">
-              📊 STATISTICS
-            </h1>
-            <p className="text-light/60 text-lg">
-              {team.name} • {team.clubName}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Stats Overview */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-        {[
-          { label: 'Total', value: stats.total, icon: '📊', color: 'from-primary to-accent' },
-          { label: 'Trainings', value: stats.training, icon: '🏋️', color: 'from-blue-500 to-blue-600' },
-          { label: 'Games', value: stats.game, icon: '⚽', color: 'from-green-500 to-green-600' },
-          { label: 'Matches', value: stats.match, icon: '🏆', color: 'from-yellow-500 to-yellow-600' },
-          { label: 'Tournaments', value: stats.tournament, icon: '🥇', color: 'from-purple-500 to-purple-600' }
-        ].map((stat, idx) => (
-          <div
-            key={stat.label}
-            className={`bg-gradient-to-br ${stat.color} rounded-xl p-5 text-dark`}
-            style={{ animationDelay: `${idx * 0.05}s` }}
-          >
-            <div className="text-3xl mb-2">{stat.icon}</div>
-            <div className="font-title text-4xl mb-1">{stat.value}</div>
-            <div className="text-xs uppercase tracking-wider opacity-80">{stat.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Attendance Button */}
-      <div className="mb-8 animate-fade-in" style={{ animationDelay: '0.15s' }}>
+      <div className="mb-6">
         <button
-          onClick={() => navigate(`/team/${id.split('/')[0]}/${id.split('/')[1]}/attendance/history`)}
-          className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl p-6 transition-all shadow-lg hover:shadow-xl"
+          onClick={() => navigate(`/team/${clubId}/${teamId}`)}
+          className="mb-4 text-light/60 hover:text-light flex items-center gap-2 transition-colors"
         >
-          <div className="flex items-center justify-between">
-            <div className="text-left">
-              <div className="text-2xl font-bold mb-1">📋 View Attendance Records</div>
-              <div className="text-sm opacity-90">Track team member attendance and statistics</div>
-            </div>
-            <div className="text-4xl">→</div>
-          </div>
+          ← Back to Team
         </button>
+        <h1 className="font-display text-4xl text-light mb-2">
+          📊 Training Statistics
+        </h1>
+        <p className="text-light/60 text-lg">
+          {club?.name} - {team?.name}
+        </p>
       </div>
 
-      {/* Filters */}
-      <div className="mb-6 animate-fade-in" style={{ animationDelay: '0.2s' }}>
-        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-          <h2 className="font-title text-xl text-light mb-4">Filters</h2>
-          
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Type Filter */}
-            <div>
-              <label className="block text-sm font-medium text-light/80 mb-2">Event Type</label>
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-              >
-                <option value="all" className="bg-mid-dark">All Types</option>
-                <option value="training" className="bg-mid-dark">🏋️ Training</option>
-                <option value="game" className="bg-mid-dark">⚽ Game</option>
-                <option value="match" className="bg-mid-dark">🏆 Match</option>
-                <option value="tournament" className="bg-mid-dark">🥇 Tournament</option>
-              </select>
-            </div>
-
-            {/* Date Filter */}
-            <div>
-              <label className="block text-sm font-medium text-light/80 mb-2">Time Period</label>
-              <select
-                value={filterDate}
-                onChange={(e) => setFilterDate(e.target.value)}
-                className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-              >
-                <option value="all" className="bg-mid-dark">All Time</option>
-                <option value="week" className="bg-mid-dark">Last 7 Days</option>
-                <option value="month" className="bg-mid-dark">Last 30 Days</option>
-                <option value="year" className="bg-mid-dark">Last Year</option>
-                <option value="custom" className="bg-mid-dark">Custom Range</option>
-              </select>
-            </div>
-
-            {/* Custom Date Range */}
-            {filterDate === 'custom' && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-light/80 mb-2">Start Date</label>
+      {/* Date Range Filter */}
+      <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 mb-6">
+        <h2 className="text-lg font-semibold text-light mb-4">📅 Date Range</h2>
+        <div className="flex flex-wrap gap-4 items-end">
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-sm text-light/60 mb-2">Start Date</label>
                   <input
                     type="date"
-                    value={customStartDate}
-                    onChange={(e) => setCustomStartDate(e.target.value)}
-                    className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full px-4 py-2 bg-dark border border-white/10 rounded-lg text-light focus:border-primary transition"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-light/80 mb-2">End Date</label>
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-sm text-light/60 mb-2">End Date</label>
                   <input
                     type="date"
-                    value={customEndDate}
-                    onChange={(e) => setCustomEndDate(e.target.value)}
-                    className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-light focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-                  />
-                </div>
-              </>
-            )}
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-full px-4 py-2 bg-dark border border-white/10 rounded-lg text-light focus:border-primary transition"
+            />
           </div>
+          <button
+            onClick={handleDateRangeChange}
+            className="px-6 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg font-medium transition"
+          >
+            Apply Filter
+          </button>
         </div>
       </div>
 
-      {/* Events List */}
-      <div className="animate-fade-in" style={{ animationDelay: '0.3s' }}>
-        <h2 className="font-title text-2xl text-light mb-4 flex items-center gap-3">
-          <span className="w-1 h-6 bg-primary rounded"></span>
-          Events ({filteredEvents.length})
-        </h2>
+      {/* Chart Toggles */}
+      <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 mb-6">
+        <h2 className="text-lg font-semibold text-light mb-4">📈 Display Options</h2>
+        <div className="flex flex-wrap gap-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showRating}
+              onChange={(e) => setShowRating(e.target.checked)}
+              className="w-5 h-5 rounded border-white/20 bg-dark text-primary focus:ring-primary"
+            />
+            <span className="text-light">⭐ Average Rating</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showEventCount}
+              onChange={(e) => setShowEventCount(e.target.checked)}
+              className="w-5 h-5 rounded border-white/20 bg-dark text-primary focus:ring-primary"
+            />
+            <span className="text-light">📊 Event Count</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showAttendance}
+              onChange={(e) => setShowAttendance(e.target.checked)}
+              className="w-5 h-5 rounded border-white/20 bg-dark text-primary focus:ring-primary"
+            />
+            <span className="text-light">👥 Feedback Responses</span>
+          </label>
+        </div>
+      </div>
 
-        {filteredEvents.length === 0 ? (
-          <div className="rounded-2xl border-2 border-dashed border-white/20 bg-white/5 backdrop-blur-sm p-12 text-center">
-            <div className="text-6xl mb-4">📊</div>
-            <h3 className="font-title text-2xl text-light mb-2">No Events Found</h3>
-            <p className="text-light/60">Try adjusting your filters to see more events.</p>
+      {/* Timeline Graph */}
+      {eventsData.length > 0 ? (
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 mb-6">
+          <div className="h-[400px]">
+            <Line data={getChartData()} options={chartOptions} />
           </div>
+        </div>
+      ) : (
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-12 text-center mb-6">
+          <div className="text-4xl mb-4">📊</div>
+          <h3 className="text-xl font-semibold text-light mb-2">No Data Available</h3>
+          <p className="text-light/60">No training feedback has been submitted yet for this period.</p>
+        </div>
+      )}
+
+      {/* Trainings List */}
+      <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+        <h2 className="text-2xl font-bold text-light mb-4">📋 Training History</h2>
+        
+        {eventsData.length === 0 ? (
+          <p className="text-light/60 text-center py-8">No trainings with feedback yet.</p>
         ) : (
-          <div className="grid gap-4">
-            {filteredEvents.map((event, idx) => {
-              const attendees = getAttendanceDetails(event);
-              const attendanceCount = attendees.length;
-
-              return (
-                <div
-                  key={event.id}
-                  onClick={() => navigate(`/events/${event.id}`)}
-                  className="group cursor-pointer bg-white/5 backdrop-blur-sm border border-white/10 p-5 rounded-xl hover:bg-white/10 hover:border-primary/50 transition-all duration-300"
-                  style={{ animationDelay: `${idx * 0.05}s` }}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-4 flex-1">
-                      <div className="text-4xl">{getEventIcon(event.type)}</div>
+          <div className="space-y-3">
+            {eventsData.map((item) => (
+              <div
+                key={item.eventId}
+                onClick={() => navigate(`/event/${item.eventId}`)}
+                className="bg-dark/50 border border-white/10 rounded-lg p-4 hover:bg-dark/70 transition cursor-pointer group"
+              >
+                <div className="flex items-center justify-between gap-4">
                       <div className="flex-1">
-                        <h3 className="font-title text-xl text-light group-hover:text-primary transition-colors">
-                          {event.title}
+                    <h3 className="font-semibold text-light group-hover:text-primary transition">
+                      {item.event?.title || 'Training'}
                         </h3>
-                        <p className="text-sm text-light/60 mb-2">
-                          {event.type || 'Event'} • {formatDate(event.date)}
-                        </p>
-                        {event.location && (
-                          <p className="text-xs text-light/40 mb-3">📍 {event.location}</p>
-                        )}
-
-                        {/* Attendance */}
-                        <div className="mt-3">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-sm font-medium text-light">
-                              👥 Attendance: {attendanceCount} {attendanceCount === 1 ? 'person' : 'people'}
-                            </span>
+                    <p className="text-sm text-light/60 mt-1">
+                      {new Date(item.event?.date).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                      })}
+                      {item.event?.startTime && ` at ${item.event.startTime}`}
+                    </p>
                           </div>
-                          {attendees.length > 0 && (
-                            <div className="flex flex-wrap gap-2">
-                              {attendees.map((name, i) => (
-                                <span
-                                  key={i}
-                                  className="px-2 py-1 bg-primary/20 text-primary text-xs rounded-full"
-                                >
-                                  {name}
-                                </span>
-                              ))}
+                  <div className="flex items-center gap-4">
+                    {/* Rating */}
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-yellow-400">
+                        {item.averageRating}⭐
                             </div>
-                          )}
-                        </div>
+                      <div className="text-xs text-light/60">
+                        {item.totalResponses} response{item.totalResponses !== 1 ? 's' : ''}
                       </div>
                     </div>
-
-                    <div className="text-primary opacity-0 group-hover:opacity-100 transform translate-x-2 group-hover:translate-x-0 transition-all">
-                      →
-                    </div>
+                    {/* Arrow */}
+                    <span className="text-primary opacity-0 group-hover:opacity-100 transition">→</span>
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         )}
       </div>

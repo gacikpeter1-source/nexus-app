@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { getTrainerTrainings, deleteTraining } from '../firebase/firestore';
+import { getMultipleTrainingPlanRatings } from '../firebase/feedback';
 import { DEFAULT_CATEGORIES } from '../components/CategorySelector';
 
 export default function TrainingLibrary() {
@@ -16,6 +17,7 @@ export default function TrainingLibrary() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [viewMode, setViewMode] = useState('grid'); // grid or list
+  const [trainingRatings, setTrainingRatings] = useState({}); // { trainingId: { averageRating, totalResponses, usageCount } }
   
   // Load trainings
   useEffect(() => {
@@ -29,6 +31,13 @@ export default function TrainingLibrary() {
       setLoading(true);
       const data = await getTrainerTrainings(user.id);
       setTrainings(data);
+
+      // Load ratings for all training plans
+      if (data.length > 0) {
+        const trainingIds = data.map(t => t.id);
+        const ratings = await getMultipleTrainingPlanRatings(trainingIds);
+        setTrainingRatings(ratings);
+      }
     } catch (error) {
       console.error('Error loading trainings:', error);
       showToast('Failed to load trainings', 'error');
@@ -240,9 +249,33 @@ export default function TrainingLibrary() {
                   {training.title}
                 </h3>
                 {training.description && (
-                  <p className="text-sm text-light/60 mb-4 line-clamp-3">
+                  <p className="text-sm text-light/60 mb-3 line-clamp-3">
                     {training.description}
                   </p>
+                )}
+
+                {/* Rating & Usage Stats */}
+                {trainingRatings[training.id] && trainingRatings[training.id].usageCount > 0 && (
+                  <div className="mb-3 flex items-center gap-3 text-sm">
+                    {trainingRatings[training.id].totalResponses > 0 ? (
+                      <>
+                        <div className="flex items-center gap-1 px-2 py-1 bg-yellow-500/20 text-yellow-300 rounded-full">
+                          <span className="font-bold">{trainingRatings[training.id].averageRating}</span>
+                          <span>⭐</span>
+                        </div>
+                        <span className="text-light/60 text-xs">
+                          {trainingRatings[training.id].totalResponses} feedback{trainingRatings[training.id].totalResponses !== 1 ? 's' : ''}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-light/60 text-xs px-2 py-1 bg-white/5 rounded-full">
+                        No feedback yet
+                      </span>
+                    )}
+                    <span className="text-light/60 text-xs">
+                      • {trainingRatings[training.id].usageCount} use{trainingRatings[training.id].usageCount !== 1 ? 's' : ''}
+                    </span>
+                  </div>
                 )}
                 
                 {/* Actions */}
@@ -295,7 +328,7 @@ export default function TrainingLibrary() {
                 <h3 className="font-semibold text-light truncate">
                   {training.title}
                 </h3>
-                <div className="flex flex-wrap gap-2 mt-1">
+                <div className="flex flex-wrap gap-2 mt-1 items-center">
                   {training.categories && training.categories.slice(0, 3).map(catId => (
                     <span
                       key={catId}
@@ -304,6 +337,20 @@ export default function TrainingLibrary() {
                       {getCategoryIcon(catId)} {getCategoryName(catId)}
                     </span>
                   ))}
+                  
+                  {/* Rating */}
+                  {trainingRatings[training.id] && trainingRatings[training.id].usageCount > 0 && (
+                    <>
+                      {trainingRatings[training.id].totalResponses > 0 && (
+                        <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-300 text-xs rounded-full font-semibold">
+                          {trainingRatings[training.id].averageRating}⭐ ({trainingRatings[training.id].totalResponses})
+                        </span>
+                      )}
+                      <span className="text-light/50 text-xs">
+                        • {trainingRatings[training.id].usageCount} use{trainingRatings[training.id].usageCount !== 1 ? 's' : ''}
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
               

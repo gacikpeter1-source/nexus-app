@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { getUserEvents, getUserClubs } from '../firebase/firestore';
+import { getEventRating } from '../firebase/feedback';
 import WeekView from '../components/calendar/WeekView';
 import DayView from '../components/calendar/DayView';
 import FilterModal from '../components/calendar/FilterModal';
@@ -22,6 +23,7 @@ export default function Calendar() {
   const [userFilter, setUserFilter] = useState('all'); // 'all' or 'mine'
   const [viewMode, setViewMode] = useState('list'); // list | month | week
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [eventRatings, setEventRatings] = useState({}); // { eventId: { averageRating, totalResponses } }
 
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
@@ -45,12 +47,42 @@ export default function Calendar() {
       const userClubs = await getUserClubs(user.id);
       setClubs(userClubs);
 
+      // Load ratings for past training events
+      await loadEventRatings(userEvents || []);
+
     } catch (error) {
       console.error('Error loading calendar:', error);
       showToast('Failed to load calendar', 'error');
     } finally {
       setLoading(false);
     }
+  }
+
+  async function loadEventRatings(events) {
+    const ratings = {};
+    const now = new Date();
+
+    // Only load ratings for past training events
+    const pastTrainings = events.filter(e => {
+      const eventDate = new Date(e.date);
+      return eventDate < now && e.type === 'training';
+    });
+
+    // Load ratings in parallel
+    await Promise.all(
+      pastTrainings.map(async (event) => {
+        try {
+          const rating = await getEventRating(event.id);
+          if (rating.totalResponses > 0) {
+            ratings[event.id] = rating;
+          }
+        } catch (error) {
+          console.error(`Error loading rating for event ${event.id}:`, error);
+        }
+      })
+    );
+
+    setEventRatings(ratings);
   }
 
   // Get teams filtered by selected club
@@ -405,6 +437,18 @@ export default function Calendar() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
+                          {/* Rating Badge (for past trainings) */}
+                          {eventRatings[event.id] && (
+                            <div className="px-3 py-1 rounded-full text-xs font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
+                              {eventRatings[event.id].averageRating}⭐ {eventRatings[event.id].totalResponses}/{(() => {
+                                const attendingCount = event.responses 
+                                  ? Object.values(event.responses).filter(r => r.status === 'attending').length 
+                                  : 0;
+                                return attendingCount;
+                              })()}
+                            </div>
+                          )}
+                          
                           {/* Attendance Count Badge */}
                           {(() => {
                             const attendingCount = event.responses 
@@ -471,6 +515,19 @@ export default function Calendar() {
                             </h3>
                             <div className="flex gap-3 text-xs text-light/60 items-center">
                               <span>📅 {new Date(event.date).toLocaleDateString()}</span>
+                              
+                              {/* Rating (for past trainings) */}
+                              {eventRatings[event.id] && (
+                                <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-300 rounded text-xs font-semibold">
+                                  {eventRatings[event.id].averageRating}⭐ {eventRatings[event.id].totalResponses}/{(() => {
+                                    const attendingCount = event.responses 
+                                      ? Object.values(event.responses).filter(r => r.status === 'attending').length 
+                                      : 0;
+                                    return attendingCount;
+                                  })()}
+                                </span>
+                              )}
+                              
                               {/* Attendance Count */}
                               {(() => {
                                 const attendingCount = event.responses 
