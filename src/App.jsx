@@ -20,6 +20,7 @@ import TrainingDetail from './pages/TrainingDetail';
 import Team from './pages/Team';
 import Teams from './pages/Teams';
 import TeamStatistics from './pages/TeamStatistics';
+import TeamAttendance from './pages/TeamAttendance';
 import Profile from './pages/Profile';
 import ChangePassword from './pages/ChangePassword';
 import Language from './pages/Language';
@@ -174,6 +175,14 @@ function App() {
                         element={
                           <ProtectedRoute>
                             <TeamStatistics />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/team/:clubId/:teamId/attendance-stats"
+                        element={
+                          <ProtectedRoute>
+                            <TeamAttendance />
                           </ProtectedRoute>
                         }
                       />
