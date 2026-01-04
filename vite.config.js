@@ -87,6 +87,8 @@ export default defineConfig({
         ]
       },
       workbox: {
+        // Increase max file size for service worker cache (default is 2MB)
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB
         // Cache strategies
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
         runtimeCaching: [
