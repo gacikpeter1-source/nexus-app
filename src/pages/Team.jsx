@@ -20,6 +20,7 @@ import { getTeamChats, createChat } from '../firebase/chats';
 import TeamMemberCards from '../components/TeamMemberCards';
 import { updateTeamCardSettings, getUserStats } from '../firebase/firestore';
 import { updateTeamMemberData } from '../firebase/firestore';
+import LeagueScheduleTab from '../components/LeagueScheduleTab';
 
 export default function Team() {
   const { clubId, teamId } = useParams();
@@ -608,6 +609,16 @@ const handleCreateEventChat = async (event) => {
           Overview
         </button>
         <button
+          onClick={() => setActiveTab('league')}
+          className={`px-3 py-2 text-xs md:text-sm font-medium transition-all whitespace-nowrap rounded-t flex-shrink-0 ${
+            activeTab === 'league'
+              ? 'text-primary border-b-2 border-primary bg-primary/10'
+              : 'text-light/60 hover:text-light hover:bg-white/5'
+          }`}
+        >
+          League
+        </button>
+        <button
           onClick={() => setActiveTab('chat')}
           className={`px-3 py-2 text-xs md:text-sm font-medium transition-all whitespace-nowrap rounded-t flex-shrink-0 ${
             activeTab === 'chat'
@@ -921,6 +932,14 @@ const handleCreateEventChat = async (event) => {
             </div>
 
           </div>
+        )}
+
+        {activeTab === 'league' && (
+          <LeagueScheduleTab
+            team={team}
+            club={club}
+            user={user}
+          />
         )}
 
         {activeTab === 'members' && (

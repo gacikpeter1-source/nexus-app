@@ -5,7 +5,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth, ROLES } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useSeasons } from '../contexts/SeasonContext';
 import NotificationsTab from '../components/NotificationsTab';
+import LeagueScheduleTab from '../components/LeagueScheduleTab';
+import SeasonManagement from '../components/SeasonManagement';
 
 import { 
   getUserClubs, 
@@ -47,6 +50,7 @@ export default function ClubManagement() {
 
   const [clubs, setClubs] = useState([]);
   const [selectedClubId, setSelectedClubId] = useState('');
+  const [club, setClub] = useState(null);
   const [clubMembers, setClubMembers] = useState([]);
   const [clubTeams, setClubTeams] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -122,7 +126,11 @@ export default function ClubManagement() {
   const [teamTrainerFilter, setTeamTrainerFilter] = useState('');
 
   // Tab state
-  const [activeTab, setActiveTab] = useState('management'); // management, requests, statistics, orders, notifications
+  const [activeTab, setActiveTab] = useState('management'); // management, requests, statistics, orders, notifications, league
+
+  // League tab state
+  const [selectedTeamId, setSelectedTeamId] = useState('');
+  const [showSeasonManagement, setShowSeasonManagement] = useState(false);
 
   // Orders tab state
 const [orders, setOrders] = useState([]);
@@ -240,12 +248,15 @@ const [orderSearchQuery, setOrderSearchQuery] = useState('');
       // Get club from Firebase
       const club = await getClub(clubId);
       if (!club) {
+        setClub(null);
         setClubMembers([]);
         setFilteredMembers([]);
         setClubTeams([]);
         setLoading(false);
         return;
       }
+      
+      setClub(club);
 
       const membersRaw = [
         ...(club.trainers || []).map(id => ({ id, role: ROLES.TRAINER })),
@@ -449,6 +460,20 @@ useEffect(() => {
     loadOrders();
   }
 }, [activeTab, selectedClubId]);
+
+  // Auto-select first team when league tab is opened
+  useEffect(() => {
+    if (activeTab === 'league' && clubTeams.length > 0 && !selectedTeamId) {
+      // Find first team user has access to
+      const availableTeam = clubTeams.find(team => {
+        if (user?.isSuperAdmin || club?.ownerId === user?.id) return true;
+        return team.trainers?.includes(user?.id) || team.assistants?.includes(user?.id);
+      });
+      if (availableTeam) {
+        setSelectedTeamId(availableTeam.id);
+      }
+    }
+  }, [activeTab, clubTeams, selectedTeamId, user, club]);
 
   useEffect(() => {
     const q = (searchQuery || '').trim().toLowerCase();
@@ -1761,6 +1786,18 @@ const filteredOrderResponses = useMemo(() => {
                 `}
               >
                 📊 {t('clubmgmt.statistics')}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('league')}
+                className={`
+                  px-1 py-0.5 md:px-2 md:py-0.8 rounded-lg transition-all duration-200 font-medium text-xs md:text-sm
+                  ${activeTab === 'league'
+                    ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg'
+                    : 'bg-white/5 text-light/70 hover:bg-white/10 hover:text-light'}
+                `}
+              >
+                🏆 League
               </button>
 
               <button
@@ -3148,6 +3185,74 @@ const filteredOrderResponses = useMemo(() => {
     </div>
   </div>
 )}
+
+        {/* League Tab */}
+        {selectedClubId && activeTab === 'league' && (
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 animate-fade-in">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="font-title text-2xl text-light">League Schedule</h2>
+              {(user?.isSuperAdmin || club?.ownerId === user?.id) && (
+                <button
+                  onClick={() => setShowSeasonManagement(true)}
+                  className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg transition-colors text-sm font-medium"
+                >
+                  ⚙️ Manage Seasons
+                </button>
+              )}
+            </div>
+
+            {/* Team Selector */}
+            {clubTeams.length > 0 && (
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-light/80 mb-2">Select Team:</label>
+                <select
+                  value={selectedTeamId}
+                  onChange={(e) => setSelectedTeamId(e.target.value)}
+                  className="bg-dark border border-white/20 rounded-lg px-4 py-2 text-light text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all min-w-[300px]"
+                >
+                  <option value="" className="bg-dark text-light">
+                    -- Select a team --
+                  </option>
+                  {clubTeams
+                    .filter(team => {
+                      // Show all teams for club owner/admin
+                      if (user?.isSuperAdmin || club?.ownerId === user?.id) return true;
+                      // Show only teams where user is trainer or assistant
+                      return team.trainers?.includes(user?.id) || team.assistants?.includes(user?.id);
+                    })
+                    .map(team => (
+                      <option key={team.id} value={team.id} className="bg-dark text-light">
+                        {team.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
+
+            {/* League Schedule Component */}
+            {selectedTeamId ? (
+              <LeagueScheduleTab
+                team={clubTeams.find(t => t.id === selectedTeamId)}
+                club={club}
+                user={user}
+              />
+            ) : (
+              <div className="text-center py-12">
+                <div className="text-4xl mb-4">🏆</div>
+                <p className="text-light/60 text-lg">Please select a team to view its league schedule</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Season Management Modal */}
+        {showSeasonManagement && selectedClubId && (
+          <SeasonManagement
+            clubId={selectedClubId}
+            onClose={() => setShowSeasonManagement(false)}
+          />
+        )}
+
         {/* Notifications Tab */}
         {selectedClubId && activeTab === 'notifications' && (
           <NotificationsTab

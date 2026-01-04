@@ -76,7 +76,7 @@ service cloud.firestore {
        USERS COLLECTION
        =========================== */
     
-    match /users/{userId} {
+      match /users/{userId} {
       // Anyone can create their own user document during registration
       // Parents can also create child subaccounts
       allow create: if isOwner(userId) || 
@@ -176,8 +176,8 @@ service cloud.firestore {
       // ✅ Team-level notification settings (nested)
       match /teams/{teamId}/notificationSettings/{settingId} {
         // ✅ FIX: Allow authenticated users to read settings (for queries)
-        allow read: if isAuthenticated();
-        
+  allow read: if isAuthenticated();
+  
         // Only club owners and trainers can update settings
         allow write: if isAuthenticated() && (
           isAdmin() ||
@@ -202,22 +202,22 @@ service cloud.firestore {
       
       // ✅ FIX: Allow updates for:
       // 1. Users updating RSVP (responses field only)
-      // 2. Event creators, club owners, trainers (full updates)
+      // 2. Event creators, club owners, trainers, assistants (full updates)
       allow update: if isAuthenticated() && (
         isAdmin() ||
         resource.data.createdBy == request.auth.uid ||
-        (resource.data.visibilityLevel == 'club' && resource.data.clubId != null && isClubOwner(resource.data.clubId)) ||
-        (resource.data.visibilityLevel == 'team' && resource.data.clubId != null && isClubTrainer(resource.data.clubId)) ||
+        (resource.data.clubId != null && isClubOwner(resource.data.clubId)) ||
+        (resource.data.clubId != null && isClubTrainer(resource.data.clubId)) ||
         // ✅ Allow any authenticated user to update responses (RSVP)
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['responses', 'updatedAt', 'waitlist', 'confirmedCount'])
       );
       
-      // Same permissions for delete as update
+      // Allow delete for creators, club owners, trainers, or assistants
       allow delete: if isAuthenticated() && (
         isAdmin() ||
         resource.data.createdBy == request.auth.uid ||
-        (resource.data.visibilityLevel == 'club' && resource.data.clubId != null && isClubOwner(resource.data.clubId)) ||
-        (resource.data.visibilityLevel == 'team' && resource.data.clubId != null && isClubTrainer(resource.data.clubId))
+        (resource.data.clubId != null && isClubOwner(resource.data.clubId)) ||
+        (resource.data.clubId != null && isClubTrainer(resource.data.clubId))
       );
     }
     
@@ -418,7 +418,7 @@ service cloud.firestore {
       // Only admins can delete invoices
       allow delete: if isAdmin();
     }
-    
+
     /* ===========================
        VOUCHERS COLLECTION
        =========================== */
@@ -574,7 +574,7 @@ service cloud.firestore {
     match /scheduledLockNotifications/{lockNotificationId} {
       // Cloud Functions create lock notifications
       allow create: if isAuthenticated();
-      
+
       // Users can read lock notifications
       allow read: if isAuthenticated();
       
@@ -690,6 +690,48 @@ service cloud.firestore {
       // Users can delete their own feedback
       allow delete: if isAuthenticated() && 
         resource.data.userId == request.auth.uid;
+    }
+    
+    /* ===========================
+       SEASONS
+       =========================== */
+    
+    match /seasons/{seasonId} {
+      // Read: All authenticated users can see seasons
+      allow read: if isAuthenticated();
+      
+      // List/Query: All authenticated users can query seasons
+      allow list: if isAuthenticated();
+      
+      // Write: Only club owner or admin
+      allow create, update, delete: if isAuthenticated() && (
+        isAdmin() ||
+        (request.resource.data.clubId != null && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.ownedClubs.hasAny([request.resource.data.clubId]))
+      );
+    }
+    
+    /* ===========================
+       LEAGUE SCHEDULE
+       =========================== */
+    
+    match /leagueSchedule/{gameId} {
+      // Read: All authenticated users can view (will be filtered by teamId in query)
+      allow read: if isAuthenticated();
+      
+      // List/Query: All authenticated users can query
+      allow list: if isAuthenticated();
+      
+      // Create: Authenticated users (permission enforced in client)
+      allow create: if isAuthenticated() &&
+        request.resource.data.keys().hasAll(['teamId', 'clubId', 'date', 'time', 'type']) &&
+        request.resource.data.createdBy == request.auth.uid;
+      
+      // Update: Authenticated users (permission enforced in client)
+      allow update: if isAuthenticated();
+      
+      // Delete: Authenticated users (permission enforced in client)
+      allow delete: if isAuthenticated();
     }
     
     /* ===========================

@@ -14,6 +14,7 @@ import { LanguageProvider } from './contexts/LanguageContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { ChatProvider } from './contexts/ChatContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { SeasonProvider } from './contexts/SeasonContext';
 
 // Configure React Query with better defaults
 const qc = new QueryClient({
@@ -41,7 +42,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <ToastProvider>
                 <ChatProvider>
                   <NotificationProvider>
+                    <SeasonProvider>
               <App />
+                    </SeasonProvider>
                   </NotificationProvider>
                 </ChatProvider>
             </ToastProvider>

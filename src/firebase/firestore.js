@@ -1360,6 +1360,357 @@ export const getTeamAttendanceStats = async (teamId, startDate = null, endDate =
 };
 
 /* ===========================
+   SEASONS
+   =========================== */
+
+/**
+ * Create a new season
+ */
+export const createSeason = async (seasonData) => {
+  try {
+    const docRef = await addDoc(collection(db, 'seasons'), {
+      ...seasonData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    return { id: docRef.id, ...seasonData };
+  } catch (error) {
+    console.error('Error creating season:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get a season by ID
+ */
+export const getSeason = async (seasonId) => {
+  try {
+    const seasonDoc = await getDoc(doc(db, 'seasons', seasonId));
+    if (seasonDoc.exists()) {
+      return { id: seasonDoc.id, ...seasonDoc.data() };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting season:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get all seasons for a club
+ */
+export const getClubSeasons = async (clubId) => {
+  try {
+    const q = query(
+      collection(db, 'seasons'),
+      where('clubId', '==', clubId),
+      orderBy('startDate', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.error('Error getting club seasons:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update a season
+ */
+export const updateSeason = async (seasonId, updates) => {
+  try {
+    await updateDoc(doc(db, 'seasons', seasonId), {
+      ...updates,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error updating season:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a season
+ */
+export const deleteSeason = async (seasonId) => {
+  try {
+    await deleteDoc(doc(db, 'seasons', seasonId));
+  } catch (error) {
+    console.error('Error deleting season:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get active season for a club
+ */
+export const getActiveSeason = async (clubId) => {
+  try {
+    const q = query(
+      collection(db, 'seasons'),
+      where('clubId', '==', clubId),
+      where('status', '==', 'active'),
+      limit(1)
+    );
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting active season:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get or create default season for a club
+ */
+export const getOrCreateDefaultSeason = async (clubId) => {
+  try {
+    // Try to get active season first
+    let activeSeason = await getActiveSeason(clubId);
+    if (activeSeason) {
+      return activeSeason;
+    }
+
+    // No active season, create default one
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth();
+    
+    // Season runs June to May
+    const seasonStartYear = currentMonth >= 5 ? currentYear : currentYear - 1;
+    const seasonEndYear = seasonStartYear + 1;
+    
+    const defaultSeason = {
+      clubId,
+      name: `${seasonStartYear}-${seasonEndYear}`,
+      displayName: `Season ${seasonStartYear}/${seasonEndYear}`,
+      startDate: `${seasonStartYear}-06-01`,
+      endDate: `${seasonEndYear}-05-31`,
+      status: 'active',
+      description: 'Default season',
+      createdBy: 'system'
+    };
+
+    return await createSeason(defaultSeason);
+  } catch (error) {
+    console.error('Error getting or creating default season:', error);
+    throw error;
+  }
+};
+
+/**
+ * Auto-assign season based on game date
+ */
+export const autoAssignSeason = (gameDate, seasons) => {
+  if (!seasons || seasons.length === 0) return null;
+  
+  // Find season where gameDate falls within range
+  const matchingSeason = seasons.find(s => 
+    gameDate >= s.startDate && gameDate <= s.endDate
+  );
+  
+  if (matchingSeason) return matchingSeason;
+  
+  // If no match, return active season
+  return seasons.find(s => s.status === 'active') || seasons[0];
+};
+
+/**
+ * Migrate existing games to seasons
+ * Assigns seasonId to games that don't have one
+ */
+export const migrateGamesToSeasons = async (clubId) => {
+  try {
+    console.log(`🔄 Starting migration for club: ${clubId}`);
+
+    // Get all seasons for this club
+    const seasons = await getClubSeasons(clubId);
+    if (seasons.length === 0) {
+      console.log('⚠️ No seasons found. Creating default season...');
+      const defaultSeason = await getOrCreateDefaultSeason(clubId);
+      seasons.push(defaultSeason);
+    }
+
+    // Get all games for this club (by querying all teams)
+    const clubDoc = await getDoc(doc(db, 'clubs', clubId));
+    if (!clubDoc.exists()) {
+      throw new Error('Club not found');
+    }
+
+    const clubData = clubDoc.data();
+    const teams = clubData.teams || [];
+    let totalMigrated = 0;
+    let totalSkipped = 0;
+
+    // Process each team's games
+    for (const team of teams) {
+      const gamesQuery = query(
+        collection(db, 'leagueSchedule'),
+        where('teamId', '==', team.id)
+      );
+      const gamesSnapshot = await getDocs(gamesQuery);
+
+      for (const gameDoc of gamesSnapshot.docs) {
+        const game = { id: gameDoc.id, ...gameDoc.data() };
+
+        // Skip if game already has a seasonId
+        if (game.seasonId) {
+          totalSkipped++;
+          continue;
+        }
+
+        // Auto-assign season based on game date
+        const assignedSeason = autoAssignSeason(game.date, seasons);
+        
+        if (assignedSeason) {
+          await updateDoc(doc(db, 'leagueSchedule', game.id), {
+            seasonId: assignedSeason.id,
+            updatedAt: serverTimestamp()
+          });
+          totalMigrated++;
+          console.log(`✅ Assigned game ${game.id} to season ${assignedSeason.name}`);
+        } else {
+          console.warn(`⚠️ Could not assign season for game ${game.id}`);
+        }
+      }
+    }
+
+    console.log(`✅ Migration complete: ${totalMigrated} games migrated, ${totalSkipped} skipped`);
+    return { migrated: totalMigrated, skipped: totalSkipped };
+  } catch (error) {
+    console.error('❌ Error migrating games:', error);
+    throw error;
+  }
+};
+
+/**
+ * Check if club has games without seasonId
+ */
+export const hasUnassignedGames = async (clubId) => {
+  try {
+    const clubDoc = await getDoc(doc(db, 'clubs', clubId));
+    if (!clubDoc.exists()) return false;
+
+    const clubData = clubDoc.data();
+    const teams = clubData.teams || [];
+
+    for (const team of teams) {
+      const gamesQuery = query(
+        collection(db, 'leagueSchedule'),
+        where('teamId', '==', team.id),
+        limit(1)
+      );
+      const gamesSnapshot = await getDocs(gamesQuery);
+
+      for (const gameDoc of gamesSnapshot.docs) {
+        if (!gameDoc.data().seasonId) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  } catch (error) {
+    console.error('Error checking for unassigned games:', error);
+    return false;
+  }
+};
+
+/* ===========================
+   LEAGUE SCHEDULE
+   =========================== */
+
+/**
+ * Create a new game in the league schedule
+ */
+export const createLeagueGame = async (gameData) => {
+  try {
+    const docRef = await addDoc(collection(db, 'leagueSchedule'), {
+      ...gameData,
+      source: 'manual',
+      status: new Date(gameData.date) >= new Date() ? 'upcoming' : 'played',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating league game:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get a single game by ID
+ */
+export const getLeagueGame = async (gameId) => {
+  try {
+    const gameDoc = await getDoc(doc(db, 'leagueSchedule', gameId));
+    if (gameDoc.exists()) {
+      return { id: gameDoc.id, ...gameDoc.data() };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting league game:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get all games for a team
+ */
+export const getTeamLeagueGames = async (teamId) => {
+  try {
+    const q = query(
+      collection(db, 'leagueSchedule'),
+      where('teamId', '==', teamId),
+      orderBy('date', 'asc'),
+      orderBy('time', 'asc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.error('Error getting team league games:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update a league game
+ */
+export const updateLeagueGame = async (gameId, updates) => {
+  try {
+    const updateData = {
+      ...updates,
+      updatedAt: serverTimestamp()
+    };
+    
+    // Recalculate status if date is updated
+    if (updates.date) {
+      updateData.status = new Date(updates.date) >= new Date() ? 'upcoming' : 'played';
+    }
+    
+    await updateDoc(doc(db, 'leagueSchedule', gameId), updateData);
+  } catch (error) {
+    console.error('Error updating league game:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a league game
+ */
+export const deleteLeagueGame = async (gameId) => {
+  try {
+    await deleteDoc(doc(db, 'leagueSchedule', gameId));
+  } catch (error) {
+    console.error('Error deleting league game:', error);
+    throw error;
+  }
+};
+
+/* ===========================
    USER PROFILE
    =========================== */
 
@@ -1729,6 +2080,25 @@ export default {
   updateAttendance,
   deleteAttendance,
   getTeamAttendanceStats,
+  
+  // Seasons functions
+  createSeason,
+  getSeason,
+  getClubSeasons,
+  updateSeason,
+  deleteSeason,
+  getActiveSeason,
+  getOrCreateDefaultSeason,
+  autoAssignSeason,
+  migrateGamesToSeasons,
+  hasUnassignedGames,
+  
+  // League Schedule functions
+  createLeagueGame,
+  getLeagueGame,
+  getTeamLeagueGames,
+  updateLeagueGame,
+  deleteLeagueGame,
   
   // Team Member Cards & Badges
   updateTeamCardSettings,
