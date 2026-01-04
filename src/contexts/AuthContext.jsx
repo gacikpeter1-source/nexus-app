@@ -104,22 +104,30 @@ export const AuthProvider = ({ children }) => {
       await userCredential.user.reload(); // ⚡ CRITICAL: Refresh auth state to get latest emailVerified status
       console.log('✅ User reloaded, emailVerified:', userCredential.user.emailVerified);
       
-      console.log('3️⃣ Checking email verification...');
-      if (!userCredential.user.emailVerified) {
-        console.error('❌ Email not verified!');
-        await signOut(auth); // Sign them out immediately
-        throw new Error('EMAIL_NOT_VERIFIED');
-      }
-      console.log('✅ Email verified');
-      
-      console.log('4️⃣ Fetching user document from Firestore...');
+      console.log('3️⃣ Fetching user document from Firestore FIRST (to check admin status)...');
       const userDoc = await getUser(userCredential.user.uid);
       console.log('📄 User doc received:', userDoc ? 'YES' : 'NO');
       
       if (!userDoc) {
         console.error('❌ No user document found in Firestore!');
+        await signOut(auth);
         throw new Error('User data not found');
       }
+
+      // Check if user is admin
+      const isAdmin = userDoc.isSuperAdmin === true || userDoc.role === 'admin';
+      console.log('👑 Is admin?', isAdmin);
+      
+      console.log('4️⃣ Checking email verification...');
+      if (!userCredential.user.emailVerified && !isAdmin) {
+        console.error('❌ Email not verified!');
+        await signOut(auth); // Sign them out immediately
+        throw new Error('EMAIL_NOT_VERIFIED');
+      }
+      if (isAdmin && !userCredential.user.emailVerified) {
+        console.log('⚠️ Admin login - bypassing email verification check');
+      }
+      console.log('✅ Email verified or admin bypass');
 
       // Track login timestamps and update emailVerified status in Firestore
       const now = new Date().toISOString();
