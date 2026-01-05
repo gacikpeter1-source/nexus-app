@@ -4,6 +4,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { getEvent, updateEventResponse, deleteEvent, getClub, getAllUsers } from '../firebase/firestore';
+import { getParentChildren } from '../firebase/parentChild';
 import { useIsAdmin } from '../hooks/usePermissions';
 import { isClubOwner } from '../firebase/privileges';
 import { ShowIf } from '../components/PermissionGuard';
@@ -33,6 +34,13 @@ export default function EventPage() {
   const [responseMessage, setResponseMessage] = useState('');
   const [showDeclineMenu, setShowDeclineMenu] = useState(false);
   const [showMaybeMenu, setShowMaybeMenu] = useState(false);
+  
+  // Child response modal state
+  const [showChildResponseModal, setShowChildResponseModal] = useState(false);
+  const [pendingResponseStatus, setPendingResponseStatus] = useState(null);
+  const [pendingResponseMessage, setPendingResponseMessage] = useState('');
+  const [childrenInTeam, setChildrenInTeam] = useState([]);
+  const [selectedChildren, setSelectedChildren] = useState([]);
 
   // Invite state
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -69,6 +77,26 @@ export default function EventPage() {
     const interval = setInterval(loadPendingRequests, 30000);
     return () => clearInterval(interval);
   }, [eventId, user]);
+  
+  // Load children in team when event loads
+  useEffect(() => {
+    if (user && event && user.role === 'parent' && event.teamId) {
+      loadChildrenInTeam();
+    }
+  }, [user, event]);
+
+  async function loadChildrenInTeam() {
+    try {
+      const children = await getParentChildren(user.id);
+      // Filter children who are members of this event's team
+      const childrenInThisTeam = children.filter(child => 
+        (child.teamIds || []).includes(event.teamId)
+      );
+      setChildrenInTeam(childrenInThisTeam);
+    } catch (error) {
+      console.error('Error loading children in team:', error);
+    }
+  }
 
   async function loadEventData() {
     try {
@@ -166,7 +194,7 @@ export default function EventPage() {
     return eventDate < now;
   }
 
-    async function handleRsvp(status, message = null) {
+    async function handleRsvp(status, message = null, childIds = null) {
     if (!user || !event) return;
 
     // ✅ FIX: Check if user can change status (blocks past events, manages lock period)
@@ -177,17 +205,47 @@ export default function EventPage() {
       showToast(statusCheck.reason || 'Cannot change status for this event', 'error');
       return;
     }
+    
+    // If parent has children in team and childIds not yet determined, show selection modal
+    if (childIds === null && user.role === 'parent' && childrenInTeam.length > 0) {
+      setPendingResponseStatus(status);
+      setPendingResponseMessage(message);
+      setSelectedChildren([]); // Default: no children selected (will apply to all)
+      setShowChildResponseModal(true);
+      return;
+    }
 
     try {
       setUpdatingRsvp(true);
+      
+      // Update parent's response
       await updateEventResponse(eventId, user.id, status, message);
+      
+      // Update children's responses
+      // If childIds is empty array (no checkboxes selected), apply to ALL children
+      // If childIds has items (checkboxes selected), apply only to those
+      const childIdsToUpdate = (childIds && childIds.length > 0) 
+        ? childIds 
+        : childrenInTeam.map(c => c.id);
+      
+      if (childIdsToUpdate.length > 0) {
+        await Promise.all(
+          childIdsToUpdate.map(childId => 
+            updateEventResponse(eventId, childId, status, message)
+          )
+        );
+      }
       
       // Reload event to get updated responses
       await loadEventData();
       
       const statusText = status === 'attending' ? 'attending' : 
                         status === 'declined' ? 'not attending' : 'maybe';
-      showToast(`Response updated: ${statusText}`, 'success');
+      const childCount = childIdsToUpdate.length;
+      const responseMsg = childCount > 0 
+        ? `Response updated for you and ${childCount} child(ren): ${statusText}`
+        : `Response updated: ${statusText}`;
+      showToast(responseMsg, 'success');
     } catch (error) {
       console.error('Error updating RSVP:', error);
       showToast('Failed to update response', 'error');
@@ -1354,6 +1412,83 @@ export default function EventPage() {
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Child Response Selection Modal */}
+      {showChildResponseModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+          <div className="bg-mid-dark border border-white/20 rounded-xl shadow-2xl p-6 max-w-md w-full">
+            <div className="mb-4">
+              <h3 className="font-title text-xl text-light mb-2">Include Children?</h3>
+              <p className="text-sm text-light/60">
+                Select which children this response applies to.
+                {selectedChildren.length === 0 && (
+                  <span className="block mt-1 text-primary font-medium">
+                    ⚠️ No children selected = applies to all children
+                  </span>
+                )}
+              </p>
+            </div>
+            
+            {/* Children List with Checkboxes */}
+            <div className="space-y-2 mb-6 max-h-[300px] overflow-y-auto">
+              {childrenInTeam.map(child => (
+                <label
+                  key={child.id}
+                  className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg cursor-pointer transition-all"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedChildren.includes(child.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedChildren([...selectedChildren, child.id]);
+                      } else {
+                        setSelectedChildren(selectedChildren.filter(id => id !== child.id));
+                      }
+                    }}
+                    className="w-5 h-5 rounded border-white/20 text-primary focus:ring-primary/20"
+                  />
+                  <div className="flex-1">
+                    <div className="text-light font-medium">{child.username}</div>
+                    <div className="text-xs text-light/60">
+                      {child.firstName} {child.lastName}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+            
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowChildResponseModal(false);
+                  setPendingResponseStatus(null);
+                  setSelectedChildren([]);
+                }}
+                className="flex-1 px-4 py-2 bg-white/10 hover:bg-white/20 text-light rounded-lg font-medium transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowChildResponseModal(false);
+                  handleRsvp(pendingResponseStatus, pendingResponseMessage, selectedChildren);
+                }}
+                className={`flex-1 px-4 py-2 text-white rounded-lg font-medium transition-all ${
+                  pendingResponseStatus === 'attending' 
+                    ? 'bg-green-500 hover:bg-green-600'
+                    : pendingResponseStatus === 'declined'
+                    ? 'bg-red-500 hover:bg-red-600'
+                    : 'bg-yellow-500 hover:bg-yellow-600'
+                }`}
+              >
+                Confirm
               </button>
             </div>
           </div>

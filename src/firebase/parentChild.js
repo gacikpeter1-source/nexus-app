@@ -98,9 +98,10 @@ export async function createChildAccount(parentId, childData) {
       approvedAt: serverTimestamp(),
     });
     
-    // Create join requests for teams instead of directly assigning
-    // This way trainers can approve the child's membership
+    // Auto-approve team assignment if parent is already a member
+    // Otherwise create join request for trainer approval
     const joinRequests = [];
+    const autoApproved = [];
     
     for (const teamId of childData.teamIds || []) {
       // Find which club this team belongs to
@@ -114,26 +115,64 @@ export async function createChildAccount(parentId, childData) {
           
           if (team) {
             try {
-              // Create join request for this team
-              const requestRef = await addDoc(collection(db, 'requests'), {
-                userId: childId,
-                clubId: clubId,
-                teamId: teamId,
-                status: 'pending',
-                requestedBy: parentId, // Parent is requesting on behalf of child
-                requestType: 'child_account',
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp()
-              });
+              // Check if parent is a member of this team
+              const isParentMember = 
+                (team.members || []).includes(parentId) ||
+                (team.trainers || []).includes(parentId) ||
+                (team.assistants || []).includes(parentId);
               
-              joinRequests.push({
-                requestId: requestRef.id,
-                clubId,
-                teamId,
-                teamName: team.name
-              });
+              if (isParentMember) {
+                // Auto-approve: directly add child to team
+                console.log(`Auto-approving child ${childId} for team ${teamId} (parent is member)`);
+                
+                // Add child to team members
+                const updatedTeams = club.teams.map(t => {
+                  if (t.id === teamId) {
+                    return {
+                      ...t,
+                      members: [...(t.members || []), childId]
+                    };
+                  }
+                  return t;
+                });
+                
+                // Update club with new team membership
+                await updateDoc(clubRef, { teams: updatedTeams });
+                
+                // Add club/team to child's arrays
+                await updateDoc(doc(db, 'users', childId), {
+                  clubIds: arrayUnion(clubId),
+                  teamIds: arrayUnion(teamId)
+                });
+                
+                autoApproved.push({
+                  clubId,
+                  teamId,
+                  teamName: team.name,
+                  reason: 'parent_is_member'
+                });
+              } else {
+                // Create join request for trainer approval
+                const requestRef = await addDoc(collection(db, 'requests'), {
+                  userId: childId,
+                  clubId: clubId,
+                  teamId: teamId,
+                  status: 'pending',
+                  requestedBy: parentId, // Parent is requesting on behalf of child
+                  requestType: 'child_account',
+                  createdAt: serverTimestamp(),
+                  updatedAt: serverTimestamp()
+                });
+                
+                joinRequests.push({
+                  requestId: requestRef.id,
+                  clubId,
+                  teamId,
+                  teamName: team.name
+                });
+              }
             } catch (requestError) {
-              console.warn(`Could not create join request for team ${teamId}:`, requestError.message);
+              console.warn(`Could not process team assignment for ${teamId}:`, requestError.message);
             }
             break; // Found the club for this team, no need to check other clubs
           }
@@ -146,7 +185,9 @@ export async function createChildAccount(parentId, childData) {
       childId, 
       childUser,
       joinRequests,
-      needsApproval: joinRequests.length > 0
+      autoApproved,
+      needsApproval: joinRequests.length > 0,
+      autoApprovedCount: autoApproved.length
     };
   } catch (error) {
     console.error('Error creating child account:', error);
@@ -666,6 +707,118 @@ export async function updateChildProfile(childId, updates) {
     return { success: true };
   } catch (error) {
     console.error('Error updating child profile:', error);
+    throw error;
+  }
+}
+
+/**
+ * Assign existing child to team (auto-approve if parent is member)
+ * @param {string} childId - Child user ID
+ * @param {string} clubId - Club ID
+ * @param {string} teamId - Team ID  
+ * @param {string} parentId - Parent user ID making the assignment
+ * @returns {object} Assignment result
+ */
+export async function assignChildToTeam(childId, clubId, teamId, parentId) {
+  try {
+    // Verify child exists and is managed by this parent
+    const childDoc = await getDoc(doc(db, 'users', childId));
+    if (!childDoc.exists()) {
+      throw new Error('CHILD_NOT_FOUND');
+    }
+    
+    const child = { id: childDoc.id, ...childDoc.data() };
+    if (!child.isSubAccount || child.managedByParentId !== parentId) {
+      throw new Error('NOT_AUTHORIZED');
+    }
+    
+    // Get club and team data
+    const clubRef = doc(db, 'clubs', clubId);
+    const clubDoc = await getDoc(clubRef);
+    
+    if (!clubDoc.exists()) {
+      throw new Error('CLUB_NOT_FOUND');
+    }
+    
+    const club = clubDoc.data();
+    const team = (club.teams || []).find(t => t.id === teamId);
+    
+    if (!team) {
+      throw new Error('TEAM_NOT_FOUND');
+    }
+    
+    // Check if child is already a member
+    if ((team.members || []).includes(childId)) {
+      return {
+        success: true,
+        alreadyMember: true,
+        message: 'Child is already a member of this team'
+      };
+    }
+    
+    // Check if parent is a member of this team
+    const isParentMember = 
+      (team.members || []).includes(parentId) ||
+      (team.trainers || []).includes(parentId) ||
+      (team.assistants || []).includes(parentId);
+    
+    if (isParentMember) {
+      // Auto-approve: directly add child to team
+      console.log(`Auto-approving child ${childId} for team ${teamId} (parent is member)`);
+      
+      // Add child to team members
+      const updatedTeams = club.teams.map(t => {
+        if (t.id === teamId) {
+          return {
+            ...t,
+            members: [...(t.members || []), childId]
+          };
+        }
+        return t;
+      });
+      
+      // Update club with new team membership
+      await updateDoc(clubRef, { teams: updatedTeams });
+      
+      // Add club/team to child's arrays
+      await updateDoc(doc(db, 'users', childId), {
+        clubIds: arrayUnion(clubId),
+        teamIds: arrayUnion(teamId),
+        updatedAt: serverTimestamp()
+      });
+      
+      return {
+        success: true,
+        autoApproved: true,
+        teamName: team.name,
+        clubName: club.name,
+        message: 'Child successfully added to team'
+      };
+    } else {
+      // Parent is not a member - create join request
+      const requestRef = await addDoc(collection(db, 'requests'), {
+        userId: childId,
+        clubId: clubId,
+        teamId: teamId,
+        status: 'pending',
+        requestedBy: parentId,
+        requestType: 'child_account',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      
+      return {
+        success: true,
+        autoApproved: false,
+        needsApproval: true,
+        requestId: requestRef.id,
+        teamName: team.name,
+        clubName: club.name,
+        message: 'Join request created - waiting for trainer approval'
+      };
+    }
+  } catch (error) {
+    console.error('Error assigning child to team:', error);
     throw error;
   }
 }
