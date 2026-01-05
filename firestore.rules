@@ -703,11 +703,11 @@ service cloud.firestore {
       // List/Query: All authenticated users can query seasons
       allow list: if isAuthenticated();
       
-      // Write: Only club owner or admin
+      // Write: Club owners, trainers, and admins can manage seasons
       allow create, update, delete: if isAuthenticated() && (
         isAdmin() ||
-        (request.resource.data.clubId != null && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.ownedClubs.hasAny([request.resource.data.clubId]))
+        isClubOwner(request.resource.data.clubId) ||
+        isClubTrainer(request.resource.data.clubId)
       );
     }
     

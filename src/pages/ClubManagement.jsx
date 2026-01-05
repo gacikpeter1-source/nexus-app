@@ -1648,9 +1648,9 @@ const filteredOrderResponses = useMemo(() => {
   }
 
   return (
-    <div className="flex flex-col min-h-screen p-1">
+    <div className="p-1">
       <div 
-        className="flex-1 overflow-auto"
+        className="overflow-auto"
         style={{
           WebkitOverflowScrolling: 'touch',
           touchAction: 'pan-y',
@@ -1762,7 +1762,7 @@ const filteredOrderResponses = useMemo(() => {
 
         {/* Tabs */}
         {selectedClubId && (
-          <div className="mb-6">
+          <div className="mb-3">
             <div className="flex gap-2 flex-wrap">
               <button
                 onClick={() => setActiveTab('management')}
@@ -3188,10 +3188,10 @@ const filteredOrderResponses = useMemo(() => {
 
         {/* League Tab */}
         {selectedClubId && activeTab === 'league' && (
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 animate-fade-in">
-            <div className="flex items-center justify-between mb-6">
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 animate-fade-in">
+            <div className="flex items-center justify-between mb-3">
               <h2 className="font-title text-2xl text-light">League Schedule</h2>
-              {(user?.isSuperAdmin || club?.ownerId === user?.id) && (
+              {isClubManager(clubs.find(c => c.id === selectedClubId)) && (
                 <button
                   onClick={() => setShowSeasonManagement(true)}
                   className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg transition-colors text-sm font-medium"
@@ -3203,8 +3203,8 @@ const filteredOrderResponses = useMemo(() => {
 
             {/* Team Selector */}
             {clubTeams.length > 0 && (
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-light/80 mb-2">Select Team:</label>
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-light/80 mb-1.5">Select Team:</label>
                 <select
                   value={selectedTeamId}
                   onChange={(e) => setSelectedTeamId(e.target.value)}
@@ -3215,8 +3215,9 @@ const filteredOrderResponses = useMemo(() => {
                   </option>
                   {clubTeams
                     .filter(team => {
+                      const currentClub = clubs.find(c => c.id === selectedClubId);
                       // Show all teams for club owner/admin
-                      if (user?.isSuperAdmin || club?.ownerId === user?.id) return true;
+                      if (user?.isSuperAdmin || currentClub?.ownerId === user?.id) return true;
                       // Show only teams where user is trainer or assistant
                       return team.trainers?.includes(user?.id) || team.assistants?.includes(user?.id);
                     })
@@ -3233,7 +3234,7 @@ const filteredOrderResponses = useMemo(() => {
             {selectedTeamId ? (
               <LeagueScheduleTab
                 team={clubTeams.find(t => t.id === selectedTeamId)}
-                club={club}
+                club={clubs.find(c => c.id === selectedClubId)}
                 user={user}
               />
             ) : (

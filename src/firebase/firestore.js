@@ -1502,19 +1502,49 @@ export const getOrCreateDefaultSeason = async (clubId) => {
 
 /**
  * Auto-assign season based on game date
+ * @param {string} clubId - The club ID
+ * @param {string} gameDate - Game date in YYYY-MM-DD format
+ * @returns {Promise<Object|null>} - The matching season or null
  */
-export const autoAssignSeason = (gameDate, seasons) => {
-  if (!seasons || seasons.length === 0) return null;
-  
-  // Find season where gameDate falls within range
-  const matchingSeason = seasons.find(s => 
-    gameDate >= s.startDate && gameDate <= s.endDate
-  );
-  
-  if (matchingSeason) return matchingSeason;
-  
-  // If no match, return active season
-  return seasons.find(s => s.status === 'active') || seasons[0];
+export const autoAssignSeason = async (clubId, gameDate) => {
+  try {
+    // Fetch all active seasons for this club
+    const seasonsQuery = query(
+      collection(db, 'seasons'),
+      where('clubId', '==', clubId),
+      where('status', '==', 'active')
+    );
+    
+    const seasonsSnapshot = await getDocs(seasonsQuery);
+    
+    if (seasonsSnapshot.empty) {
+      console.log(`⚠️ No active seasons found for club ${clubId}`);
+      return null;
+    }
+    
+    const seasons = seasonsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    // Find season where gameDate falls within range
+    const matchingSeason = seasons.find(s => 
+      gameDate >= s.startDate && gameDate <= s.endDate
+    );
+    
+    if (matchingSeason) {
+      console.log(`✅ Game date ${gameDate} matched to season: ${matchingSeason.name}`);
+      return matchingSeason;
+    }
+    
+    // If no match, return active season
+    const activeSeason = seasons.find(s => s.status === 'active') || seasons[0];
+    console.log(`⚠️ No exact match, using active season: ${activeSeason?.name || 'none'}`);
+    return activeSeason;
+  } catch (error) {
+    console.error('Error auto-assigning season:', error);
+    return null;
+  }
 };
 
 /**
@@ -1629,7 +1659,9 @@ export const createLeagueGame = async (gameData) => {
   try {
     const docRef = await addDoc(collection(db, 'leagueSchedule'), {
       ...gameData,
-      source: 'manual',
+      source: gameData.source || 'manual', // 'manual', 'scraped', or 'both'
+      scrapedId: gameData.scrapedId || null, // External ID from league website
+      lastSyncedAt: gameData.source === 'scraped' ? serverTimestamp() : null,
       status: new Date(gameData.date) >= new Date() ? 'upcoming' : 'played',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
@@ -1709,6 +1741,138 @@ export const deleteLeagueGame = async (gameId) => {
     throw error;
   }
 };
+
+/* ===========================
+   LEAGUE SCRAPER CONFIG
+   =========================== */
+
+/**
+ * Save scraper configuration for a team
+ */
+export const saveScraperConfig = async (clubId, teamId, config) => {
+  try {
+    const clubRef = doc(db, 'clubs', clubId);
+    const clubDoc = await getDoc(clubRef);
+    
+    if (!clubDoc.exists()) {
+      throw new Error('Club not found');
+    }
+
+    const clubData = clubDoc.data();
+    const teams = clubData.teams || [];
+    const teamIndex = teams.findIndex(t => t.id === teamId);
+
+    if (teamIndex === -1) {
+      throw new Error('Team not found');
+    }
+
+    teams[teamIndex] = {
+      ...teams[teamIndex],
+      scraperConfig: {
+        ...config,
+        updatedAt: new Date().toISOString()
+      }
+    };
+
+    await updateDoc(clubRef, { teams });
+    return true;
+  } catch (error) {
+    console.error('Error saving scraper config:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get scraper configuration for a team
+ */
+export const getScraperConfig = async (clubId, teamId) => {
+  try {
+    const clubRef = doc(db, 'clubs', clubId);
+    const clubDoc = await getDoc(clubRef);
+    
+    if (!clubDoc.exists()) {
+      return null;
+    }
+
+    const clubData = clubDoc.data();
+    const team = (clubData.teams || []).find(t => t.id === teamId);
+    
+    return team?.scraperConfig || null;
+  } catch (error) {
+    console.error('Error getting scraper config:', error);
+    throw error;
+  }
+};
+
+/**
+ * Sync scraped games with database
+ */
+export const syncScrapedGames = async (teamId, clubId, scrapedGames) => {
+  try {
+    const existingGames = await getTeamLeagueGames(teamId);
+    const results = {
+      added: 0,
+      updated: 0,
+      unchanged: 0,
+      conflicts: []
+    };
+
+    for (const scrapedGame of scrapedGames) {
+      // Try to match with existing game by scrapedId or date+time
+      const existingGame = existingGames.find(g => 
+        (g.scrapedId && g.scrapedId === scrapedGame.externalId) ||
+        (g.date === scrapedGame.date && g.time === scrapedGame.time)
+      );
+
+      if (existingGame) {
+        // Check if there's a conflict (manual edits vs scraped data)
+        if (existingGame.source === 'manual') {
+          // Manual game exists, mark as conflict
+          results.conflicts.push({
+            existing: existingGame,
+            scraped: scrapedGame
+          });
+        } else if (hasChanges(existingGame, scrapedGame)) {
+          // Update scraped game
+          await updateLeagueGame(existingGame.id, {
+            ...scrapedGame,
+            source: 'scraped',
+            scrapedId: scrapedGame.externalId,
+            lastSyncedAt: new Date().toISOString()
+          });
+          results.updated++;
+        } else {
+          results.unchanged++;
+        }
+      } else {
+        // New game from scraper
+        await createLeagueGame({
+          ...scrapedGame,
+          teamId,
+          clubId,
+          source: 'scraped',
+          scrapedId: scrapedGame.externalId,
+          createdBy: 'scraper'
+        });
+        results.added++;
+      }
+    }
+
+    return results;
+  } catch (error) {
+    console.error('Error syncing scraped games:', error);
+    throw error;
+  }
+};
+
+// Helper function to check if scraped data has changes
+function hasChanges(existing, scraped) {
+  return existing.date !== scraped.date ||
+         existing.time !== scraped.time ||
+         existing.location !== scraped.location ||
+         existing.opponent !== scraped.opponent ||
+         existing.result !== scraped.result;
+}
 
 /* ===========================
    USER PROFILE
@@ -2099,6 +2263,9 @@ export default {
   getTeamLeagueGames,
   updateLeagueGame,
   deleteLeagueGame,
+  saveScraperConfig,
+  getScraperConfig,
+  syncScrapedGames,
   
   // Team Member Cards & Badges
   updateTeamCardSettings,

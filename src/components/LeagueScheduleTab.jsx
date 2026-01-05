@@ -6,20 +6,36 @@ import {
   updateLeagueGame, 
   deleteLeagueGame,
   createEvent,
-  deleteEvent
+  deleteEvent,
+  getScraperConfig,
+  autoAssignSeason
 } from '../firebase/firestore';
 import { useSeasons } from '../contexts/SeasonContext';
+import { useToast } from '../contexts/ToastContext';
 import AddGameModal from './AddGameModal';
 import SeasonSelector from './SeasonSelector';
+import EventDetailModal from './EventDetailModal';
+import ScraperConfigModal from './ScraperConfigModal';
+import ConflictResolutionModal from './ConflictResolutionModal';
+import ScraperPreviewModal from './ScraperPreviewModal';
+import { scrapeLeagueSchedule, matchGames, detectConflicts } from '../utils/leagueScraper';
 
 export default function LeagueScheduleTab({ team, club, user }) {
   const { selectedSeason } = useSeasons();
+  const { showToast } = useToast();
   
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all'); // 'all', 'upcoming', 'played'
   const [showAddGameModal, setShowAddGameModal] = useState(false);
   const [editingGame, setEditingGame] = useState(null);
+  const [selectedEventId, setSelectedEventId] = useState(null);
+  const [showScraperConfig, setShowScraperConfig] = useState(false);
+  const [scraperConfig, setScraperConfig] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [conflicts, setConflicts] = useState([]);
+  const [showConflicts, setShowConflicts] = useState(false);
+  const [showScraperPreview, setShowScraperPreview] = useState(false);
 
   // Permission check: Can user edit schedule?
   const canEdit = useMemo(() => {
@@ -33,10 +49,11 @@ export default function LeagueScheduleTab({ team, club, user }) {
     );
   }, [user, team, club]);
 
-  // Load games
+  // Load games and scraper config
   useEffect(() => {
     loadGames();
-  }, [team?.id]);
+    loadScraperConfig();
+  }, [team?.id, club?.id]);
 
   const loadGames = async () => {
     if (!team?.id) return;
@@ -49,6 +66,35 @@ export default function LeagueScheduleTab({ team, club, user }) {
       console.error('Error loading league games:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadScraperConfig = async () => {
+    if (!club?.id || !team?.id) return;
+    
+    try {
+      const config = await getScraperConfig(club.id, team.id);
+      setScraperConfig(config);
+    } catch (error) {
+      console.error('Error loading scraper config:', error);
+    }
+  };
+
+  // Parse game date to Date object (handles both DD.MM.YYYY and YYYY-MM-DD)
+  const parseGameDate = (dateString) => {
+    if (!dateString) return new Date();
+    
+    if (dateString.includes('.')) {
+      // DD.MM.YYYY format - convert to proper Date
+      const [day, month, year] = dateString.split('.');
+      const parsedDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      console.log(`[DATE PARSE] Input: "${dateString}" → Parsed: ${parsedDate.toDateString()}`);
+      return parsedDate;
+    } else {
+      // YYYY-MM-DD format
+      const parsedDate = new Date(dateString);
+      console.log(`[DATE PARSE] Input: "${dateString}" (ISO) → Parsed: ${parsedDate.toDateString()}`);
+      return parsedDate;
     }
   };
 
@@ -66,10 +112,23 @@ export default function LeagueScheduleTab({ team, club, user }) {
 
     // Filter by status
     if (filter === 'upcoming') {
-      filtered = filtered.filter(game => new Date(game.date) >= today);
+      filtered = filtered.filter(game => {
+        const gameDate = parseGameDate(game.date);
+        return gameDate >= today;
+      });
     } else if (filter === 'played') {
-      filtered = filtered.filter(game => new Date(game.date) < today);
+      filtered = filtered.filter(game => {
+        const gameDate = parseGameDate(game.date);
+        return gameDate < today;
+      });
     }
+
+    // Sort chronologically (earliest date first)
+    filtered.sort((a, b) => {
+      const dateA = parseGameDate(a.date);
+      const dateB = parseGameDate(b.date);
+      return dateA - dateB;
+    });
 
     return filtered;
   }, [games, filter, selectedSeason]);
@@ -207,13 +266,21 @@ export default function LeagueScheduleTab({ team, club, user }) {
     setShowAddGameModal(true);
   };
 
+  // Handle view event details
+  const handleViewEventDetails = (game) => {
+    if (game.eventId) {
+      setSelectedEventId(game.eventId);
+    }
+  };
+
   // Format date for display
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
+    const date = parseGameDate(dateString);
     return date.toLocaleDateString('en-US', { 
       weekday: 'short', 
       month: 'short', 
-      day: 'numeric' 
+      day: 'numeric',
+      year: 'numeric'
     });
   };
 
@@ -232,7 +299,244 @@ export default function LeagueScheduleTab({ team, club, user }) {
   const isUpcoming = (dateString) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    return new Date(dateString) >= today;
+    const gameDate = parseGameDate(dateString);
+    return gameDate >= today;
+  };
+
+  // Get source badge
+  const getSourceBadge = (source) => {
+    if (source === 'scraped') {
+      return <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded text-xs font-semibold" title="Auto-synced from league website">🌐 Scraped</span>;
+    } else if (source === 'both') {
+      return <span className="px-2 py-0.5 bg-purple-500/20 text-purple-300 rounded text-xs font-semibold" title="Manual edits + scraped data">🔄 Manual+Auto</span>;
+    }
+    return <span className="px-2 py-0.5 bg-green-500/20 text-green-300 rounded text-xs font-semibold" title="Manually created">✏️ Manual</span>;
+  };
+
+  // Handle manual sync
+  const handleManualSync = async () => {
+    if (!scraperConfig || !scraperConfig.enabled || !scraperConfig.url) {
+      showToast('Please configure scraper settings first', 'error');
+      return;
+    }
+
+    // Open preview modal to show what will be scraped
+    setShowScraperPreview(true);
+  };
+
+  // Handle confirmed sync from preview modal
+  const handleConfirmedSync = async (scrapedGames) => {
+    setShowScraperPreview(false);
+
+    try {
+      setSyncing(true);
+      console.log('[SYNC] Starting sync with', scrapedGames.length, 'scraped games');
+      console.log('[SYNC] Existing games:', games.length);
+      showToast('Processing games...', 'info');
+
+      // Match and process scraped games
+      const detectedConflicts = [];
+      let addedCount = 0;
+      let updatedCount = 0;
+
+      for (const scrapedGame of scrapedGames) {
+        console.log('[SYNC] Processing scraped game:', {
+          date: scrapedGame.date,
+          time: scrapedGame.time,
+          homeTeam: scrapedGame.homeTeam,
+          guestTeam: scrapedGame.guestTeam,
+          externalId: scrapedGame.externalId
+        });
+
+        const { match, confidence } = matchGames(scrapedGame, games);
+        console.log('[SYNC] Match result:', { found: !!match, confidence });
+
+        if (match) {
+          console.log('[SYNC] Found matching game:', {
+            id: match.id,
+            source: match.source,
+            date: match.date,
+            time: match.time
+          });
+
+          // Game exists - check for conflicts
+          if (match.source === 'manual') {
+            // Manual game - check if data differs
+            const gameConflicts = detectConflicts(match, scrapedGame);
+            console.log('[SYNC] Manual game - conflicts:', gameConflicts.length);
+            
+            if (gameConflicts.length > 0) {
+              console.log('[SYNC] Adding to conflicts list');
+              detectedConflicts.push({
+                existing: match,
+                scraped: scrapedGame,
+                conflicts: gameConflicts,
+                confidence
+              });
+            } else {
+              console.log('[SYNC] No conflicts - updating lastSyncedAt only');
+              await updateLeagueGame(match.id, {
+                source: 'manual+scraped',
+                scrapedId: scrapedGame.externalId,
+                lastSyncedAt: new Date().toISOString()
+              });
+              updatedCount++;
+            }
+          } else {
+            // Scraped game - update with new data
+            console.log('[SYNC] Scraped game - updating with new data');
+            await updateLeagueGame(match.id, {
+              homeTeam: scrapedGame.homeTeam,
+              guestTeam: scrapedGame.guestTeam,
+              date: scrapedGame.date,
+              time: scrapedGame.time,
+              location: scrapedGame.location,
+              type: scrapedGame.type,
+              result: scrapedGame.result || match.result,
+              notes: scrapedGame.notes || match.notes,
+              source: 'scraped',
+              scrapedId: scrapedGame.externalId,
+              lastSyncedAt: new Date().toISOString()
+            });
+            updatedCount++;
+          }
+        } else {
+          // New game - add it
+          console.log('[SYNC] No match found - adding new game');
+          // Parse scraped date properly (DD.MM.YYYY format)
+          const [day, month, year] = scrapedGame.date.split('.');
+          const scrapedDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          
+          // Convert date to YYYY-MM-DD for season matching
+          const isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+          
+          // Auto-assign season based on game date
+          const season = await autoAssignSeason(club.id, isoDate);
+          console.log('[SYNC] Auto-assigned season:', season?.name || 'none');
+          
+          const newGameData = {
+            homeTeam: scrapedGame.homeTeam,
+            guestTeam: scrapedGame.guestTeam,
+            date: scrapedGame.date,
+            time: scrapedGame.time,
+            location: scrapedGame.location,
+            type: scrapedGame.type,
+            result: scrapedGame.result,
+            notes: scrapedGame.notes,
+            teamId: team.id,
+            clubId: club.id,
+            seasonId: season?.id || null,
+            source: 'scraped',
+            scrapedId: scrapedGame.externalId,
+            createdBy: user.id,
+            status: scrapedDate >= today ? 'upcoming' : 'played'
+          };
+          console.log('[SYNC] Creating new game:', newGameData);
+          const gameId = await createLeagueGame(newGameData);
+          addedCount++;
+
+          // Check if this game includes the current team (use scraper config team identifier)
+          const teamIdentifier = scraperConfig?.teamIdentifier?.toUpperCase() || team.name.toUpperCase();
+          const homeTeamUpper = scrapedGame.homeTeam?.toUpperCase() || '';
+          const guestTeamUpper = scrapedGame.guestTeam?.toUpperCase() || '';
+          
+          const isTeamGame = 
+            homeTeamUpper.includes(teamIdentifier) || 
+            guestTeamUpper.includes(teamIdentifier);
+
+          console.log(`[SYNC] Checking if team game: identifier="${teamIdentifier}", home="${homeTeamUpper}", guest="${guestTeamUpper}", match=${isTeamGame}`);
+
+          if (isTeamGame && gameId) {
+            console.log(`[SYNC] ✅ This is a ${teamIdentifier} game - creating calendar event`);
+            
+            // Create calendar event for Myslava games only
+            try {
+              const eventTitle = `${scrapedGame.homeTeam} vs ${scrapedGame.guestTeam}`;
+              
+              // Get all team members
+              const teamMembers = [
+                ...(team.trainers || []),
+                ...(team.assistants || []),
+                ...(team.members || [])
+              ];
+              const uniqueMembers = [...new Set(teamMembers)];
+              
+              // Initialize responses
+              const initialResponses = {};
+              uniqueMembers.forEach(userId => {
+                initialResponses[userId] = {
+                  status: 'pending',
+                  message: null,
+                  timestamp: null
+                };
+              });
+
+              // Convert date format from DD.MM.YYYY to YYYY-MM-DD
+              const [day, month, year] = scrapedGame.date.split('.');
+              const isoDate = `${year}-${month}-${day}`;
+              
+              const eventData = {
+                title: eventTitle,
+                type: scrapedGame.type || 'game',
+                date: isoDate,
+                time: scrapedGame.time,
+                location: scrapedGame.location === 'home' ? 'Home' : 
+                         scrapedGame.location === 'away' ? 'Away' : 
+                         scrapedGame.location === 'neutral' ? 'Neutral' : '',
+                description: scrapedGame.notes || `League game`,
+                clubId: club.id,
+                teamId: team.id,
+                createdBy: user.id,
+                invitedUsers: uniqueMembers,
+                responses: initialResponses,
+                visibility: 'team',
+                visibilityLevel: 'team',
+                participantLimit: null,
+                lockPeriod: 0,
+                reminderTime: 24,
+                reminderEnabled: true,
+                isLeagueGame: true
+              };
+              
+              const createdEvent = await createEvent(eventData);
+              console.log('✅ Calendar event created for Myslava game');
+              
+              // Link event to game
+              if (createdEvent?.id) {
+                await updateLeagueGame(gameId, { eventId: createdEvent.id });
+                console.log('✅ Game linked to calendar event');
+              }
+            } catch (eventError) {
+              console.error('⚠️ Failed to create calendar event:', eventError);
+              // Don't fail the sync if event creation fails
+            }
+          } else {
+            console.log('[SYNC] Not a Myslava game - skipping event creation');
+          }
+        }
+      }
+
+      console.log('[SYNC] Final results:', { addedCount, updatedCount, conflicts: detectedConflicts.length });
+
+      // Reload games
+      await loadGames();
+
+      // Show results
+      if (detectedConflicts.length > 0) {
+        setConflicts(detectedConflicts);
+        setShowConflicts(true);
+        showToast(`⚠️ Found ${detectedConflicts.length} conflict(s) requiring review`, 'warning');
+      } else {
+        showToast(`✅ Sync complete! Added: ${addedCount}, Updated: ${updatedCount}`, 'success');
+      }
+    } catch (error) {
+      console.error('Error syncing games:', error);
+      showToast('Failed to sync games: ' + error.message, 'error');
+    } finally {
+      setSyncing(false);
+    }
   };
 
   if (loading) {
@@ -259,7 +563,7 @@ export default function LeagueScheduleTab({ team, club, user }) {
           </p>
         </div>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {/* Filters */}
           <div className="flex bg-white/5 rounded-lg p-1 gap-1">
             <button
@@ -293,6 +597,30 @@ export default function LeagueScheduleTab({ team, club, user }) {
               Played
             </button>
           </div>
+
+          {/* Scraper Buttons (Only for editors) */}
+          {canEdit && (
+            <>
+              <button
+                onClick={() => setShowScraperConfig(true)}
+                className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg text-xs font-medium transition-all whitespace-nowrap"
+                title="Configure auto-sync from league website"
+              >
+                ⚙️ Scraper
+              </button>
+              
+              {scraperConfig?.enabled && (
+                <button
+                  onClick={handleManualSync}
+                  disabled={syncing}
+                  className="px-3 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 rounded-lg text-xs font-medium transition-all whitespace-nowrap disabled:opacity-50"
+                  title="Manually sync now"
+                >
+                  {syncing ? '⏳ Syncing...' : '🔄 Sync Now'}
+                </button>
+              )}
+            </>
+          )}
 
           {/* Add Button (Only for editors) */}
           {canEdit && (
@@ -335,8 +663,8 @@ export default function LeagueScheduleTab({ team, club, user }) {
                 <tr className="border-b border-white/10 bg-white/5">
                   <th className="text-left py-3 px-4 font-semibold">Date</th>
                   <th className="text-left py-3 px-4 font-semibold">Time</th>
-                  <th className="text-left py-3 px-4 font-semibold">Type</th>
                   <th className="text-left py-3 px-4 font-semibold">Match / Result</th>
+                  <th className="text-left py-3 px-4 font-semibold">Type</th>
                   <th className="text-left py-3 px-4 font-semibold">Location</th>
                   {canEdit && <th className="text-right py-3 px-4 font-semibold">Actions</th>}
                 </tr>
@@ -345,12 +673,15 @@ export default function LeagueScheduleTab({ team, club, user }) {
                 {filteredGames.map((game, index) => (
                   <tr 
                     key={game.id}
-                    className={`border-b border-white/10 hover:bg-white/5 transition-colors ${
+                    onClick={() => handleViewEventDetails(game)}
+                    className={`border-b border-white/10 hover:bg-white/10 transition-colors cursor-pointer ${
                       isUpcoming(game.date) ? 'bg-primary/5' : ''
-                    }`}
+                    } ${game.eventId ? '' : 'opacity-60'}`}
+                    title={game.eventId ? 'Click to view event details' : 'No event linked'}
                   >
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
+                        {game.eventId && <span className="text-xs">📅</span>}
                         {isUpcoming(game.date) && (
                           <span className="w-2 h-2 rounded-full bg-primary"></span>
                         )}
@@ -358,11 +689,6 @@ export default function LeagueScheduleTab({ team, club, user }) {
                       </div>
                     </td>
                     <td className="py-3 px-4">{game.time}</td>
-                    <td className="py-3 px-4">
-                      <span className="px-2 py-1 bg-white/10 rounded text-xs capitalize">
-                        {game.type}
-                      </span>
-                    </td>
                     <td className="py-3 px-4">
                       {game.result ? (
                         <span className="font-medium text-primary">{game.result}</span>
@@ -376,18 +702,32 @@ export default function LeagueScheduleTab({ team, club, user }) {
                         <span className="text-light/40">-</span>
                       )}
                     </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-1 bg-white/10 rounded text-xs capitalize">
+                          {game.type}
+                        </span>
+                        {getSourceBadge(game.source || 'manual')}
+                      </div>
+                    </td>
                     <td className="py-3 px-4">{formatLocation(game.location)}</td>
                     {canEdit && (
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => handleEditGame(game)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditGame(game);
+                            }}
                             className="px-3 py-1 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded transition-colors text-xs"
                           >
                             Edit
                           </button>
                           <button
-                            onClick={() => handleDeleteGame(game.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteGame(game.id);
+                            }}
                             className="px-3 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded transition-colors text-xs"
                           >
                             Delete
@@ -405,12 +745,15 @@ export default function LeagueScheduleTab({ team, club, user }) {
           <div className="md:hidden divide-y divide-white/10">
             {filteredGames.map((game) => (
               <div 
-                key={game.id} 
-                className={`p-4 ${isUpcoming(game.date) ? 'bg-primary/5' : ''}`}
+                key={game.id}
+                onClick={() => handleViewEventDetails(game)} 
+                className={`p-4 cursor-pointer hover:bg-white/10 transition-colors ${isUpcoming(game.date) ? 'bg-primary/5' : ''} ${game.eventId ? '' : 'opacity-60'}`}
+                title={game.eventId ? 'Tap to view event details' : 'No event linked'}
               >
                 {/* Date & Time */}
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
+                    {game.eventId && <span className="text-xs">📅</span>}
                     {isUpcoming(game.date) && (
                       <span className="w-2 h-2 rounded-full bg-primary"></span>
                     )}
@@ -419,11 +762,12 @@ export default function LeagueScheduleTab({ team, club, user }) {
                   <span className="text-sm text-light/60">{game.time}</span>
                 </div>
 
-                {/* Type & Location */}
-                <div className="flex items-center gap-2 mb-2">
+                {/* Type & Location & Source */}
+                <div className="flex flex-wrap items-center gap-2 mb-2">
                   <span className="px-2 py-1 bg-white/10 rounded text-xs capitalize">
                     {game.type}
                   </span>
+                  {getSourceBadge(game.source || 'manual')}
                   <span className="text-xs text-light/60">{formatLocation(game.location)}</span>
                 </div>
 
@@ -447,15 +791,24 @@ export default function LeagueScheduleTab({ team, club, user }) {
 
                 {/* Actions */}
                 {canEdit && (
-                  <div className="flex items-center gap-2 pt-3 border-t border-white/10">
+                  <div 
+                    className="flex items-center gap-2 pt-3 border-t border-white/10"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <button
-                      onClick={() => handleEditGame(game)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditGame(game);
+                      }}
                       className="flex-1 px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded transition-colors text-sm"
                     >
                       Edit
                     </button>
                     <button
-                      onClick={() => handleDeleteGame(game.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteGame(game.id);
+                      }}
                       className="flex-1 px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded transition-colors text-sm"
                     >
                       Delete
@@ -482,6 +835,51 @@ export default function LeagueScheduleTab({ team, club, user }) {
             setShowAddGameModal(false);
             setEditingGame(null);
           }}
+        />
+      )}
+
+      {/* Event Detail Modal */}
+      {selectedEventId && (
+        <EventDetailModal
+          eventId={selectedEventId}
+          onClose={() => setSelectedEventId(null)}
+        />
+      )}
+
+      {/* Scraper Configuration Modal */}
+      {showScraperConfig && (
+        <ScraperConfigModal
+          clubId={club.id}
+          team={team}
+          onClose={() => setShowScraperConfig(false)}
+          onSave={() => {
+            loadScraperConfig();
+            showToast('Scraper configuration saved!', 'success');
+          }}
+        />
+      )}
+
+      {/* Conflict Resolution Modal */}
+      {showConflicts && conflicts.length > 0 && (
+        <ConflictResolutionModal
+          conflicts={conflicts}
+          onClose={() => {
+            setShowConflicts(false);
+            setConflicts([]);
+          }}
+          onResolve={() => {
+            loadGames();
+            setConflicts([]);
+          }}
+        />
+      )}
+
+      {/* Scraper Preview Modal */}
+      {showScraperPreview && scraperConfig && (
+        <ScraperPreviewModal
+          config={scraperConfig}
+          onClose={() => setShowScraperPreview(false)}
+          onConfirmSync={handleConfirmedSync}
         />
       )}
     </div>

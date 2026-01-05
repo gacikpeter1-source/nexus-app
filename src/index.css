@@ -300,3 +300,11 @@ textarea:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(255, 51, 102, 0.1);
 }
+
+/* ===========================
+   MODAL / POPUP FIX
+   =========================== */
+/* Ensure modals appear properly */
+body.modal-open {
+  overflow: hidden;
+}

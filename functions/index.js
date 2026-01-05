@@ -3,6 +3,8 @@
 
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
+const axios = require('axios');
+const cheerio = require('cheerio');
 
 admin.initializeApp();
 
@@ -3718,5 +3720,135 @@ exports.onUserDeleted = functions.firestore
       console.error('═══════════════════════════════════════');
     }
   });
+
+// ============================================================================
+// LEAGUE SCHEDULE SCRAPER
+// ============================================================================
+
+/**
+ * Scrape league schedule from external website
+ * Called from client when user wants to sync league games
+ */
+exports.scrapeLeagueSchedule = functions.https.onCall(async (data, context) => {
+  // Must be authenticated
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { url, teamIdentifier } = data;
+
+  if (!url) {
+    throw new functions.https.HttpsError('invalid-argument', 'URL is required');
+  }
+
+  console.log('═══════════════════════════════════════');
+  console.log('🔍 LEAGUE SCHEDULE SCRAPER - DEBUG MODE');
+  console.log(`📄 URL: ${url}`);
+  console.log(`🏒 Team: ${teamIdentifier}`);
+  console.log('═══════════════════════════════════════');
+
+  try {
+    // Fetch the HTML page
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      timeout: 10000
+    });
+
+    const html = response.data;
+    const $ = cheerio.load(html);
+    
+    // Parse structure: Every game follows this pattern (7 lines):
+    // Line 1: Round (e.g., "1. kolo")
+    // Line 2: Home team (full name with abbr, e.g., "HC HANISKA FLYERSHAN")
+    // Line 3: Score separator (" - : - ")
+    // Line 4: Guest team (full name with abbr, e.g., "AHK SOKOĽANYSOK")
+    // Line 5: Date (e.g., "10.01.2026 -")
+    // Line 6: Time (e.g., "20:30")
+    // Line 7: "Detail zápasu"
+    
+    $('script').remove();
+    $('style').remove();
+    const bodyText = $('body').text();
+    const lines = bodyText.split('\n').map(l => l.trim()).filter(l => l.length > 3);
+    
+    console.log(`\n📊 Total lines: ${lines.length}`);
+    console.log('🔍 Parsing games...\n');
+    
+    const games = [];
+    
+    // Find all lines with "X. kolo" pattern - these mark the start of games
+    for (let i = 0; i < lines.length - 6; i++) {
+      const line = lines[i];
+      
+      // Check if this line is a round indicator
+      if (line.match(/^\d+\.\s*kolo$/)) {
+        const round = line;
+        const homeTeam = lines[i + 1];
+        const separator = lines[i + 2];
+        const guestTeam = lines[i + 3];
+        const dateLine = lines[i + 4];
+        const timeLine = lines[i + 5];
+        
+        // Check separator and extract result if available
+        if (separator.includes('-') && separator.includes(':')) {
+          // Extract date (remove trailing " -")
+          const date = dateLine.replace(/\s*-\s*$/, '').trim();
+          const time = timeLine.trim();
+          
+          // Validate date and time format
+          if (date.match(/^\d{2}\.\d{2}\.\d{4}$/) && time.match(/^\d{2}:\d{2}$/)) {
+            // Remove last 3 characters (abbreviations) from team names
+            const cleanHomeTeam = homeTeam.slice(0, -3).trim();
+            const cleanGuestTeam = guestTeam.slice(0, -3).trim();
+            
+            // Extract result if game has been played (format: "X : Y" instead of "- : -")
+            let result = null;
+            const scoreMatch = separator.match(/^(\d+)\s*:\s*(\d+)$/);
+            if (scoreMatch) {
+              result = `${scoreMatch[1]}:${scoreMatch[2]}`;
+              console.log(`✅ Game: ${cleanHomeTeam} vs ${cleanGuestTeam} | ${date} ${time} | Result: ${result} | ${round}`);
+            } else {
+              console.log(`✅ Game: ${cleanHomeTeam} vs ${cleanGuestTeam} | ${date} ${time} | ${round}`);
+            }
+            
+            games.push({
+              externalId: `hlcana-${date}-${time}-${i}`.replace(/[\s:.]/g, '-'),
+              round,
+              homeTeam: cleanHomeTeam,
+              guestTeam: cleanGuestTeam,
+              date,
+              time,
+              result,
+              type: 'game',
+              location: teamIdentifier && cleanHomeTeam.includes(teamIdentifier) ? 'home' : 
+                        teamIdentifier && cleanGuestTeam.includes(teamIdentifier) ? 'away' : 'neutral',
+              notes: `Scraped from ${url}`
+            });
+          }
+        }
+      }
+    }
+
+    console.log(`✅ Successfully scraped ${games.length} games`);
+    console.log('═══════════════════════════════════════');
+
+    return {
+      success: true,
+      games,
+      scrapedAt: new Date().toISOString()
+    };
+
+  } catch (error) {
+    console.error('❌ Scraping error:', error);
+    console.error('═══════════════════════════════════════');
+    
+    throw new functions.https.HttpsError(
+      'internal',
+      `Failed to scrape league schedule: ${error.message}`
+    );
+  }
+});
 
 
