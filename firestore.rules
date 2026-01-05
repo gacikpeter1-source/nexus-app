@@ -514,13 +514,27 @@ service cloud.firestore {
       allow create: if isAuthenticated();
       
       // User can read their own notifications
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // Parents can read their children's notifications
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        // Check if notification userId is a child of the current user
+        (exists(/databases/$(database)/documents/users/$(resource.data.userId)) &&
+         get(/databases/$(database)/documents/users/$(resource.data.userId)).data.keys().hasAny(['parentIds']) &&
+         request.auth.uid in get(/databases/$(database)/documents/users/$(resource.data.userId)).data.parentIds)
+      );
       
       // System can update notifications
       allow update: if true;
       
       // User can delete their own notifications
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // Parents can delete their children's notifications
+      allow delete: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        // Check if notification userId is a child of the current user
+        (exists(/databases/$(database)/documents/users/$(resource.data.userId)) &&
+         get(/databases/$(database)/documents/users/$(resource.data.userId)).data.keys().hasAny(['parentIds']) &&
+         request.auth.uid in get(/databases/$(database)/documents/users/$(resource.data.userId)).data.parentIds)
+      );
     }
     
     /* ===========================
