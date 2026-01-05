@@ -92,6 +92,7 @@ service cloud.firestore {
       // Parents can update their child subaccounts
       // ✅ FIX: Club owners/trainers can update clubIds when approving join requests
       // ✅ FIX: Club owners/trainers can update role field (to assign parent role)
+      // ✅ FIX: Parents can update parentIds/childIds during relationship approval
       allow update: if isOwner(userId) || isAdmin() ||
         (isAuthenticated() && 
          'managedByParentId' in resource.data && 
@@ -103,7 +104,20 @@ service cloud.firestore {
         // Restrict to non-admin roles for security
         (isAuthenticated() && 
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'updatedAt']) &&
-         request.resource.data.role in ['user', 'parent', 'trainer', 'assistant']);
+         request.resource.data.role in ['user', 'parent', 'trainer', 'assistant']) ||
+        // Allow parents to update parentIds during relationship approval
+        (isAuthenticated() && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['parentIds', 'updatedAt']) &&
+         request.auth.uid in request.resource.data.parentIds) ||
+        // Allow parents to update childIds during relationship approval
+        (isAuthenticated() && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['childIds', 'updatedAt']) &&
+         userId == request.auth.uid) ||
+        // Allow parents to update parentIds and accountType when linking (for regular parent-child links)
+        (isAuthenticated() && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['parentIds', 'accountType', 'updatedAt']) &&
+         request.auth.uid in request.resource.data.parentIds &&
+         request.resource.data.accountType == 'linked');
       
       // Users can delete their own account, admins can delete any (except other admins)
       // Parents can delete child subaccounts
