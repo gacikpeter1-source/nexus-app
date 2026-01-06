@@ -53,14 +53,9 @@ export const sendNotificationToUsers = async (userIds, notification) => {
  * Notify users about new event
  */
 export const notifyEventCreated = async (event, clubMembers, teamMembers) => {
-  // Format date and time for notification
-  const eventDate = event.date ? new Date(event.date).toLocaleDateString() : 'TBD';
-  const eventTime = event.startTime || event.time || '';
-  const dateTimeText = eventTime ? `${eventDate} at ${eventTime}` : eventDate;
-  
   const notification = {
     title: '📅 New Event Created',
-    body: `${event.title} - ${dateTimeText}`,
+    body: `${event.title} - ${new Date(event.start).toLocaleDateString()}`,
     data: {
       type: 'event_new',
       eventId: event.id,

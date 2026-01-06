@@ -15,6 +15,7 @@ import { ToastProvider } from './contexts/ToastContext';
 import { ChatProvider } from './contexts/ChatContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { SeasonProvider } from './contexts/SeasonContext';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Configure React Query with better defaults
 const qc = new QueryClient({
@@ -33,27 +34,29 @@ const qc = new QueryClient({
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <QueryClientProvider client={qc}>
-      <BrowserRouter>
-        {/* ✅ SINGLE provider hierarchy - no duplicates */}
-        <AuthProvider>
-          <SubscriptionProvider>
-          <LanguageProvider>
-            <ToastProvider>
-                <ChatProvider>
-                  <NotificationProvider>
-                    <SeasonProvider>
-              <App />
-                    </SeasonProvider>
-                  </NotificationProvider>
-                </ChatProvider>
-            </ToastProvider>
-          </LanguageProvider>
-          </SubscriptionProvider>
-        </AuthProvider>
-      </BrowserRouter>
-      <ReactQueryDevtools initialIsOpen={false} />
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={qc}>
+        <BrowserRouter>
+          {/* ✅ SINGLE provider hierarchy - no duplicates */}
+          <AuthProvider>
+            <SubscriptionProvider>
+            <LanguageProvider>
+              <ToastProvider>
+                  <ChatProvider>
+                    <NotificationProvider>
+                      <SeasonProvider>
+                <App />
+                      </SeasonProvider>
+                    </NotificationProvider>
+                  </ChatProvider>
+              </ToastProvider>
+            </LanguageProvider>
+            </SubscriptionProvider>
+          </AuthProvider>
+        </BrowserRouter>
+        <ReactQueryDevtools initialIsOpen={false} />
+      </QueryClientProvider>
+    </ErrorBoundary>
   </React.StrictMode>
 );
 

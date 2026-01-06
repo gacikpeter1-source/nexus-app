@@ -385,91 +385,83 @@ export default function Calendar() {
                 <p className="text-light/60">Create your first event to get started!</p>
               </div>
             ) : (
-              <div className="grid gap-4">
+              <div className="space-y-2">
                 {upcomingEvents.map(event => {
                   // Check if current user declined or attending this event
                   const userResponse = event.responses?.[user?.id];
                   const isDeclined = userResponse?.status === 'declined';
                   const isAttending = userResponse?.status === 'attending';
                   
+                  const attendingCount = event.responses 
+                    ? Object.values(event.responses).filter(r => r.status === 'attending').length 
+                    : 0;
+                  const totalLimit = event.participantLimit || '∞';
+                  
                   return (
                     <Link
                       key={event.id}
                       to={`/event/${event.id}`}
-                      className={`group bg-white/5 backdrop-blur-sm border rounded-xl p-5 hover:bg-white/10 transition-all ${
-                        isDeclined ? 'opacity-50 border-white/10' : 
-                        isAttending ? 'border-green-500/50 bg-green-500/5 shadow-[0_0_15px_rgba(34,197,94,0.3)] hover:border-green-500/70' : 
-                        'border-white/10 hover:border-primary/50'
+                      className={`group flex items-center gap-2 p-2 rounded-lg transition-all mb-2 ${
+                        isDeclined ? 'opacity-50 bg-gray-800 hover:bg-gray-750' : 
+                        isAttending ? 'bg-green-500/10 hover:bg-green-500/20' : 
+                        'bg-gray-800 hover:bg-gray-750'
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-4 flex-1">
-                          {/* Circle placeholder for club/team logo */}
-                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold shrink-0">
-                            {event.type?.charAt(0).toUpperCase() || 'E'}
-                          </div>
-                          <div className="flex-1">
-                            <h3 className={`font-title text-xl group-hover:text-primary transition-colors mb-1 ${
-                              isDeclined ? 'text-light/50 line-through' : 'text-light'
-                            }`}>
-                              {event.title}
-                            </h3>
-                            {isAttending && (
-                              <div className="inline-block px-2 py-1 bg-green-500/20 text-green-300 rounded text-xs font-medium mb-2">
-                                ✓ You are registered
-                              </div>
-                            )}
-                            {isDeclined && (
-                              <div className="inline-block px-2 py-1 bg-red-500/20 text-red-300 rounded text-xs font-medium mb-2">
-                                ❌ Declined
-                              </div>
-                            )}
-                            <p className="text-sm text-light/60 capitalize mb-2">
-                              {event.type || 'Event'}
-                              {event.visibilityLevel === 'team' && ' • Team Event'}
-                              {event.visibilityLevel === 'club' && ' • Club Event'}
-                            </p>
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-light/70">
-                              <span>📅 {new Date(event.date).toLocaleDateString()}</span>
-                              {event.time && <span>🕐 {event.time}</span>}
-                              {event.location && <span>📍 {event.location}</span>}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {/* Rating Badge (for past trainings) */}
-                          {eventRatings[event.id] && (
-                            <div className="px-3 py-1 rounded-full text-xs font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
-                              {eventRatings[event.id].averageRating}⭐ {eventRatings[event.id].totalResponses}/{(() => {
-                                const attendingCount = event.responses 
-                                  ? Object.values(event.responses).filter(r => r.status === 'attending').length 
-                                  : 0;
-                                return attendingCount;
-                              })()}
-                            </div>
-                          )}
-                          
-                          {/* Attendance Count Badge */}
-                          {(() => {
-                            const attendingCount = event.responses 
-                              ? Object.values(event.responses).filter(r => r.status === 'attending').length 
-                              : 0;
-                            const totalLimit = event.participantLimit || '∞';
-                            const isFull = event.participantLimit && attendingCount >= event.participantLimit;
-                            
-                            return (
-                              <div className={`px-3 py-1 rounded-full text-xs font-bold ${
-                                isFull 
-                                  ? 'bg-red-500/20 text-red-300 border border-red-500/30' 
-                                  : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                              }`}>
-                                {attendingCount}/{totalLimit}
-                            </div>
-                            );
-                          })()}
-                          <span className="text-primary opacity-0 group-hover:opacity-100 transition-opacity">→</span>
-                        </div>
-                      </div>
+                      {/* Type Badge */}
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium shrink-0 ${
+                        event.type === 'training' ? 'bg-blue-500/20 text-blue-300' :
+                        event.type === 'game' ? 'bg-green-500/20 text-green-300' :
+                        event.type === 'tournament' ? 'bg-purple-500/20 text-purple-300' :
+                        'bg-gray-500/20 text-gray-300'
+                      }`}>
+                        {event.type?.charAt(0).toUpperCase() || 'E'}
+                      </span>
+                      
+                      {/* Separator */}
+                      <span className="text-gray-600">|</span>
+                      
+                      {/* Date + Time */}
+                      <span className="text-xs text-gray-400 shrink-0">
+                        {(() => {
+                          const date = new Date(event.date);
+                          const month = date.getMonth() + 1;
+                          const day = date.getDate();
+                          return `${month}/${day}`;
+                        })()} {event.time || ''}
+                      </span>
+                      
+                      {/* Separator */}
+                      <span className="text-gray-600">|</span>
+                      
+                      {/* Title */}
+                      <span className={`text-sm font-semibold truncate flex-1 min-w-0 ${
+                        isDeclined ? 'text-white/50 line-through' : 'text-white'
+                      }`}>
+                        {event.title}
+                      </span>
+                      
+                      {/* Location (hidden on mobile) */}
+                      {event.location && (
+                        <>
+                          <span className="hidden md:inline text-gray-600">|</span>
+                          <span className="hidden md:inline text-xs text-gray-500 truncate max-w-[150px]">
+                            📍 {event.location}
+                          </span>
+                        </>
+                      )}
+                      
+                      {/* Separator */}
+                      <span className="text-gray-600 shrink-0">|</span>
+                      
+                      {/* Attendance Badge */}
+                      <span className="text-xs text-gray-400 shrink-0">
+                        {attendingCount}/{totalLimit}
+                      </span>
+                      
+                      {/* Registered Badge */}
+                      {isAttending && (
+                        <span className="text-green-400 text-sm shrink-0">✓</span>
+                      )}
                     </Link>
                   );
                 })}
@@ -485,69 +477,91 @@ export default function Calendar() {
                 Past Events ({pastEvents.length})
               </h2>
               
-              <div className="grid gap-4">
+              <div className="space-y-2">
                 {pastEvents.slice(0, 10).map(event => {
                   const userResponse = event.responses?.[user?.id];
                   const isDeclined = userResponse?.status === 'declined';
                   const isAttending = userResponse?.status === 'attending';
                   
+                  const attendingCount = event.responses 
+                    ? Object.values(event.responses).filter(r => r.status === 'attending').length 
+                    : 0;
+                  const totalLimit = event.participantLimit || '∞';
+                  
                   return (
                     <Link
                       key={event.id}
                       to={`/event/${event.id}`}
-                      className={`group bg-white/5 backdrop-blur-sm border rounded-xl p-5 hover:bg-white/10 transition-all ${
-                        isDeclined ? 'opacity-40 border-white/10' : 
-                        isAttending ? 'opacity-60 hover:opacity-100 border-green-500/30 bg-green-500/5' : 
-                        'opacity-60 hover:opacity-100 border-white/10'
+                      className={`group flex items-center gap-2 p-2 rounded-lg transition-all mb-2 ${
+                        isDeclined ? 'opacity-40 bg-gray-800 hover:bg-gray-750' : 
+                        'opacity-60 hover:opacity-100 bg-gray-800 hover:bg-gray-750'
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-4 flex-1">
-                          {/* Circle placeholder */}
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/50 to-accent/50 flex items-center justify-center text-white text-sm font-bold shrink-0">
-                            {event.type?.charAt(0).toUpperCase() || 'E'}
-                          </div>
-                          <div className="flex-1">
-                            <h3 className={`font-medium mb-1 ${
-                              isDeclined ? 'text-light/40 line-through' : 'text-light'
-                            }`}>
-                              {event.title}
-                            </h3>
-                            <div className="flex gap-3 text-xs text-light/60 items-center">
-                              <span>📅 {new Date(event.date).toLocaleDateString()}</span>
-                              
-                              {/* Rating (for past trainings) */}
-                              {eventRatings[event.id] && (
-                                <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-300 rounded text-xs font-semibold">
-                                  {eventRatings[event.id].averageRating}⭐ {eventRatings[event.id].totalResponses}/{(() => {
-                                    const attendingCount = event.responses 
-                                      ? Object.values(event.responses).filter(r => r.status === 'attending').length 
-                                      : 0;
-                                    return attendingCount;
-                                  })()}
-                                </span>
-                              )}
-                              
-                              {/* Attendance Count */}
-                              {(() => {
-                                const attendingCount = event.responses 
-                                  ? Object.values(event.responses).filter(r => r.status === 'attending').length 
-                                  : 0;
-                                const totalLimit = event.participantLimit || '∞';
-                                
-                                return (
-                                  <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded text-xs font-semibold">
-                                    {attendingCount}/{totalLimit}
-                                </span>
-                                );
-                              })()}
-                              {isDeclined && (
-                                <span className="text-red-400">❌ Declined</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                      {/* Type Badge */}
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium shrink-0 opacity-60 ${
+                        event.type === 'training' ? 'bg-blue-500/20 text-blue-300' :
+                        event.type === 'game' ? 'bg-green-500/20 text-green-300' :
+                        event.type === 'tournament' ? 'bg-purple-500/20 text-purple-300' :
+                        'bg-gray-500/20 text-gray-300'
+                      }`}>
+                        {event.type?.charAt(0).toUpperCase() || 'E'}
+                      </span>
+                      
+                      {/* Separator */}
+                      <span className="text-gray-600">|</span>
+                      
+                      {/* Date + Time */}
+                      <span className="text-xs text-gray-500 shrink-0">
+                        {(() => {
+                          const date = new Date(event.date);
+                          const month = date.getMonth() + 1;
+                          const day = date.getDate();
+                          return `${month}/${day}`;
+                        })()} {event.time || ''}
+                      </span>
+                      
+                      {/* Separator */}
+                      <span className="text-gray-600">|</span>
+                      
+                      {/* Title */}
+                      <span className={`text-sm font-semibold truncate flex-1 min-w-0 ${
+                        isDeclined ? 'text-white/40 line-through' : 'text-white/60'
+                      }`}>
+                        {event.title}
+                      </span>
+                      
+                      {/* Location (hidden on mobile) */}
+                      {event.location && (
+                        <>
+                          <span className="hidden md:inline text-gray-600">|</span>
+                          <span className="hidden md:inline text-xs text-gray-500 truncate max-w-[150px]">
+                            📍 {event.location}
+                          </span>
+                        </>
+                      )}
+                      
+                      {/* Separator */}
+                      <span className="text-gray-600 shrink-0">|</span>
+                      
+                      {/* Rating Badge (for trainings) */}
+                      {eventRatings[event.id] && (
+                        <>
+                          <span className="text-xs text-yellow-400 shrink-0">
+                            {eventRatings[event.id].averageRating}⭐
+                          </span>
+                          <span className="text-gray-600 shrink-0">|</span>
+                        </>
+                      )}
+                      
+                      {/* Attendance Badge */}
+                      <span className="text-xs text-gray-500 shrink-0">
+                        {attendingCount}/{totalLimit}
+                      </span>
+                      
+                      {/* Registered Badge */}
+                      {isAttending && (
+                        <span className="text-green-400/60 text-sm shrink-0">✓</span>
+                      )}
                     </Link>
                   );
                 })}
